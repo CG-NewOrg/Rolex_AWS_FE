@@ -1211,15 +1211,26 @@ sap.ui.define([
             };
         },
         createAndFetchPromptDetails: function (
-            oQuestionAI, sSelectedIconTab, existsInLocalData, _this, oPromtModel, oBundle, isFirstResponse, basePath
+            oQuestionAI,
+            sSelectedIconTab,
+            existsInLocalData,
+            _this,
+            oPromtModel,
+            oBundle,
+            isFirstResponse,
+            basePath 
         ) {
+            
             if (isFirstResponse && (!oQuestionAI || oQuestionAI.trim() === "")) {
                 return;
             }
-            var sUrl = `${basePath}/lm/promptTemplates`;
+
+            var sBasePath = _this._sBasePath;
+
+            var sUrl = `${sBasePath}/cockpit/getPromptDetails`;
+
             var fourDigitId = Date.now().toString().slice(-4);
             var uniqueName = sSelectedIconTab + "_" + fourDigitId + "_prompt";
-            // var uniqueName = "prompt_" + sSelectedIconTab + "_" + Date.now();
 
             var oPayload = {
                 name: uniqueName,
@@ -1234,7 +1245,9 @@ sap.ui.define([
                     ],
                     additional_fields: {
                         UserId: _this._loggedInUser,
-                        ProjectId: _this._ProjectDetail
+                        ProjectId: _this._ProjectDetail,
+                        Category: sSelectedIconTab,
+                        MsgType: "prompt"
                     }
                 }
             };
@@ -1243,13 +1256,17 @@ sap.ui.define([
             var originalPrompt = oResponseModel.getProperty("/originalPrompt") || "";
             var selectedPromptId = oResponseModel.getProperty("/selectedPromptId") || "";
 
-            var isModified = originalPrompt.trim().toLowerCase() !== oQuestionAI.trim().toLowerCase();
+            var isModified =
+                originalPrompt.trim().toLowerCase() !==
+                (oQuestionAI || "").trim().toLowerCase();
 
             $.ajax({
-                url: `${sUrl}?scenario=${encodeURIComponent(sSelectedIconTab)}`,
+                url: `${sBasePath}/cockpit/getPromptDetails?Category=${encodeURIComponent(sSelectedIconTab)}&MsgType=prompt&ProjectId=${encodeURIComponent(_this._ProjectDetail)}`,
                 method: "GET",
                 contentType: "application/json",
+
                 success: function (data) {
+
                     var existingPrompts = (data.resources || []).filter(function (item) {
                         return item.id === selectedPromptId;
                     });
@@ -1257,49 +1274,73 @@ sap.ui.define([
                     if (existingPrompts.length > 0 && !isModified) {
                         return;
                     }
-                    if (existingPrompts.length > 0 && isModified) {
-                        sap.m.MessageBox.confirm("You have modified the selected prompt. Do you want to update it or create a new one?", {
-                            actions: ["Update", "Create"],
-                            onClose: function (oAction) {
-                                if (oAction === "Update") {
-                                    const existingPrompt = existingPrompts[0];
-                                    const updatePayload = {
-                                        name: existingPrompt.name,
-                                        version: existingPrompt.version,
-                                        scenario: existingPrompt.scenario,
-                                        spec: {
-                                            ...existingPrompt.spec,
-                                            template: [{ role: "user", content: oQuestionAI }],
-                                            defaults: {
-                                                "UserId": _this._loggedInUser,
-                                                "UpdatedIn": _this._ProjectDetail
-                                            }
-                                        }
-                                    };
 
-                                    $.ajax({
-                                        url: sUrl,
-                                        method: "POST",
-                                        contentType: "application/json",
-                                        data: JSON.stringify(updatePayload),
-                                        success: function () {
-                                            sap.m.MessageBox.success("Prompt updated.");
-                                            _this.getDataPromptMsg();
-                                        },
-                                        error: function () {
-                                            sap.m.MessageBox.error("Failed to update prompt.");
-                                        }
-                                    });
-                                } else {
-                                    _this.addPromptFr(true);
+                    if (existingPrompts.length > 0 && isModified) {
+
+                        sap.m.MessageBox.confirm(
+                            "You have modified the selected prompt. Do you want to update it or create a new one?",
+                            {
+                                actions: ["Update", "Create"],
+
+                                onClose: function (oAction) {
+
+                                    if (oAction === "Update") {
+
+                                        const existingPrompt = existingPrompts[0];
+
+                                        const updatePayload = {
+                                            name: existingPrompt.name,
+                                            version: existingPrompt.version,
+                                            scenario: existingPrompt.scenario,
+                                            ProjectId: _this._ProjectDetail,
+                                            Category: sSelectedIconTab,
+                                            MsgType: "prompt",
+                                            spec: {
+                                                ...existingPrompt.spec,
+                                                template: [
+                                                    {
+                                                        role: "user",
+                                                        content: oQuestionAI
+                                                    }
+                                                ],
+                                                defaults: {
+                                                    UserId: _this._loggedInUser,
+                                                    UpdatedIn: _this._ProjectDetail
+                                                }
+                                            }
+                                        };
+
+                                        $.ajax({
+                                            url: sUrl,
+                                            method: "POST",
+                                            contentType: "application/json",
+                                            data: JSON.stringify(updatePayload),
+
+                                            success: function () {
+                                                sap.m.MessageBox.success("Prompt updated.");
+                                                _this.getDataPromptMsg();
+                                            },
+
+                                            error: function () {
+                                                sap.m.MessageBox.error("Failed to update prompt.");
+                                            }
+                                        });
+
+                                    } else {
+                                        _this.addPromptFr(true);
+                                    }
                                 }
                             }
-                        });
+                        );
+
                         return;
                     }
                 },
+
                 error: function () {
-                    sap.m.MessageBox.show(oBundle.getText("errorDataRetrieval"));
+                    sap.m.MessageBox.show(
+                        oBundle.getText("errorDataRetrieval")
+                    );
                 }
             });
         },

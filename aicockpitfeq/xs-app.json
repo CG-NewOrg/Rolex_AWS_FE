@@ -2,6 +2,20 @@
   "authenticationMethod": "route",
   "welcomeFile": "/index.html",
   "routes": [
+     {
+      "source": "^/kb-integration/(.*)$",
+      "destination": "KB_integration_ragpostgres",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1"
+    },
+    {
+      "source": "^/kbintegration/(.*)$",
+      "destination": "KB_Integration_testpostgres",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1"
+    },
     {
       "source": "^/cockpit/(.*)$",
       "destination": "CGAICOCKPIT_BE_Q",

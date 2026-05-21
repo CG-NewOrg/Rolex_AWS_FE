@@ -45,11 +45,7 @@
                         icon="sap-icon://account"
                         visible="{vFlagMod>/isAdmin}"
                     />
-                    <!-- <tnt:NavigationListItem
-                        text="{i18n>knowB}"
-                        key="knowlegdeB"
-                        icon="sap-icon://favorite-list"
-                    /> -->
+
                     <tnt:NavigationListItem
                         text="{i18n>knowBAdmin}"
                         key="knowlegdeBAdmin"
@@ -111,11 +107,7 @@
                             key="cdSum"
                             icon="sap-icon://doc-attachment"
                         />
-                        <!-- <tnt:NavigationListItem
-                            text="{i18n>more}"
-                            key="more"
-                            icon="sap-icon://eraser"
-                        /> -->
+
                         <tnt:NavigationListItem
                             text="{i18n>git}"
                             key="gitKey"
@@ -164,7 +156,6 @@
             </tnt:SideNavigation>
         </tnt:sideContent>
         <tnt:mainContents>
-            <!-- <VBox> -->
             <Page
                 id="page1"
                 showFooter="true"
@@ -178,7 +169,6 @@
                         height="100%"
                         class=""
                     >
-                        <!-- class="sapUiSmallMargin" -->
                         <VBox
                             backgroundDesign="Solid"
                             alignContent="Start"
@@ -363,23 +353,23 @@
                                         selectionChange=".onSapDocSel"
                                     >
                                         <core:Item
-                                            key="dd27de94-0d60-4619-90ec-af1b0fbdfee0"
+                                            key="7f1ef380-2f16-44e9-a92d-93a4540e2c92"
                                             text="Tracebility Matrix for BPM"
                                         />
                                         <core:Item
-                                            key="3a54b893-a810-437f-87a6-8f75b5eff43d"
+                                            key="590b26ff-cd41-4deb-8a23-4ce2ff5de42b"
                                             text="L1 Documentation"
                                         />
                                         <core:Item
-                                            key="4431c824-7a3b-4192-931b-90d44ac7bfad"
+                                            key="1c21f25c-d5e0-4a36-b9fd-8c8c101f320c"
                                             text="L1 &amp; L2 Documentation"
                                         />
                                         <core:Item
-                                            key="bc091f3a-14a0-41e9-aa49-b2869aa3d47d"
+                                            key="ec9032b2-e6c0-45f7-985c-d7d76531c242"
                                             text="L3 Documentation"
                                         />
                                         <core:Item
-                                            key="1616d206-1c4f-454f-8821-e8dcc9fc3425"
+                                            key="03f31e0e-d3ec-4d8a-a7fd-69ae552b1630"
                                             text="Cohesive L1,L2 &amp; L3 Documentation"
                                         />
                                         <layoutData>
@@ -402,15 +392,15 @@
                                         selectionChange=".onTCTypeSel"
                                     >
                                         <core:Item
-                                            key="3d0f919e-5c3d-4e35-b562-69516c328514"
+                                            key="8d934c4f-b7c2-4cdb-aad0-3b7dcb6ebb2d"
                                             text="Positive"
                                         />
                                         <core:Item
-                                            key="704e4b23-3b8b-41ee-9f62-7dbd25ed60e4"
+                                            key="21e37260-97dc-412d-87fd-8d38c7a87240"
                                             text="Boundary"
                                         />
                                         <core:Item
-                                            key="f34162b6-bf70-4d63-a775-2f88a6140c06"
+                                            key="2a5c1c55-e8cd-49a1-a2f6-c93401f28d0f"
                                             text="Negative"
                                         />
                                         <layoutData>
@@ -729,6 +719,35 @@
                                                 enabled="{airesponseDetailModel>/downloadVis}"
                                             />
                                         </HBox>
+                                        <HBox
+                                            id="openTCGTemp"
+                                            alignContent="Start"
+                                            justifyContent="Start"
+                                            visible="false"
+                                        >
+                                            <Label
+                                                text="{i18n>tcgTemp}"
+                                                showColon="true"
+                                                class="sapUiTinyMarginEnd sapUiTinyMarginTop"
+                                            />
+                                            <Button
+                                                type="Emphasized"
+                                                tooltip="{i18n>tcgTemp}"
+                                                icon="sap-icon://write-new-document"
+                                                press=".openTCGTemplateFragment"
+                                                class="sapUiMediumMarginEnd"
+                                            />
+                                            <Label
+                                                id="tcCountLbl"
+                                                text="Enter Test Count"
+                                                class="sapUiTinyMarginEnd sapUiTinyMarginTop"
+                                            />
+                                            <Input
+                                                id="tcCountNum"
+                                                value="5"
+                                                width="30%"
+                                            />
+                                        </HBox>
                                     </VBox>
                                     <Label text="{i18n>selSavFile}" />
                                     <VBox width="100%">
@@ -746,6 +765,7 @@
                                                     />
                                                 </layoutData>
                                             </Input>
+
                                             <unified:FileUploader
                                                 buttonOnly="true"
                                                 id="fileUploader1"
@@ -852,6 +872,7 @@
                             >
                                 <fr:content>
                                     <core:Title text="{i18n>prompts}" />
+
                                     <Label text="{i18n>selPrompt}" />
                                     <HBox>
                                         <Input

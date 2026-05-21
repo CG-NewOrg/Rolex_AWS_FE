@@ -712,22 +712,28 @@ sap.ui.define([
                 Citations: citations
             };
         },
-        KBModelSelect: function (apiModelText) {
-            // KB restricted models - using KB_Integration destination via approuter
+          KBModelSelect: function (apiModelText) {
+
             switch (apiModelText) {
                 case "gpt-5":
-                    return this._sBasePath + `/kb-integration/RagQueryGPT5`;
                 case "gpt-4o":
-                    return this._sBasePath + `/kb-integration/RagQueryGPT4o`;
+                case "gpt-4.1":
+                case "gpt-4.1-nano":
+                case "gpt-5-mini":
+                case "gpt-5-nano":
                 case "anthropic--claude-3.5-sonnet":
-                    return this._sBasePath + `/kb-integration/RagQueryClaude3.5`;
+                case "anthropic--claude-4.5-sonnet":
+                case "anthropic--claude-4-sonnet":
+                case "anthropic--claude-3-haiku":
+                case "anthropic--claude-3-sonnet":
+                case "anthropic--claude-4.5-opus":
                 case "mistralai--mistral-small-instruct":
-                    return this._sBasePath + `/kb-integration/RagQueryMistralSmall`;
                 case "mistralai--mistral-large-instruct":
-                    return this._sBasePath + `/kb-integration/RagQueryMistralLarge`;
+                    return this._sBasePath + `/kb-integration/ragquery`;
                 default:
-                    return false;
+                    return "";
             }
+
         },
         _resetSendButton: function () {
             var oSendBtn = sap.ui.getCore().byId("sendButton");

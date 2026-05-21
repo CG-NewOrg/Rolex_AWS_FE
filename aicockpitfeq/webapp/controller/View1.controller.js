@@ -33,10 +33,6 @@ sap.ui.define([
             "Content-Security-Policy": "default-src'none'"
         },
 
-        /**
-         * Fetch and cache the CSRF token once from the OData service root.
-         * Call this once at startup; subsequent POSTs reuse the cached token.
-         */
         _fetchCsrfToken: function () {
             var that = this;
             return new Promise(function (resolve) {
@@ -52,14 +48,7 @@ sap.ui.define([
             });
         },
 
-        /**
-         * Helper: POST using the cached CSRF token (no per-request HEAD call).
-         * @param {string} sUrl  Endpoint URL
-         * @param {object} oPayload  JSON payload
-         * @param {function} fnSuccess  success(data, status, xhr)
-         * @param {function} fnError    error(jqXhr, textStatus, errorMessage)
-         * @param {object} [oExtraHeaders]  additional headers
-         */
+    
         _postWithCsrf: function (sUrl, oPayload, fnSuccess, fnError, oExtraHeaders) {
             $.ajax({
                 url: sUrl,
@@ -309,45 +298,44 @@ sap.ui.define([
                 }
             }
         },
-        // KBGetFiles: function (sSelectedIconTab) {
-        //     var listObjectsUrl = this._sBasePath + `/kb-integration/ListObjectStoreFiles?category=${sSelectedIconTab}&project=${this._ProjectDetail}`;
-        //     var that = this;
-        //     $.ajax({
-        //         url: listObjectsUrl,
-        //         type: "GET",
-        //         headers: that.defaultHeaders,
-        //         success: function (data) {
-        //             var fileNames = [];
-        //             var ObjectStorageFile = new sap.ui.model.json.JSONModel();
-        //             var contents = data?.files;
-        //             if (contents) {
-        //                 var projUI = String(that._ProjectDetail).replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-        //                 var catUI = String(sSelectedIconTab).toUpperCase();
-        //                 var filteredFiles = contents.filter(f => String(f.category).toUpperCase() === catUI && f.project === projUI);
-        //                 if (filteredFiles.length > 0) {
-        //                     fileNames = filteredFiles.map(file => ({
-        //                         UpdatedDate: file.last_modified,
-        //                         s3_key: "/" + catUI + "/" + projUI + "/" + file.filename,
-        //                         Key: file.full_path,
-        //                         Name: file.filename,
-        //                         view_url: file.view_url,
-        //                         download_url: file.download_url,
-        //                         is_kb: file.full_path.startsWith("KB/")
-        //                     }));
-        //                 }
-        //             }
+      KBGetFiles: function (sSelectedIconTab) {
+            var listObjectsUrl = this._sBasePath + `/kb-integration/ListObjectStoreFiles?category=${sSelectedIconTab}&project=${this._ProjectDetail}`;
+            var that = this;
+            $.ajax({
+                url: listObjectsUrl,
+                type: "GET",
+                headers: that.defaultHeaders,
+                success: function (data) {
+                    var fileNames = [];
+                    var ObjectStorageFile = new sap.ui.model.json.JSONModel();
+                    var contents = data?.files;
+                    if (contents) {
+                        var projUI = String(that._ProjectDetail).replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+                        var catUI = String(sSelectedIconTab).toUpperCase();
+                        var filteredFiles = contents.filter(f => String(f.category).toUpperCase() === catUI && f.project === projUI);
+                        if (filteredFiles.length > 0) {
+                            fileNames = filteredFiles.map(file => ({
+                                UpdatedDate: file.last_modified,
+                                s3_key: "/" + catUI + "/" + projUI + "/" + file.filename,
+                                Key: file.full_path,
+                                Name: file.filename,
+                                view_url: file.view_url,
+                                download_url: file.download_url,
+                                is_kb: file.full_path.startsWith("KB/")
+                            }));
+                        }
+                    }
 
-        //             ObjectStorageFile.setData(fileNames);
-        //             that.getView().setModel(ObjectStorageFile, "ObjectFileList");
-        //             BusyIndicator.hide();
-        //         },
-        //         error: function (xhr, status, error) {
-        //             // Handle error if needed
-        //             BusyIndicator.hide();
-        //         }
-        //     });
-        // },
-
+                    ObjectStorageFile.setData(fileNames);
+                    that.getView().setModel(ObjectStorageFile, "ObjectFileList");
+                    BusyIndicator.hide();
+                },
+                error: function (xhr, status, error) {
+                    // Handle error if needed
+                    BusyIndicator.hide();
+                }
+            });
+        },
         onFileSearch: function (oEvent) {
             var sQuery = oEvent.getParameter("value");  // what user typed
             var oBinding = oEvent.getSource().getBinding("items");
@@ -1410,9 +1398,12 @@ sap.ui.define([
                             }
                         });
                         oDialog4.open();
-                        var url = this._sBasePath + "/lm/promptTemplates?scenario=BS&version=0.0.1";
-
-                        var roleSel = "user"
+                        // var url = this._sBasePath + "/lm/promptTemplates?scenario=BS&version=0.0.1";
+                        let sCategory = "BS";
+                        let sMsgType = "prompt";
+                        var roleSel = "user";
+                        var url = this._sBasePath +"/cockpit/getPromptDetails?Category=" + sCategory + "&MsgType=" + sMsgType + "&ProjectId=" + that._ProjectDetail;
+                        this.getView().byId("msgSelected").setSelectedKey(roleSel);
                         //this.getView().byId("msgSelected").setSelectedKey(roleSel);
                         that.onSearch(url, roleSel);
                         // BusyIndicator.hide();
@@ -1555,12 +1546,15 @@ sap.ui.define([
         onMsgSel: function (eve) {
 
             var catSel = this.getView().byId("categorySelect").getSelectedKey();
-            var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
+            // var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
+            let url = "";
             if (eve.mParameters.selectedItem.mProperties.text == "Prompt") {
+                url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=prompt&ProjectId=" + this._ProjectDetail;
                 this.onSearch(url, "user");
                 //  this.getView().byId("delPr").setEnabled(true);
                 this.getOwnerComponent().getModel('flagModel').setProperty("/isSys", false);
             } else if (eve.mParameters.selectedItem.mProperties.text == "System") {
+                url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=sysMsg&ProjectId=" + this._ProjectDetail;
                 this.onSearch(url, "system");
                 this.getOwnerComponent().getModel('flagModel').setProperty("/isSys", true);
                 //this.getView().byId("delPr").setEnabled(false);
@@ -1844,10 +1838,17 @@ sap.ui.define([
                 }
             }
         },
-        closeAddPrompt: function () {
+        
+          closeAddPrompt: function () {
             var catSel = this.byId("categorySelect").getSelectedKey();
             var msgSel = this.byId("msgSelected").getSelectedKey();
-            var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
+            // var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
+            if (msgSel == "user") {
+                msgSel = "prompt";
+            } else {
+                msgSel = "system";
+            }
+            let url = this._sBasePath +"/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + msgSel + "&ProjectId=" + this._ProjectDetail;
             this.onSearch(url, msgSel);
             var aDependents = this.getView().getDependents();
 
@@ -1865,6 +1866,7 @@ sap.ui.define([
             });
 
         },
+
 
         closeSysKeyFr: function () {
             var aDependents = this.getView().getDependents();
@@ -2301,12 +2303,15 @@ sap.ui.define([
             var sFragmentName = oView.getModel("switchFragments").getProperty("/frg/frName");
             var systemKeyPayload = "";
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var sysContent = this.getView().byId("descTxtArea").getValue();
+            var sysContent = "";
             var scenarioSel = this.getView().byId("navigationList").getSelectedKey();
+            let catSel = "";
             if (ev.getSource().getId().includes("listView1--saveSysBtn") == true && scenarioSel == "promptlib") {
                 MessageBox.error(oBundle.getText("selFuncTabsBtn"));
             } else {
                 if (sFragmentName !== "promptlibpr") {
+                    catSel = this.selectedKeyFunct();
+                    sysContent = this.getView().byId("descTxtArea").getValue();
                     //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
                     this.getView().byId("descTxtArea").setEditable(false);
                     this.getView().byId("multiInputSystem").setEditable(true);
@@ -2316,14 +2321,14 @@ sap.ui.define([
 
                     var scenario = "";
                     switch (scenarioSel) {
-                        case "DocGen":
-                            scenario = "DocGen";
-                            break;
                         case "bdPMO":
                             scenario = "BS";
                             break;
                         case "usrCr":
                             scenario = "User";
+                            break;
+                        case "DocGen":
+                            scenario = "DocGen";
                             break;
                         case "fcFSD":
                             scenario = "fstoconf";
@@ -2362,6 +2367,7 @@ sap.ui.define([
                         sysName = this.getView().byId("multiInputSystem").getValue();
                     } else {
                         sysName = this.getView().byId("addSysPrefix").getValue() + this.getView().byId("multiInputSystem").getValue();
+                        this.getView().byId("addSysPart").setVisible(false);
                         this.getView().byId("multiInputSystem").setValue(sysName);
                         this.stopEdit = true;
                         this.getView().byId("addSysPrefix").setVisible(false);
@@ -2389,95 +2395,96 @@ sap.ui.define([
                     this.getView().byId("descTxtArea").setValueState("Error");
                     this.getView().byId("descTxtArea").setValueStateText("Enter System Message Description");
                     this.getView().byId("editSys").setVisible(false);
-                } else {
-                    if (sFragmentName !== "promptlibpr") {
-                        //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                        this.getView().byId("addSysPart").setVisible(false);
-                        systemKeyPayload = {
-                            "name": sysName,
-                            "version": "0.0.1",
-                            "scenario": scenario, //like BS, User, etc 
-                            "spec": {
-                                "template": [
-                                    {
-                                        "role": "system",
-                                        "content": sysContent
-                                    }
-                                ],
-                                "defaults": {
-                                    "ProjectId": this._ProjectDetail,
-                                    "UserId": this._loggedInUser,
-                                    "CreatedIn": createdIn,
-                                    "UpdatedIn": updatedIn,
-                                    "msgType": "System",
-                                    "updBy": this._loggedInUserName,
-                                    "updAt": new Date().toISOString()
-                                }
-                            }
-                        };
-                    } else {
-                        ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
-                        systemKeyPayload = this.getView().getModel("savePrmModel").oData;
-                        if (systemKeyPayload.name.includes(this.getView().getModel("enSysPromp").getProperty("/sysKey"))) {
-
-                        } else {
-                            systemKeyPayload.name = this.getView().getModel("enSysPromp").getProperty("/sysKey") + systemKeyPayload.name;
-                        }
-                    }
-                    var sUrl = this._sBasePath + "/lm/promptTemplates";
-                    var that = this;
-                    $.ajax({
-                        url: sUrl,
-                        method: "POST",
-                        contentType: "application/json",
-                        data: JSON.stringify(systemKeyPayload),
-                        success: async function (data, status, xhr) {
-                            if (that.addedFromCurrUser == true) {
-                                sap.m.MessageToast.show("System Message Created");
-                            }
-                            if (that.isSystemEdited == true) {
-                                sap.m.MessageToast.show("System Message Updated");
-                            }
-                            that.getDataSysMsg();
-                            if (sFragmentName === "promptlibpr") {
-                                //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                                that.getView().byId("idPromptRegistryTable").removeSelections(true);
-                                if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
-                                    that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
-                                    var catSel = that.getView().byId("categorySelect").getSelectedKey();
-                                    var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
-                                    var roleSel = "system"
-                                    that.onSearch(url, roleSel);
-                                }
-                                that.closeAddPrompt();
-                            } else {
-                                that.isSystemSaved = true;
-                                that.isSystemEdited = false;
-
-                                that.getView().byId("saveSysBtn").setVisible(false);
-                                that.getView().byId("addExBtn").setVisible(true);
-                                that.getView().byId("descTxtArea").setEditable(false);
-                                that.getView().byId("multiInputSystem").setEnabled(true);
-                                that.getView().byId("editSys").setVisible(true);
-                                ///       that.disableInputsysmsg(that.getView().byId("multiInputSystem"));
-                                that.getFiles();
-                            }
-                        },
-                        error: function (jqXhr, textStatus, errorMessage) {
-                            BusyIndicator.hide();
-                            MessageBox.error(JSON.parse(jqXhr.responseText).message);
-                        }
-                    });
+                } else if (sFragmentName == "promptlibpr") {
+                    catSel = this.getView().byId("categorySelect").getSelectedKey();
+                    sysContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
+                    sysName = this.getView().getModel("savePrmModel").oData.name;
                 }
+                // else {
+                // if (sFragmentName !== "promptlibpr") {
+                //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+
+                systemKeyPayload = {
+                    payload: {
+                        Prompt_Details: sysContent,
+                        Category: catSel,
+                        MsgType: "sysMsg",
+                        ProjectId: this._ProjectDetail,
+                        PromptId: sysName,
+                        UserId: this._loggedInUser,
+                        DateTime: new Date().toISOString(),
+                    }
+                };
+                // } 
+                // else {
+                //     ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
+                //     systemKeyPayload = this.getView().getModel("savePrmModel").oData;
+                //     if (systemKeyPayload.name.includes(this.getView().getModel("enSysPromp").getProperty("/sysKey"))) {
+
+                //     } else {
+                //         systemKeyPayload.name = this.getView().getModel("enSysPromp").getProperty("/sysKey") + systemKeyPayload.name;
+                //     }
+                // }
+                var that = this;
+
+                $.ajax({
+                    url: this._sBasePath + "/cockpit/createPromptDetails",
+                    method: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify(systemKeyPayload),
+                    success: async function (data, status, xhr) {
+                        if (that.addedFromCurrUser == true) {
+                            sap.m.MessageToast.show("System Message Created");
+                        }
+                        if (that.isSystemEdited == true) {
+                            sap.m.MessageToast.show("System Message Updated");
+                        }
+                        that.getDataSysMsg();
+                        if (sFragmentName === "promptlibpr") {
+                            //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                            that.getView().byId("idPromptRegistryTable").removeSelections(true);
+                            if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
+                                that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
+                                var catSel = that.getView().byId("categorySelect").getSelectedKey();
+                                //var url = "/cockpit/getPromptDetails?scenario=" + catSel + "&version=0.0.1&ProjectId=" + that._ProjectDetail;
+                                var roleSel = "system"
+                                var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + roleSel + "&ProjectId=" + that._ProjectDetail;
+
+                                that.onSearch(url, roleSel);
+                            }
+                            that.closeAddPrompt();
+                        } else {
+                            that.isSystemSaved = true;
+                            that.isSystemEdited = false;
+
+                            that.getView().byId("saveSysBtn").setVisible(false);
+                            that.getView().byId("addExBtn").setVisible(true);
+                            that.getView().byId("descTxtArea").setEditable(false);
+                            that.getView().byId("multiInputSystem").setEnabled(true);
+                            that.getView().byId("editSys").setVisible(true);
+                            ///       that.disableInputsysmsg(that.getView().byId("multiInputSystem"));
+                            that.getFiles();
+                        }
+                    },
+                    error: function (jqXhr, textStatus, errorMessage) {
+                        that.getView().byId("descTxtArea").setValue("");
+                        that.getView().byId("multiInputSystem").setValue("");
+                        that.getView().byId("editSys").setVisible(false);
+                        BusyIndicator.hide();
+                        MessageBox.error(JSON.parse(jqXhr.responseText).message);
+                    }
+                });
+                // }
             }
         },
-        selChangeDoc: function (eveSelVal) {
+       
+         selChangeDoc: function (eveSelVal) {
             var that = this;
             var _this = this;
             var busyDialog = new sap.m.BusyDialog();
             var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             if (bRagEnabled) {
-                that.KBselChangeDoc(eveSelVal);  
+                that.KBselChangeDoc(eveSelVal);
             } else {
                 busyDialog.open();
                 var aContexts = eveSelVal.getParameter("selectedContexts");
@@ -2492,7 +2499,7 @@ sap.ui.define([
                     this.getView().byId("fileUploader1").setValue("");
                     this.getView().byId("docNameText").setVisible(true);
                     this.getView().byId("viewDocBtn").setVisible(true);
-                   
+
                     this.getView().byId("docNameText").setText(oFile);
 
                     var vector = 0;
@@ -2535,7 +2542,7 @@ sap.ui.define([
                             that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
                             _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
 
-                        
+
                             let uint8;
                             try {
                                 const text = new TextDecoder("utf-8").decode(data);
@@ -2555,7 +2562,7 @@ sap.ui.define([
                                     throw "Not JSON PDF";
                                 }
                             } catch (e) {
-                             
+
                                 uint8 = new Uint8Array(data);
                             }
 
@@ -2590,29 +2597,45 @@ sap.ui.define([
                             oModel.setProperty("/BSContent", actualText);
                             busyDialog.close();
 
-                        } else if (fileExtension === "xlsx") {
-
+                        } 
+                       else if (fileExtension === "xlsx" || fileExtension === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
                             that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
                             _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
+                            console.log("XHR response:", data);
+                            //Step 1: Convert ArrayBuffer → UTF‑8 text
+                            let jsonText = new TextDecoder("utf-8").decode(data);
 
-                            const uint8 = _this.resolveBinary(data);
+                            //Step 2: Parse JSON containing Base64 Excel
+                            let json = JSON.parse(jsonText);
 
+                            //Step 3: Base64 → binary string
+                            const base64 = json.value;
+                            const binary = atob(base64);
+
+                            // Step 4: binary string → Uint8Array (required for XLSX)
+                            const uint8 = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) {
+                                uint8[i] = binary.charCodeAt(i);
+                            }
+
+                            // Step 5: Parse Excel using XLSX.js
                             const workbook = XLSX.read(uint8, { type: "array" });
 
+                            // Step 6: Convert all sheets to CSV or text
                             let allText = "";
                             let excelDataAsObjects = {};
-
+                            let sheetName = "";
                             workbook.SheetNames.forEach(name => {
                                 allText += `Sheet: ${name}\n`;
+                                sheetName = name;
                                 allText += XLSX.utils.sheet_to_csv(workbook.Sheets[name]) + "\n\n";
-                                excelDataAsObjects[name] =
-                                    XLSX.utils.sheet_to_json(workbook.Sheets[name]);
+                                excelDataAsObjects[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
                             });
 
-                            that.getView().getModel("fileViewModel")
-                                .setProperty("/xlsJsonData", excelDataAsObjects);
-
+                            // Save both raw text + structured JSON
+                            that.getView().getModel("fileViewModel").setProperty("/xlsJsonData", excelDataAsObjects[sheetName]);
                             oModel.setProperty("/BSContent", allText);
+
                             busyDialog.close();
                             return;
                         } else if (fileExtension === "png" || fileExtension === "jpeg" || fileExtension === "jpg") {
@@ -3290,112 +3313,148 @@ sap.ui.define([
             //  this.getView().byId("cancelPrmBtn").setVisible(true);
         },
         savePrompt: function () {
-            var oView = this.getView()
-            var sFragmentName = oView.getModel("switchFragments").getProperty("/frg/frName");
-            var promptContent = "";
+            let oView = this.getView();
+            let sFragmentName = oView.getModel("switchFragments").getProperty("/frg/frName");
+            let promptContent = "";
+            let sPromptId = "", catSel = "";
+
             if (sFragmentName == "promptlibpr") {
                 promptContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
+                catSel = this.byId("categorySelect").getSelectedKey();
             } else {
                 this.getView().byId("savePrm").setVisible(false);
                 this.getView().byId("cancelPrmBtn").setVisible(true);
+                sPromptId = oView.byId("multiInputPrompt").getValue();
+                catSel = this.selectedKeyFunct();
                 promptContent = this.getView().byId("descTxtAreaPrompt").getValue();
             }
+
             if (promptContent == "" && sFragmentName == "") {
                 ///  this.getView().byId("descTxtAreaPrompt").setEditable(true);
                 this.getView().byId("descTxtAreaPrompt").setValueState("Error");
                 this.getView().byId("descTxtAreaPrompt").setValueStateText("Enter Prompt Description");
                 this.getView().byId("editPrm").setVisible(false);
             } else if (promptContent !== "" || sFragmentName == "promptlibpr") {
+                ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
+                //this.getView().byId("multiInputPrompt").setValue(this.getView().byId("addPrName").getValue());
+
                 this.getView().byId("addPrPart").setVisible(false);
                 this.getView().byId("addPrName").setVisible(false);
-
-                var promptPayload1 = {};
-
-                if (this.getView().getModel("savePrmModel") == undefined) {
-                    var scenario = this.selectedKeyFunct();
-                    promptPayload1 = {
-                        "name": this.getView().byId("multiInputPrompt").getValue(),
-                        "version": "0.0.1",
-                        "scenario": scenario, //category 
-                        "spec": {
-                            "template": [
-                                {
-                                    "role": "user",
-                                    "content": ""
-                                }
-                            ],
-                            "defaults": {
-                                "UserId": this._loggedInUser,
-                                "ProjectId": this._ProjectDetail,
-                                "CreatedIn": this._ProjectDetail,
-                                "UpdatedIn": this._ProjectDetail,
-                                "msgType": "Prompt",
-                                "updBy": this._loggedInUserName,
-                                "updAt": new Date().toISOString()
-                            }
-                        }
-                    };
-                } else {
-                    promptPayload1 = this.getView().getModel("savePrmModel").oData;
-                    if (sFragmentName !== "promptlibpr") {
-                        promptPayload1.scenario = this.selectedKeyFunct();
-                    }
-                }
-                promptPayload1.spec.defaults.updBy = this._loggedInUserName;
-                promptPayload1.spec.defaults.updAt = new Date().toISOString();
-                promptPayload1.spec.template[0].content = promptContent;
-
-                if (sFragmentName === "promptlibpr") {
-                    var catSel = this.byId("categorySelect").getSelectedKey();
-                    if (catSel) {
-                        promptPayload1.scenario = catSel;
-                    }
-                }
-                var sUrl = this._sBasePath + "/lm/promptTemplates";
-                var that = this;
-                $.ajax({
-                    url: sUrl,
-                    method: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify(promptPayload1),
-                    success: async function (data, status, xhr) {
-                        MessageBox.success(data.message);
-                        ////MessageToast.show(data.message);
-                        that.getDataPromptMsg();
-                        that.getView().byId("savePrm").setVisible(false);
-                        that.getView().byId("promptAdd").setVisible(true);
-                        that.getView().byId("descTxtAreaPrompt").setEditable(false);
-                        that.getView().byId("editPrm").setVisible(true);
-                        that.getView().byId("multiInputPrompt").setEnabled(true);
-                        that.getFiles();
-                        that.getView().byId("multiInputPrompt").setValueState("None");
-                        that.getView().byId("descTxtAreaPrompt").setValueState("None");
-                        that.getView().byId("selDocList").setValueState("None");
-
-                        if (sFragmentName === "promptlibpr") {
-                            that.getView().byId("idPromptRegistryTable").removeSelections(true);
-                            if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
-                                that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
-                                var catSel = that.getView().byId("categorySelect").getSelectedKey();
-                                var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
-                                var roleSel = "user"
-                                that.onSearch(url, roleSel);
-
-                            }
-                            that.closeAddPrompt();
-                        } else {
-                            that.isPromptAdded = true;
-                        }
-                    },
-                    error: function (jqXhr, textStatus, errorMessage) {
-                        BusyIndicator.hide();
-                        MessageBox.error(JSON.parse(jqXhr.responseText).message);
-                        // sap.m.MessageBox.error(oBundle.getText("errContactITTeam"));
-                    }
-                });
-            } else {
-
+                oView.byId("descTxtAreaPrompt").setValueState("None");
             }
+            var promptPayload1 = {};
+
+            if (this.getView().getModel("savePrmModel") == undefined) {
+                var scenario = this.selectedKeyFunct();
+                promptPayload1 = {
+                    "name": this.getView().byId("multiInputPrompt").getValue(),
+                    "version": "0.0.1",
+                    "scenario": scenario, //category 
+                    "spec": {
+                        "template": [
+                            {
+                                "role": "user",
+                                "content": ""
+                            }
+                        ],
+                        "defaults": {
+                            "UserId": this._loggedInUser,
+                            "ProjectId": this._ProjectDetail,
+                            "CreatedIn": this._ProjectDetail,
+                            "UpdatedIn": this._ProjectDetail,
+                            "msgType": "Prompt",
+                            "updBy": this._loggedInUserName,
+                            "updAt": new Date().toISOString()
+                        }
+                    }
+                };
+            } else {
+                promptPayload1 = this.getView().getModel("savePrmModel").oData;
+                sPromptId = this.getView().getModel("savePrmModel").oData.name;
+                if (sFragmentName !== "promptlibpr") {
+                    promptPayload1.scenario = this.selectedKeyFunct();
+                }
+            }
+            promptPayload1.spec.defaults.updBy = this._loggedInUserName;
+            promptPayload1.spec.defaults.updAt = new Date().toISOString();
+            promptPayload1.spec.template[0].content = promptContent;
+
+
+            if (sFragmentName === "promptlibpr") {
+                if (catSel) {
+                    promptPayload1.scenario = catSel;
+                }
+            }
+            var payload = {
+                payload: {
+                    Prompt_Details: promptContent,
+                    Category: catSel,
+                    MsgType: "prompt",
+                    ProjectId: this._ProjectDetail,
+                    UserId: this._loggedInUser,
+                    DateTime: new Date().toISOString(),
+                    PromptId: sPromptId
+                }
+            };
+            var that = this;
+
+            $.ajax({
+                url: this._sBasePath +"/cockpit/createPromptDetails",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify(payload),
+
+                success: function (data) {
+
+                    if (sFragmentName === "promptlibpr") {
+                        //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                        that.getView().byId("idPromptRegistryTable").removeSelections(true);
+                        if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
+                            that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
+                            var catSel = that.getView().byId("categorySelect").getSelectedKey();
+                            //  var url = "/cockpit/getPromptDetails?scenario=" + catSel + "&version=0.0.1&ProjectId=" + that._ProjectDetail;
+                            var roleSel = "user"
+                            var msgType = "prompt";
+                            var url = this._sBasePath +"/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + msgType + "&ProjectId=" + that._ProjectDetail;
+
+                            that.onSearch(url, roleSel);
+                        }
+                        that.closeAddPrompt();
+                    } else {
+                        sap.m.MessageToast.show("Prompt saved successfully");
+                        oView.byId("descTxtAreaPrompt").setEditable(false);
+                        oView.byId("savePrm").setVisible(false);
+                        oView.byId("promptAdd").setVisible(true);
+                        oView.byId("editPrm").setVisible(true);
+
+                        // Ensure GO validation passes after a successful save
+                        that.isPromptAdded = true;
+
+                        // Persist selection into response model so downstream logic sees it
+                        try {
+                            var oRespModel = that.getView().getModel("responseModel");
+                            if (oRespModel) {
+                                oRespModel.setProperty("/originalPrompt", promptContent);
+                                oRespModel.setProperty("/selectedPromptId", sPromptId || oView.byId("multiInputPrompt").getValue());
+                            }
+                        } catch (e) {
+                            // no-op
+                        }
+
+                        // that.getDataPromptMsg && that.getDataPromptMsg();
+                        // that.getFiles && that.getFiles();
+                    }
+                },
+
+                error: function (jqXhr) {
+                    var errMsg = "Error while saving prompt";
+                    try {
+                        errMsg = JSON.parse(jqXhr.responseText).error.message;
+                    } catch (e) { }
+
+                    MessageBox.error(errMsg);
+                }
+            });
         },
         onLiveChange: function (oEvent) {
             oEvent.getSource().setProperty("valueState", "None");
@@ -3420,253 +3479,223 @@ sap.ui.define([
         },
         getDataSysMsg: function () {
 
-            var busyDialog = new sap.m.BusyDialog();
-            //  busyDialog.open();
-
             var that = this;
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var scenarioSel = this.getView().byId("navigationList").getSelectedKey();
-            var sUrl = this._sBasePath + "/lm/promptTemplates";
-            var newUrl = "";
+            // var busyDialog = new sap.m.BusyDialog();
+            // busyDialog.open();
+            // that.getView().setBusy(true);
+            var Category = this.selectedKeyFunct();
+            var MsgType = "sysMsg";
+            var ProjectId = this._ProjectDetail;
 
-            switch (scenarioSel) {
-                case "bdPMO": newUrl = sUrl + "?scenario=BS&version=0.0.1"; break;
-                case "usrCr": newUrl = sUrl + "?scenario=User&version=0.0.1"; break;
-                case "fcFSD": newUrl = sUrl + "?scenario=fstoconf&version=0.0.1"; break;
-                case "osdTSD": newUrl = sUrl + "?scenario=fstots&version=0.0.1"; break;
-                case "cdGen": newUrl = sUrl + "?scenario=tstocode&version=0.0.1"; break;
-                case "cdRem": newUrl = sUrl + "?scenario=coderem&version=0.0.1"; break;
-                case "cdSum": newUrl = sUrl + "?scenario=codesum&version=0.0.1"; break;
-                case "gitKey": newUrl = sUrl + "?scenario=tstocodeGit&version=0.0.1"; break;
-                case "tutKey": newUrl = sUrl + "?scenario=TUT&version=0.0.1"; break;
-                case "bpmKey": newUrl = sUrl + "?scenario=BPM"; break;
-                case "tcgKey": newUrl = sUrl + "?scenario=TCG"; break;
-                case "pctKey": newUrl = sUrl + "?scenario=PCT"; break;
-            }
-            var historyMod = this.getOwnerComponent().getModel("historyModel");
+            return new Promise(function (resolve, reject) {
 
-            var selKey = this.getView().byId("sapDocSel").getSelectedKey();
-            var aSorters = [];
-            $.ajax({
-                url: newUrl,
-                method: "GET",
-                success: function (data) {
-                    if (data && data.resources && data.resources.length > 0) {
+                $.ajax({
+                    url: that._sBasePath + "/cockpit/getPromptDetails",
+                    method: "GET",
+                    data: {
+                        Category: Category,
+                        MsgType: MsgType,
+                        ProjectId: ProjectId
+                    },
+                    headers: that.defaultHeaders,
 
-                        var BSData = [];
-                        var fetchDetails = data.resources.map(function (resource) {
-                            return $.ajax({
-                                url: that._sBasePath + `/lm/promptTemplates/${resource.id}`,
-                                method: "GET",
-                                headers: that.defaultHeaders
-                            }).then(function (response) {
-                                if (response && response.spec && Array.isArray(response.spec.template)) {
-                                    var projectId = response.spec.defaults ? response.spec.defaults.ProjectId : null;
-                                    if (projectId == "default" || projectId == that._ProjectDetail || projectId == "Global") {
-                                        response.spec.template.forEach(function (templateItem) {
-                                            if (templateItem.role === "system" && templateItem.content) {
-                                                that.getView().getModel("switchTempModel")
-                                                    .setProperty("/roleofTemplate", "system");
-                                                if (scenarioSel == "pctKey") {
-                                                    if (that.step == "Step1") {
-                                                        if (resource.name == "Logical_Process_Cycle_Test") {
-                                                            BSData.push({
-                                                                PROMPTID: resource.id,
-                                                                PROMPT_TEMPLATE: templateItem.content,
-                                                                NAME: resource.name,
-                                                                PROJECT_ID: projectId
-                                                            });
-                                                            that.getView().byId("multiInputSystem").setValue(resource.name);
-                                                            that.getView().byId("descTxtArea").setValue(templateItem.content);
-                                                        }
-                                                        if (historyMod && historyMod.oData.historyData) {
-                                                            historyMod.oData = {};
-                                                            historyMod.refresh();
-                                                        }
-                                                    }
-                                                    else if (that.step == "Step2") {
-                                                        if (resource.name == "Test_Process_Cycle_Test") {
-                                                            BSData.push({
-                                                                PROMPTID: resource.id,
-                                                                PROMPT_TEMPLATE: templateItem.content,
-                                                                NAME: resource.name,
-                                                                PROJECT_ID: projectId
-                                                            });
-                                                            that.getView().byId("multiInputSystem").setValue(resource.name);
-                                                            that.getView().byId("descTxtArea").setValue(templateItem.content);
-                                                        }
-                                                    }
-                                                    else if (that.step == "Step3") {
-                                                        if (resource.name == "Function_Process_Cycle_Test") {
-                                                            BSData.push({
-                                                                PROMPTID: resource.id,
-                                                                PROMPT_TEMPLATE: templateItem.content,
-                                                                NAME: resource.name,
-                                                                PROJECT_ID: projectId
-                                                            });
-                                                            that.getView().byId("multiInputSystem").setValue(resource.name);
-                                                            that.getView().byId("descTxtArea").setValue(templateItem.content);
+                    success: function (response) {
+                        let finalData = [];
 
-                                                        }
-                                                    }
-                                                    that.isSystemSaved = true;
+                        if (response && response.value && Array.isArray(response.value.result)) {
+                            finalData = response.value.result
+                                .filter(function (item) {
+                                    return item.Project_Id === ProjectId || item.Project_Id === "default";
+                                })
+                                .map(function (item) {
+                                    return {
+                                        PROMPTID: item.ID,
+                                        UUID: item.ID, // fallback since UUID not coming
+                                        PROMPT_TEMPLATE: item.Prompt_Details,
+                                        NAME: item.PromptId,
+                                        SCENARIO: item.Category,
+                                        CREATED_AT: item.Date_Added,
+                                        PROJECT_ID: item.Project_Id,
+                                        ProjectId: item.Project_Id
+                                    };
+                                });
+                        }
 
-                                                }
-                                                else if (scenarioSel == "bpmKey") {
-                                                    if (resource.id == that.setBPMKey) {
-                                                        BSData.push({
-                                                            PROMPTID: resource.id,
-                                                            PROMPT_TEMPLATE: templateItem.content,
-                                                            NAME: resource.name,
-                                                            PROJECT_ID: projectId
-                                                        });
-                                                        that.getView().byId("multiInputSystem").setValue(resource.name);
-                                                        that.getView().byId("descTxtArea").setValue(templateItem.content);
-                                                    }
-                                                    BusyIndicator.hide();
-                                                } else if (scenarioSel == "tcgKey") {
-                                                    if (resource.id == that.setTCGKey) {
-                                                        BSData.push({
-                                                            PROMPTID: resource.id,
-                                                            PROMPT_TEMPLATE: templateItem.content,
-                                                            NAME: resource.name,
-                                                            PROJECT_ID: projectId
-                                                        });
-                                                        that.getView().byId("multiInputSystem").setValue(resource.name);
-                                                        that.getView().byId("descTxtArea").setValue(templateItem.content);
-                                                    }
-                                                    BusyIndicator.hide();
-                                                }
-                                                else {
-                                                    BSData.push({
-                                                        PROMPTID: resource.id,
-                                                        PROMPT_TEMPLATE: templateItem.content,
-                                                        NAME: resource.name,
-                                                        PROJECT_ID: projectId
-                                                    });
-                                                }
-                                            }
-                                        });
-                                    }
-                                }
+
+                        // Populate model used by System Key dialog
+                        Utility.initializeModel(
+                            that.getView(),
+                            "BSData",
+                            { messages: finalData }
+                        );
+
+                        // Ensure SystemKey list (bound to BSData>/messages) is visible
+                        var oSwitchTemp = that.getView().getModel("switchTempModel");
+                        if (oSwitchTemp) {
+                            oSwitchTemp.setProperty("/roleofTemplate", "system");
+                        }
+                        // tcg data
+
+                        //  IMPORTANT: match selected key
+                        //var selectedKey = that.setTCGKey;
+                        var selectedKey = that._currentSelectionKey;
+
+                        if (selectedKey && finalData.length > 0) {
+
+                            var selectedObj = finalData.find(function (item) {
+                                return item.UUID === selectedKey;
                             });
-                        });
 
-                        Promise.all(fetchDetails).then(function () {
-                            Utility.initializeModel(that.getView(), "BSData", { messages: BSData });
-                            aSorters.push(new sap.ui.model.Sorter("NAME", false));
-                            if (that.oDialog) {
-                                that.oDialog.setBusy(false);
+                            if (selectedObj) {
+                                that.getView().byId("multiInputSystem")
+                                    .setValue(selectedObj.NAME);
+
+                                that.getView().byId("descTxtArea")
+                                    .setValue(selectedObj.PROMPT_TEMPLATE);
                             }
-                        }).catch(function (error) {
-                            busyDialog.close();
-                            console.error("Error fetching System Key details:", error);
-                        });
+                        }
 
-                    } else {
+                        // tcg data
+                        // pct handle
+                        var scenarioSel = that._tempScenarioKey || that.getView().byId("navigationList").getSelectedKey();
+
+                        // STEP-based selection for PCT
+                        if (scenarioSel === "pctKey" && finalData.length > 0) {
+
+                            let expectedPromptId = "";
+
+                            if (that.step === "Step1" || that.step === "step1") {
+                                expectedPromptId = "Logical_Process_Cycle_Test";
+                            }
+                            else if (that.step === "Step2" || that.step === "step2") {
+                                expectedPromptId = "Test_Process_Cycle_Test";
+                            }
+                            else if (that.step === "Step3" || that.step === "step3") {
+                                expectedPromptId = "Function_Process_Cycle_Test";
+                            }
+
+                            var selectedObj = finalData.find(function (item) {
+                                return item.NAME === expectedPromptId; //  IMPORTANT
+                            });
+
+                            if (selectedObj) {
+
+                                that.getView().byId("multiInputSystem")
+                                    .setValue(selectedObj.NAME);
+
+                                that.getView().byId("descTxtArea")
+                                    .setValue(selectedObj.PROMPT_TEMPLATE);
+
+                                //that._currentSelectionKey = selectedObj.UUID; //  keep consistency
+                            }
+
+                            //  Clear history
+                            var historyMod = that.getOwnerComponent().getModel("historyModel");
+                            if (historyMod && historyMod.oData.historyData) {
+                                historyMod.oData = {};
+                                historyMod.refresh();
+                            }
+                        }
+                        // Clear busy states on both dialogs if present
                         if (that.oDialog) {
                             that.oDialog.setBusy(false);
                         }
-                    }
-                },
-                error: function (error) {
-                    busyDialog.close();
-                    reject(error);
-                }
-            });
-
-        },
-        getDataPromptMsg: function () {
-
-            var busyDialog = new sap.m.BusyDialog();
-            // busyDialog.open();
-
-            var that = this;
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var scenarioSel = this.getView().byId("navigationList").getSelectedKey();
-            var sUrl = this._sBasePath + "/lm/promptTemplates";
-            var newUrl = "";
-
-            switch (scenarioSel) {
-                case "DocGen": newUrl = sUrl + "?scenario=DocGen&version=0.0.1"; break;
-                case "bdPMO": newUrl = sUrl + "?scenario=BS&version=0.0.1"; break;
-                case "usrCr": newUrl = sUrl + "?scenario=User&version=0.0.1"; break;
-                case "fcFSD": newUrl = sUrl + "?scenario=fstoconf&version=0.0.1"; break;
-                case "osdTSD": newUrl = sUrl + "?scenario=fstots&version=0.0.1"; break;
-                case "cdGen": newUrl = sUrl + "?scenario=tstocode&version=0.0.1"; break;
-                case "cdRem": newUrl = sUrl + "?scenario=coderem&version=0.0.1"; break;
-                case "cdSum": newUrl = sUrl + "?scenario=codesum&version=0.0.1"; break;
-                case "gitKey": newUrl = sUrl + "?scenario=tstocodeGit&version=0.0.1"; break;
-                case "tutKey": newUrl = sUrl + "?scenario=TUT&version=0.0.1"; break;
-                case "bpmKey": newUrl = sUrl + "?scenario=BPM"; break;
-                case "tcgKey": newUrl = sUrl + "?scenario=TCG"; break;
-                case "pctKey": newUrl = sUrl + "?scenario=PCT"; break;
-            }
-            return new Promise(function (resolve, reject) {
-                $.ajax({
-                    url: newUrl,
-                    method: "GET",
-                    success: function (data) {
-                        if (data && data.resources && data.resources.length > 0) {
-
-                            var allUserPrompts = [];
-
-                            var fetchDetails = data.resources.map(function (resource) {
-                                return $.ajax({
-                                    url: that._sBasePath + `/lm/promptTemplates/${resource.id}`,
-                                    method: "GET",
-                                    headers: that.defaultHeaders
-                                }).then(function (response) {
-                                    if (response && response.spec && Array.isArray(response.spec.template)) {
-                                        var projectId = response.spec.defaults ? response.spec.defaults.ProjectId : null;
-                                        if (projectId == "default" || projectId == that._ProjectDetail) {
-                                            response.spec.template.forEach(function (templateItem) {
-                                                if (templateItem.role === "user" && templateItem.content) {
-                                                    that.getView().getModel("switchTempModel").setProperty("/roleofTemplate", "user");
-                                                    allUserPrompts.unshift({
-                                                        PROMPTID: resource.id,
-                                                        PROMPT_TEMPLATE: templateItem.content,
-                                                        NAME: resource.name,
-                                                        SCENARIO: resource.scenario,
-                                                        PROJECT_ID: projectId
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    }
-                                });
-                            });
-
-                            Promise.all(fetchDetails).then(function () {
-
-                                var BSPromptData = allUserPrompts;
-                                Utility.initializePromptModels(that.getView(), "BSPromptData", BSPromptData);
-                                if (that.oDialog1) {
-                                    that.oDialog1.setBusy(false);
-                                }
-
-                                resolve(data);
-
-                            }).catch(function (error) {
-                                console.error("Error fetching user prompt details:", error);
-                                busyDialog.close();
-                                reject(error);
-                            });
-
-                        } else {
-                            if (that.oDialog1) {
-                                that.oDialog1.setBusy(false);
-                            }
-                            resolve(null);
+                        if (that.sysKeySelFr) {
+                            that.sysKeySelFr.setBusy(false);
                         }
+                        //that.oDialog.setBusy(false);
+                        BusyIndicator.hide();
+
+                        resolve(finalData);
                     },
+
                     error: function (error) {
-                        busyDialog.close();
+                        if (that.oDialog) {
+                            that.oDialog.setBusy(false);
+                        }
+                        if (that.sysKeySelFr) {
+                            that.sysKeySelFr.setBusy(false);
+                        }
+                        if (that.oDialog1) {
+                            that.oDialog1.setBusy(false);
+                        }
+                        console.error("GET Prompt Error:", error);
                         reject(error);
                     }
                 });
+
             });
-            // }
+        },
+
+        getDataPromptMsg: function () {
+
+            var that = this;
+            var busyDialog = new sap.m.BusyDialog();
+            busyDialog.open();
+
+            var Category = this.selectedKeyFunct();
+            var MsgType = "prompt";
+            var ProjectId = this._ProjectDetail;
+
+            return new Promise(function (resolve, reject) {
+
+                var sUrl = that._sBasePath + "/cockpit/getPromptDetails?Category=" + encodeURIComponent(Category) +
+                    "&MsgType=" + encodeURIComponent(MsgType) +
+                    "&ProjectId=" + encodeURIComponent(ProjectId);
+
+                $.ajax({
+                    url: sUrl,
+                    method: "GET",
+                    headers: that.defaultHeaders,
+
+                    success: function (response) {
+                        busyDialog.close();
+
+                        let finalData = [];
+
+                        if (response && response.value && Array.isArray(response.value.result)) {
+
+                            finalData = response.value.result
+                                .filter(function (item) {
+                                    return item.Project_Id === ProjectId || item.Project_Id === "default";
+                                })
+                                .map(function (item) {
+                                    return {
+                                        PROMPTID: item.ID,
+                                        UUID: item.ID, // fallback (since UUID not in response)
+                                        PROMPT_TEMPLATE: item.Prompt_Details,
+                                        NAME: item.PromptId,
+                                        SCENARIO: item.Category,
+                                        CREATED_AT: item.Date_Added,
+                                        PROJECT_ID: item.Project_Id
+                                    };
+                                });
+                        }
+
+
+                        Utility.initializePromptModels(
+                            that.getView(),
+                            "BSPromptData",
+                            finalData
+                        );
+
+                        if (that.oDialog1) {
+                            that.oDialog1.setBusy(false);
+                        }
+
+                        resolve(finalData);
+                    },
+
+                    error: function (error) {
+                        if (that.oDialog) {
+                            that.oDialog.setBusy(false);
+                        }
+                        console.error("GET Prompt Error:", error);
+                        reject(error);
+                    }
+                });
+
+            });
         },
 
         onTableExport: function (eveTable) {
@@ -3967,6 +3996,537 @@ sap.ui.define([
             sap.m.URLHelper.redirect(sUrl, true);
             this._oPromptDatePopover && this._oPromptDatePopover.close();
         },
+         _handlePCTExecution: function () {
+            if (this.step === "Step2") {
+                this.pctkbwithstep2();
+            } else if (this.step === "Step3") {
+                this.pctkbwithstep3();
+            } else {
+                this.PCTKBwithTCG();
+            }
+ 
+ 
+        },
+
+        aicallforTCG_onlyKB: async function () {
+            BusyIndicator.show();
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            var oViewModel = this.getView().getModel("viewModel");
+            var that = this;
+ 
+            var modelName = this.getView().byId("selModel").getValue();
+            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            // var allMessages = [];
+            var oModel = this.getView().getModel("appmodel");
+            var fileData = oModel.getProperty("/BSContent");
+            var tcgRespArr = [];
+            var fileViewData = this.getView().getModel("fileViewModel").oData;
+            var fileExtension = (fileViewData.Name.split(".").pop() || "").toLowerCase();
+            var dataObj = { "UserStory_ID": "", "Epic": "", "Features": "", "User Stories Description": "", "Acceptance Criteria": "" };
+ 
+            var useridPattern = /UserStory_ID/g;
+ 
+            var tcc = this.getView().byId("tcCountNum").getValue();
+ 
+ 
+            var tokensUsed = 0;
+ 
+            var freeTextData = this.getView().getModel("tcgModel").getProperty("/fText") || "";
+            var citationIndex = [];
+            var apiKMUrl = this._sBasePath + "/kbintegration/tcg";
+ 
+            var typeofTC = "";
+ 
+            var selectedSysMsgType = this.getView().getModel("tcgModel").getProperty("/selVal");
+            if (selectedSysMsgType == "positive_scenario") {
+                typeofTC = "HAPPY";
+            } else if (selectedSysMsgType == "boundary_scenario") {
+                typeofTC = "BOUNDARY";
+            } else {
+                typeofTC = "NEGATIVE";
+            }
+            this.getView().getModel("tcgModel").setProperty("/allResponses", []);
+            var aiModelName = that.getView().byId("selModel").getValue();
+            if (aiModelName == "anthropic--claude-4.5-opus") {
+                aiModelName = "claude-opus4.5";
+            }
+            else if (aiModelName == "anthropic--claude-4-sonnet") {
+                aiModelName = "claude-4-sonnet";
+            }
+            else if (aiModelName == "anthropic--claude-3-haiku") {
+                aiModelName = "claude-3-haiku";
+            }
+            var fileDataRepeat = "";
+            var histPayload = {};
+            var aMessages = []
+            var kbPayload = {
+                "model": aiModelName,
+                "temperature": Number(oViewModel.getProperty("/comnPopUpModelParamTemp") || 0.7),
+                "top_p": Number(oViewModel.getProperty("/comnPopUpModelParamTopP") || 0.95),
+                "max_tokens": Number(oViewModel.getProperty("/comnPopUpModelParamMaxLength") || 5000),
+                "scenario": "",
+                "UserStory_ID": "",
+                "Epic": "",
+                "Features": "",
+                "UserStoriesDescription": "",
+                "AcceptanceCriteria": "",
+                "system_prompt": {
+                    "name": this.getView().byId("multiInputSystem").getValue(),
+                    "version": "1.0.0",
+                    "scenario": "",
+                    "spec": {
+                        "template": [
+                            {
+                                "role": "system",
+                                "content": ""
+                            }
+                        ],
+                        "defaults": {
+                            "additional_info": promptMsgData,
+                            "UserId": this._loggedInUser,
+                            "ProjectId": this._ProjectDetail,
+                            "selection": this.getView().getModel("tcgModel").getProperty("/selVal")
+                        }
+                    }
+                }
+            };
+            // start scenario change
+            var promptName = this.getView().byId("multiInputSystem").getValue();
+ 
+            var scenarioValue = "Happy Path"; // default
+ 
+            if (promptName === "Boundary_Test_Case_Generation") {
+                scenarioValue = "Boundary";
+            } else if (promptName === "Negative_Test_Case_Generation") {
+                scenarioValue = "Negative Test";
+            } else if (promptName === "Positive_Test_Case_Generation") {
+                scenarioValue = "Happy Path";
+            }
+            kbPayload.scenario = scenarioValue;
+            kbPayload.system_prompt.scenario = scenarioValue;
+            // end scenario change
+            if (fileData === "" && freeTextData == "") {
+                BusyIndicator.hide();
+                MessageBox.error("Please upload a File or Enter Text Data in Free Text Area!");
+                this.getView().byId("selDocList").setValueState("Error");
+                this.getView().byId("selDocList").setValueStateText("Upload/Select File");
+            } else if (Array.isArray(fileData)) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.warning(oBundle.getText("wrongTemplate"));
+            } else if (fileData.url) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.warning(oBundle.getText("kbTCGFileSel"));
+            }
+            else if (fileData !== "" || freeTextData !== "") {
+ 
+                ///////// test case count replacement
+                var testCaseCountText = "{test_case_count}: Number of test cases to generate (REQUIRED, default: 5)";
+                if (tcc == "0" || tcc == "") {
+                    aMsgContentSystemDesc = aMsgContentSystemDesc.replace(testCaseCountText, "{test_case_count}:5");
+                } else {
+                    aMsgContentSystemDesc = aMsgContentSystemDesc.replace(testCaseCountText, "{test_case_count}:" + tcc.toString());
+ 
+                }
+ 
+                //////////////additional info/ prompt replacement
+                var additionalInfoText = "{additional_info}: Supplementary context for test generation (OPTIONAL)";
+                if (promptMsgData !== "") {
+                    aMsgContentSystemDesc = aMsgContentSystemDesc.replace(additionalInfoText, "{additional_info}:" + promptMsgData + "</TCG_" + typeofTC + ">");
+                } else {
+                    aMsgContentSystemDesc = aMsgContentSystemDesc.replace(additionalInfoText, "{additional_info}:\n</TCG_" + typeofTC + ">");
+                }
+                /////file content true///
+                var originalSysMsg = aMsgContentSystemDesc;
+ 
+                var reqFileText = "{requirement_file}: Document containing user stories (OPTIONAL)";
+                var reqFreeText = "{requirement_text}: Direct user story text (OPTIONAL)";
+ 
+ 
+                if (!fileData.match(useridPattern) && !freeTextData.match(useridPattern)) {
+                    ///////// free text replacement
+                    if (freeTextData !== "") {
+                        aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFreeText, "{requirement_text}:" + freeTextData);
+                    } else {
+                        aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFreeText, "{requirement_text}:");
+                    }
+                    aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFileText, "<TCG_" + typeofTC + ">\n {requirement_file}:" + fileData);
+                    aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                    histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                    // allMessages.push(histPayload);
+                    kbPayload.system_prompt.spec.template = aMessages;
+                    try {
+                        const response = await fetch(apiKMUrl, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                ...(this.defaultHeaders || {})
+                            },
+                            body: JSON.stringify(kbPayload)
+                        });
+ 
+                        if (!response.ok) {
+                            const errText = await response.text().catch(() => "");
+                            throw new Error(`TCG call failed for ${story.UserStory_ID || "Unknown"}: ${response.status} ${errText}`);
+                        }
+                        const rawText = await response.text();
+ 
+                        // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                        const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+ 
+                        citationIndex = [];
+                        parsedResponse[0].citations.forEach((item) => {
+                            if (!item) return;
+ 
+                            const filename = item.filename || "Unknown";
+                            const link = item.download_url;
+                            if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                        });
+                        citationIndex.forEach(c => {
+                            const key = `${c.fname}|${c.link}`;
+                            if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                        });
+                        tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                        tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                        tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: citationIndex, tokensGen: tokensUsed });
+                        this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+ 
+                    } catch (err) {
+                        BusyIndicator.hide();
+                        sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                    } finally {
+ 
+                    }
+ 
+                } else {
+                    var fileORText = "";
+                    var changeinFT = "";
+                    if (fileData.match(useridPattern)) {
+                        fileORText = fileData;
+                        changeinFT = "File";
+                    } else if (freeTextData.match(useridPattern)) {
+                        fileORText = freeTextData;
+                        changeinFT = "FreeText";
+                    }
+                    if (this.getView().getModel("tcgModel").getProperty("/wordorExcel") == "word" || changeinFT == "FreeText") {
+ 
+                        var count = fileORText.match(useridPattern).length;
+                        var searchUserId = "UserStory_ID :";
+                        var searchEpic = "Epic :";
+                        var searchFeatures = "Features :";
+                        var searchUserStorriesDesc = "User Stories Description :";
+                        var searchAccCrit = "Acceptance Criteria :";
+                        var para = 0;
+                        // var dataArr = [];
+                        var userId, epic, features, userstoriesDesc, acccrit;
+ 
+                        for (var i = 0; i < count; i++) {
+                            if (i == 0) {
+                                para = 0;
+ 
+                                userId = fileORText.indexOf(searchUserId);
+                                epic = fileORText.indexOf(searchEpic);
+                                features = fileORText.indexOf(searchFeatures);
+                                userstoriesDesc = fileORText.indexOf(searchUserStorriesDesc);
+                                acccrit = fileORText.indexOf(searchAccCrit);
+                            } else {
+                                if (fileExtension == "txt") {
+ 
+                                    para = fileORText.search(/\r\n\r\n/) + 4;
+                                } else if (fileExtension == "pdf") {
+ 
+                                } else {
+ 
+                                    para = fileORText.search(/\n{4}/) + 4;
+                                }
+                                if (fileExtension !== "pdf") {
+ 
+                                    fileORText = fileORText.slice(para);
+                                }
+ 
+ 
+                                userId = fileORText.indexOf(searchUserId);
+                                epic = fileORText.indexOf(searchEpic);
+                                features = fileORText.indexOf(searchFeatures);
+                                userstoriesDesc = fileORText.indexOf(searchUserStorriesDesc);
+                                acccrit = fileORText.indexOf(searchAccCrit);
+                            }
+                            var textAfterIndex1 = userId + searchUserId.length;
+                            var textAfterString1 = fileORText.substring(textAfterIndex1).trim();
+                            if (fileExtension == "txt") {
+                                dataObj["UserStory_ID"] = textAfterString1.split("\r\n")[0].trim();
+                            } else if (fileExtension == "pdf") {
+                                dataObj["UserStory_ID"] = textAfterString1.split(searchEpic.slice(0, 4))[0].trim();
+                            } else {
+                                dataObj["UserStory_ID"] = textAfterString1.split("\n\n")[0].trim();
+                            }
+                            var textAfterIndex2 = epic + searchEpic.length;
+                            var textAfterString2 = fileORText.substring(textAfterIndex2).trim();
+                            if (fileExtension == "txt") {
+                                dataObj["Epic"] = textAfterString2.split("\r\n")[0].trim();
+                            } else if (fileExtension == "pdf") {
+                                dataObj["Epic"] = textAfterString2.split(searchFeatures.slice(0, 8))[0].trim();
+                            } else {
+                                dataObj["Epic"] = textAfterString2.split("\n\n")[0].trim();
+                            }
+                            var textAfterIndex3 = features + searchFeatures.length;
+                            var textAfterString3 = fileORText.substring(textAfterIndex3).trim();
+                            if (fileExtension == "txt") {
+                                dataObj["Features"] = textAfterString3.split("\r\n")[0].trim();
+                            } else if (fileExtension == "pdf") {
+                                dataObj["Features"] = textAfterString3.split(searchUserStorriesDesc.slice(0, 24))[0].trim();
+                            } else {
+                                dataObj["Features"] = textAfterString3.split("\n\n")[0].trim();
+                            }
+                            var textAfterIndex4 = userstoriesDesc + searchUserStorriesDesc.length;
+                            var textAfterString4 = fileORText.substring(textAfterIndex4).trim();
+                            if (fileExtension == "txt") {
+                                dataObj["User Stories Description"] = textAfterString4.split("\r\n")[0].trim();
+                            } else if (fileExtension == "pdf") {
+                                dataObj["User Stories Description"] = textAfterString4.split(searchAccCrit.slice(0, 19))[0].trim();
+                            } else {
+                                dataObj["User Stories Description"] = textAfterString4.split("\n\n")[0].trim();
+                            }
+                            var textAfterIndex5 = acccrit + searchAccCrit.length;
+ 
+                            var textAfterString5 = fileORText.substring(textAfterIndex5).trim();
+                            if (fileExtension == "txt") {
+                                dataObj["Acceptance Criteria"] = textAfterString5.split("\r\n")[0].trim();
+                            } else if (fileExtension == "pdf") {
+                                dataObj["Acceptance Criteria"] = textAfterString5.split(searchUserId.slice(0, 12))[0].trim();
+                            } else {
+                                dataObj["Acceptance Criteria"] = textAfterString5.split("\n\n")[0].trim();
+                            }
+                            if (fileExtension == "pdf") {
+                                var newLength = dataObj["Acceptance Criteria"].length;
+ 
+                                fileData = fileORText.slice(newLength);
+                            }
+                            fileDataRepeat = "UserStory_ID : " + dataObj["UserStory_ID"] + "\nEpic : " + dataObj["Epic"] + "\nFeatures : " + dataObj["Features"] + "\nUser Stories Description : " + dataObj["User Stories Description"] + "\nAcceptance Criteria : " + dataObj["Acceptance Criteria"];
+ 
+                            if (changeinFT == "File") {
+                                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFileText, "<TCG_" + typeofTC + ">\n {requirement_file}:" + fileDataRepeat);
+                                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFreeText, "{requirement_text}:" + freeTextData);
+                            } else if (changeinFT == "FreeText") {
+                                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFileText, "<TCG_" + typeofTC + ">\n {requirement_file}:" + fileData);
+                                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFreeText, "{requirement_text}:" + fileDataRepeat);
+                            }
+ 
+                            kbPayload["UserStory_ID"] = dataObj["UserStory_ID"];
+                            kbPayload["Epic"] = dataObj["Epic"];
+                            kbPayload["Features"] = dataObj["Features"];
+                            kbPayload["UserStoriesDescription"] = dataObj["User Stories Description"];
+                            kbPayload["AcceptanceCriteria"] = dataObj["Acceptance Criteria"];
+                            aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                            histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                            // allMessages.push(histPayload);
+                            kbPayload.system_prompt.spec.template = aMessages;
+                            try {
+                                const response = await fetch(apiKMUrl, {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        ...(this.defaultHeaders || {})
+                                    },
+                                    body: JSON.stringify(kbPayload)
+                                });
+ 
+                                if (!response.ok) {
+                                    const errText = await response.text().catch(() => "");
+                                    throw new Error(`TCG call failed for ${story.UserStory_ID || "Unknown"}: ${response.status} ${errText}`);
+                                }
+                                const rawText = await response.text();
+ 
+                                // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                                const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+ 
+                                citationIndex = [];
+                                parsedResponse[0].citations.forEach((item) => {
+                                    if (!item) return;
+                                    const filename = item.filename || "Unknown";
+                                    const link = item.download_url;
+                                    if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                                });
+                                citationIndex.forEach(c => {
+                                    const key = `${c.fname}|${c.link}`;
+                                    if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                                });
+ 
+                                tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                                tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                                tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: citationIndex, tokensGen: tokensUsed });
+                                this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+                                ///////reinit sys msg for req file changes for next user story
+                                aMsgContentSystemDesc = originalSysMsg;
+ 
+                            } catch (err) {
+                                BusyIndicator.hide();
+                                sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                            } finally {
+ 
+                            }
+ 
+ 
+                            // dataArr.push(dataObj);
+                        }
+ 
+                    } else if (this.getView().getModel("tcgModel").getProperty("/wordorExcel") == "excel") {
+                        var excelfileDetails = [];
+                        if (Array.isArray(this.getView().getModel("fileViewModel").oData.xlsJsonData)) {
+                            excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData;
+                        } else {
+                            excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData.Sheet1;
+                        }
+                        
+                        var excelfileDetails = [];
+ 
+                        if (Array.isArray(this.getView().getModel("fileViewModel").oData.xlsJsonData)) {
+                            excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData;
+                        } else {
+                            excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData.Sheet1;
+                        }
+ 
+                        // ✅ Create parallel tasks
+                        var promises = excelfileDetails.map(async (row) => {
+ 
+                            var localPayload = JSON.parse(JSON.stringify(kbPayload)); // ✅ clone payload
+                            var localSysMsg = originalSysMsg; // ✅ avoid overwrite issue
+ 
+                            var fileDataRepeat =
+                                "UserStory_ID : " + row["UserStory_ID"] +
+                                "\nEpic : " + row["Epic"] +
+                                "\nFeatures : " + row["Features"] +
+                                "\nUser Stories Description : " + row["User Stories Description"] +
+                                "\nAcceptance Criteria : " + row["Acceptance Criteria"] + "\n";
+ 
+                            let updatedMsg = localSysMsg
+                                .replace(reqFileText, "<TCG_" + typeofTC + ">\n {requirement_file}:" + fileDataRepeat)
+                                .replace(reqFreeText, "{requirement_text}:" + freeTextData);
+ 
+                            var aMessages = [{ "role": "system", "content": updatedMsg }];
+ 
+                            localPayload.UserStory_ID = row["UserStory_ID"];
+                            localPayload.Epic = row["Epic"];
+                            localPayload.Features = row["Features"];
+                            localPayload.UserStoriesDescription = row["User Stories Description"];
+                            localPayload.AcceptanceCriteria = row["Acceptance Criteria"];
+                            localPayload.system_prompt.spec.template = aMessages;
+ 
+                            try {
+                                const response = await fetch(apiKMUrl, {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        ...(that.defaultHeaders || {})
+                                    },
+                                    body: JSON.stringify(localPayload)
+                                });
+ 
+                                const rawText = await response.text();
+                                const parsedResponse = that._parseNdjsonOrJsonText(rawText);
+ 
+                                let citationIndex = [];
+                                parsedResponse[0].citations.forEach((item) => {
+                                    if (!item) return;
+                                    citationIndex.push({
+                                        link: item.download_url,
+                                        fname: item.filename || "Unknown"
+                                    });
+                                });
+ 
+                                return {
+                                    UserStory_ID: row["UserStory_ID"],
+                                    response: parsedResponse[0].response,
+                                    citations: citationIndex,
+                                    tokens: parsedResponse[0].token_usage.total_tokens || 0
+                                };
+ 
+                            } catch (err) {
+                                return {
+                                    UserStory_ID: row["UserStory_ID"],
+                                    error: err.message
+                                };
+                            }
+                        });
+ 
+                        // ✅ EXECUTE PARALLEL
+                        const results = await Promise.all(promises);
+ 
+                        // ✅ Store results
+                        tcgRespArr = [];
+ 
+                        results.forEach(res => {
+                            if (!res.error) {
+                                tokensUsed += res.tokens;
+ 
+                                tcgRespArr.push({
+                                    UserStory_ID: "***************" + res.UserStory_ID + "***************",
+                                    response: res.response,
+                                    citationTcg: res.citations,
+                                    tokensGen: tokensUsed
+                                });
+                            }
+                        });
+ 
+                        this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+ 
+                    }
+                }
+ 
+            }
+ 
+            const oSideNavigation = this.byId("sideNavigation");
+            oSideNavigation.setExpanded(false);
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
+            this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
+            var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+            var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+            var tokenData = this.getView().getModel("TokenLimit").oData;
+            var scenario = this.selectedKeyFunct();
+            var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+            this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+ 
+            this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
+            var resp = "";
+            var cit = [];
+            tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+            for (var r = 0; r < tcgRespArr.length; r++) {
+ 
+                resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
+                for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                    cit.push(tcgRespArr[r].citationTcg[c]);
+                }
+            }
+ 
+            this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
+            this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+            this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+            var oResMsg = {
+                role: 'assistant',
+                content: resp
+            };
+            var totToken = 0;
+            var fileCont = true;
+ 
+            Utility.handleTabResponseDynamic(
+                scenario,
+                that,
+                resp,
+                oResMsg,
+                promptMsgData,
+                totToken,
+                tknallotted,
+                oViewModel,
+                fileCont
+            );
+            this.getView().getModel("tcgModel").setProperty("/fText", "");
+            BusyIndicator.hide();
+        },
+
         onGo: function () {
             var that = this;
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
@@ -3976,8 +4536,8 @@ sap.ui.define([
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
             var promptID = this.getView().byId("multiInputPrompt").getValue();
             var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
-            if (popUpSel == "") {
-
+              if (popUpSel == "") {
+ 
                 if (sSelectedIconTab == "PCT") {
                     if (aFileData == "") {
                         MessageBox.error("Please Upload/ Select a file");
@@ -3990,24 +4550,39 @@ sap.ui.define([
                                         MessageBox.information(oBundle.getText("nextMsg"));
                                     } else {
                                         that.executedOnce == false;
-                                        that.MergeButtonTest1();
+                                        //that.MergeButtonTest1();
+                                        that._handlePCTExecution();
                                     }
                                 }
                             });
-
-
+                            this._handlePCTExecution();
+                            return;
+ 
                         } else {
+                            if (sSelectedIconTab == "PCT") {
+                                this._handlePCTExecution();
+                                return;
+                            }
                             this.MergeButtonTest1();
                         }
                         const oSideNavigation = this.byId("sideNavigation"),
                             bExpanded = oSideNavigation.getExpanded();
                         oSideNavigation.setExpanded(false);
                     }
-
+ 
                 } else if (sSelectedIconTab == "TCG") {
-                    this.AIcallforTCG();
-                } else if (sSelectedIconTab == "BPM" && aFileData == "") {
+                    // this.AIcallforTCG();
+                    this.aicallforTCG_onlyKB();
+                }
+                // else if (sSelectedIconTab == "PCT") {
+                //       this._handlePCTExecution();
+ 
+                // }
+                else if (sSelectedIconTab == "BPM" && aFileData == "") {
                     MessageBox.error("Please Upload/ Select a file");
+                } else if (sSelectedIconTab == "BPM" && aFileData !== "") {
+                    //MessageBox.error("Please Upload/ Select a file");
+                    this.aicallforBPM_onlyKB();
                 } else {
                     var sysName = this.getView().byId("multiInputSystem").getValue();
                     var sysContent = this.getView().byId("descTxtArea").getValue();
@@ -4045,25 +4620,26 @@ sap.ui.define([
                         this.getView().byId("descTxtAreaPrompt").setValue("");
                         MessageBox.error("Please Select a Prompt ID or Create a Prompt");
                         noGo = true;
-                    } else if (promptID !== "" && promptMsgData !== "" && this.isPromptAdded == false) {
-                        MessageBox.error("Please Save Prompt Details to proceed!");
-                        noGo = true;
                     }
+                    //else if (promptID !== "" && promptMsgData !== "" && this.isPromptAdded == false) {
+                    //     MessageBox.error("Please Save Prompt Details to proceed!");
+                    //     noGo = true;
+                    // }
                     else if (!aFileData && promptMsgData == "" && bRagEnabled == false && this.executedOnce == false) {
                         MessageBox.error("Please upload/ select a file OR select/add a Prompt!");
                         this.getView().byId("multiInputPrompt").setValueState("Error");
                         this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
                         this.getView().byId("selDocList").setValueState("Error");
                         this.getView().byId("selDocList").setValueStateText("Upload/Select File");
-
+ 
                         // this.getView().byId("fileUploader1").setValueState("Error");
                         // this.getView().byId("fileUploader1").setValueStateText("Upload/Select File");
-
-                    } else if ((promptMsgData == "" || promptID == "") && bRagEnabled == true && (sSelectedIconTab !== "PCT" || sSelectedIconTab !== "TCG" || sSelectedIconTab !== "BPM")) {
+ 
+                    } else if ((promptMsgData == "" || promptID == "") && bRagEnabled == true && (sSelectedIconTab !== "PCT" && sSelectedIconTab !== "TCG" && sSelectedIconTab !== "BPM")) {
                         this.getView().byId("multiInputPrompt").setValueState("Error");
                         this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
                         MessageBox.error("Please Select/Add a Prompt!");
-
+ 
                     } else if (promptMsgData == "" && promptID == "" && bRagEnabled == false && this.executedOnce == true) {
                         this.getView().byId("descTxtAreaPrompt").setValueState("Error");
                         this.getView().byId("descTxtAreaPrompt").setValueStateText("Please Select a Prompt ID or Create a Prompt");
@@ -4079,7 +4655,8 @@ sap.ui.define([
                         oSideNavigation.setExpanded(false);
                     }
                 }
-            } else {
+            } 
+            else {
                 MessageBox.information("Please select a functionality Tab from Navigation Group to press Go!");
             }
         },
@@ -5988,109 +6565,140 @@ sap.ui.define([
         onSearch: function (url, roleSel) {
 
             var that = this;
-            //sys call
-            //var selectedcat = eveFilterbar.getSource().getProperty().getKey();
-            var sUrl = this._sBasePath + "/lm/promptTemplates?scenario=BS&version=0.0.1";
-            sUrl = url;
-            var allPrompts = [];
-            var allPromptsModel = new sap.ui.model.json.JSONModel(allPrompts);
+            var sUrl = url;
+            // Initialize/reset the model used by Prompt Library table
+            var allPromptsModel = new sap.ui.model.json.JSONModel([]);
             that.getView().setModel(allPromptsModel, "allPromptsModel");
-            that.getView().getModel("allPromptsModel").refresh();
+            that.getView().getModel("allPromptsModel").refresh(true);
+
             return new Promise(function (resolve, reject) {
                 $.ajax({
                     url: sUrl,
                     method: "GET",
+                    headers: that.defaultHeaders,
                     success: function (data) {
-                        if (data && data.resources && data.resources.length > 0) {
+                        try {
+                            var items = [];
+                            var projectId = that._ProjectDetail || "";
 
-                            var fetchDetails = data.resources.map(function (resource) {
-                                return $.ajax({
-                                    url: that._sBasePath + `/lm/promptTemplates/${resource.id}`,
-                                    method: "GET",
-                                    headers: that.defaultHeaders
-                                }).then(async function (response) {
-                                    if (response && response.spec && response.spec.defaults) {
-                                        if (response.spec.defaults.ProjectId == "default" || response.spec.defaults.ProjectId == that._ProjectDetail) {
-
-                                            response.spec.template.forEach(function (templateItem) {
-                                                if (templateItem.role === roleSel && templateItem.content) {
-                                                    const updatedBy = response?.spec.defaults?.updBy || "";
-                                                    const updatedAt = response?.spec.defaults?.updAt || "";
-                                                    const msgType = response?.spec.defaults?.msgType || ""
-                                                    allPrompts.push({ ID: response.id, Prompt_Template: response.spec.template[0].content, UpdatedAt: updatedAt, ProjectId: response.spec.defaults.ProjectId, Date_Added: response.creationTimestamp, Category: response.scenario, MsgType: msgType, UserId: response.spec.defaults.UserId, UpdatedBy: updatedBy, name: response.name });
-
-                                                    allPrompts.map((unit) => {
-                                                        // if (response.spec.template[0].role == "system") {
-                                                        //     unit.MsgType = "System Message";
-                                                        // } else 
-                                                        if (response.spec.template[0].role == "user") {
-                                                            unit.MsgType = "Prompt";
-                                                        } else if (response.spec.template[0].role == "system") {
-                                                            unit.MsgType = "System Message";
-                                                        }
-                                                        switch (unit.Category) {
-                                                            case "BS":
-                                                                return unit.Category = "Business Discussion/PMO";
-                                                                break;
-                                                            case "User":
-                                                                return unit.Category = "User Story Creation";
-                                                                break;
-                                                            case "fstoconf":
-                                                                return unit.Category = "Functional Configuration/FSD";
-                                                                break;
-                                                            case "fstots":
-                                                                return unit.Category = "Technical Specification";
-                                                                break;
-                                                            case "tstocode":
-                                                                return unit.Category = "Code Generation";
-                                                                break;
-                                                            case "coderem":
-                                                                return unit.Category = "Code Remediation";
-                                                                break;
-                                                            case "codesum":
-                                                                return unit.Category = "Code Summary";
-                                                                break;
-                                                            case "tstocodeGit":
-                                                                return unit.Category = "Git Integration";
-                                                                break;
-                                                            case "TUT":
-                                                                return unit.Category = "Technical User Testing";
-                                                                break;
-                                                            case "BPM":
-                                                                return unit.Category = "Business Process Model";
-                                                                break;
-                                                            case "TCG":
-                                                                return unit.Category = "Test case Generation";
-                                                                break;
-                                                            case "PCT":
-                                                                return unit.Category = "Process Cycle Test";
-                                                                break;
-                                                        }
-                                                        return unit;
-                                                    });
-                                                }
-                                            });
+                            // New API shape: /cockpit/getPromptDetails returns { value: { status, result: [...] } }
+                            if (data && data.value && Array.isArray(data.value.result)) {
+                                items = data.value.result
+                                    .filter(function (item) {
+                                        return item.Project_Id === "default" || item.Project_Id === projectId;
+                                    })
+                                    .map(function (item) {
+                                        var msgTypeNorm = item.MsgType || "";
+                                        if (roleSel === "user" || msgTypeNorm === "prompt") {
+                                            msgTypeNorm = "Prompt";
+                                        } else if (roleSel === "system" || msgTypeNorm === "sysMsg") {
+                                            msgTypeNorm = "System Message";
                                         }
-                                        that.getView().getModel("allPromptsModel").refresh();
-                                    }
-                                    BusyIndicator.hide();
+                                        return {
+                                            ID: item.ID,
+                                            UUID: item.ID, // fallback alias
+                                            Prompt_Template: item.Prompt_Details,
+                                            Date_Added: item.Date_Added,
+                                            Category: item.Category,
+                                            ProjectId: item.Project_Id,
+                                            MsgType: msgTypeNorm,
+                                            UserId: item.UpdatedBy || item.CreatedBy || "",
+                                            name: item.PromptId,
+                                            UpdatedBy: item.UpdatedBy || "",
+                                            UpdatedAt: item.UpdatedAt || item.Date_Added || ""
+                                        };
+                                    });
+                                that.getView().getModel("allPromptsModel").setData(items);
+                                that.getView().getModel("allPromptsModel").refresh(true);
+                                BusyIndicator.hide();
+                                resolve(items);
+                                return;
+                            }
+
+                            // Legacy fallback (old LM promptTemplates flow)
+                            if (data && Array.isArray(data.resources)) {
+                                var pending = data.resources.map(function (resource) {
+                                    return $.ajax({
+                                        url: that._sBasePath + "/lm/promptTemplates/" + resource.id,
+                                        method: "GET",
+                                        headers: that.defaultHeaders
+                                    }).then(function (response) {
+                                        if (response && response.spec && response.spec.defaults) {
+                                            if (response.spec.defaults.ProjectId === "default" || response.spec.defaults.ProjectId === projectId) {
+                                                response.spec.template.forEach(function (templateItem) {
+                                                    if (templateItem.role === roleSel && templateItem.content) {
+                                                        var updatedBy = response?.spec?.defaults?.updBy || "";
+                                                        var updatedAt = response?.spec?.defaults?.updAt || "";
+                                                        var msgType = response?.spec?.defaults?.msgType || "";
+                                                        var rec = {
+                                                            ID: response.id,
+                                                            UUID: response.id,
+                                                            Prompt_Template: response.spec.template[0].content,
+                                                            UpdatedAt: updatedAt,
+                                                            ProjectId: response.spec.defaults.ProjectId,
+                                                            Date_Added: response.creationTimestamp,
+                                                            Category: response.scenario,
+                                                            MsgType: msgType,
+                                                            UserId: response.spec.defaults.UserId,
+                                                            UpdatedBy: updatedBy,
+                                                            name: response.name
+                                                        };
+                                                        if (response.spec.template[0].role == "user") {
+                                                            rec.MsgType = "Prompt";
+                                                        } else if (response.spec.template[0].role == "system") {
+                                                            rec.MsgType = "System Message";
+                                                        }
+                                                        items.push(rec);
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    });
                                 });
-                            });
+
+                                $.when.apply($, pending).always(function () {
+                                    that.getView().getModel("allPromptsModel").setData(items);
+                                    that.getView().getModel("allPromptsModel").refresh(true);
+                                    BusyIndicator.hide();
+                                    resolve(items);
+                                });
+                                return;
+                            }
+
+                            // No recognized data shape
+                            that.getView().getModel("allPromptsModel").setData([]);
+                            that.getView().getModel("allPromptsModel").refresh(true);
+                            BusyIndicator.hide();
+                            resolve([]);
+                        } catch (e) {
+                            BusyIndicator.hide();
+                            reject(e);
                         }
+                    },
+                    error: function (xhr, status, error) {
+                        BusyIndicator.hide();
+                        reject(error || status);
                     }
                 });
             });
 
         },
-        catSelChange: function (eveSelCh) {
+         catSelChange: function (eveSelCh) {
             var sProject = this._ProjectDetail;
             var sUserName = this._loggedInUserName;
             var selPar = eveSelCh.getSource().getSelectedKey();
             var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
             var url = "";
             var msgsel = this.getView().byId("msgSelected").getSelectedKey();
+            let msgType="";
+            if(msgsel=="user"){
+                msgType="prompt";
+            }else{
+                msgType="system";
+            }
             if (popUpSel == "promptlibpr") {
-                url = this._sBasePath + "/lm/promptTemplates?scenario=" + selPar + "&version=0.0.1";
+                // url = this._sBasePath + "/lm/promptTemplates?scenario=" + selPar + "&version=0.0.1";
+                 url = this._sBasePath +"/cockpit/getPromptDetails?Category=" + selPar + "&MsgType="+msgType+"&ProjectId=" + this._ProjectDetail;
                 this.onSearch(url, msgsel);
             } else if (popUpSel == "knowlBAdmin") {
                 this.loadKnowlBAdminFiles(selPar, sProject, sUserName);
@@ -6594,7 +7202,14 @@ sap.ui.define([
             }
 
             this.getView().getModel("savePrmModel").refresh();
-            var url = this._sBasePath + "/lm/promptTemplates?scenario=" + selPar + "&version=0.0.1";
+            let msgType="";
+            if(msgSel=="user"){
+                msgType="prompt";
+            }else{
+                msgType="system";
+            }
+            var url =  this._sBasePath +"/cockpit/getPromptDetails?Category=" + selPar + "&MsgType="+msgType+"&ProjectId=" + this._ProjectDetail;
+            // var url = this._sBasePath + "/lm/promptTemplates?scenario=" + selPar + "&version=0.0.1";
 
             this.getView().byId("categorySelect").setSelectedKey(selPar);
             this.onSearch(url, msgSel);
@@ -6708,11 +7323,9 @@ sap.ui.define([
             }
         },
         onDeletePrompt: function (oEvent) {
-            // var oButton = oEvent.getSource();
             var that = this;
             var sPromptId = "";
             var oPromptModel, aPrompts = [];
-            var checkProject = "";
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
             var sFragmentName = this.getView().getModel("switchFragments").getProperty("/frg/frName");
             var oTable = "";
@@ -6731,60 +7344,82 @@ sap.ui.define([
                 var oContext = oSelectedItem.getBindingContext("allPromptsModel");
                 aPrompts = this.getView().getModel("allPromptsModel").getData();
                 var oPromptData = oContext.getObject();
-                checkProject = oPromptData.ProjectId;
-                sPromptId = oPromptData.ID;
+                sPromptId = oPromptData.UUID;
                 if (!sPromptId) {
                     MessageBox.error("Prompt ID is missing. Cannot delete.");
                     return;
                 }
             } else {
-                sPromptId = oEvent.getParameter("listItem").getBindingContext("BSPromptData").getObject().PROMPTID;
+                /////sPromptId = oEvent.getParameter("listItem").getBindingContext("BSPromptData").getObject().PROMPTID;
+                sPromptId = oEvent.getParameter("listItem").getBindingContext("BSPromptData").getObject().UUID;
                 oPromptModel = this.getView().getModel("BSPromptData");
                 aPrompts = oPromptModel.getData();
-                checkProject = oEvent.getParameter("listItem").getBindingContext("BSPromptData").getObject().PROJECT_ID;
             }
-            if (checkProject == "default") {
-                MessageBox.information("Cannot Delete Default Project");
-            } else {
-                MessageBox.confirm(oBundle.getText("confirmDeletePrompt"), {
-                    title: oBundle.getText("deletePromptTitle"),
-                    actions: [MessageBox.Action.YES, MessageBox.Action.NO],
-                    onClose: function (oAction) {
-                        if (oAction === MessageBox.Action.YES) {
-                            $.ajax({
-                                url: that._sBasePath + "/lm/promptTemplates/" + sPromptId,
-                                method: "DELETE",
-                                headers: this.defaultHeaders,
-                                success: function () {
+            var oModel = this.getView().getModel("BSPromptData");
+            var aData = oModel.getData();
+            sap.m.MessageBox.confirm(oBundle.getText("confirmDeletePrompt"), {
+                title: oBundle.getText("deletePromptTitle"),
+                actions: [sap.m.MessageBox.Action.YES, sap.m.MessageBox.Action.NO],
 
-                                    ////   MessageBox.success(oBundle.getText("promptDeletedSuccess"));
-                                    sap.m.MessageToast.show(oBundle.getText("promptDeletedSuccess"));
-                                    // var updatedPrompts = aPrompts.filter(item => item.ID !== sPromptId);
-                                    var updatedPrompts;
-                                    if (sFragmentName === "promptlibpr") {
-                                        updatedPrompts = aPrompts.filter(item => item.ID !== sPromptId);
-                                    } else {
-                                        updatedPrompts = aPrompts.filter(item => item.PROMPTID !== sPromptId);
-                                    }
-                                    oPromptModel.setData(updatedPrompts);
-                                    oPromptModel.refresh(true);
-                                    if (sFragmentName === "promptlibpr") {
-                                        oTable.removeSelections(true);
-                                        if (oTable.getBinding("items")) {
-                                            oTable.getBinding("items").refresh();
-                                        }
-                                    }
-                                    //// that.deleteSysPrompt(oEvent, false);
-                                }.bind(this),
-                                error: function (error) {
-                                    console.error("Error deleting prompt:", error);
-                                    MessageBox.error(oBundle.getText("promptDeleteError"));
-                                }
-                            });
+                onClose: function (oAction) {
+
+                    if (oAction === sap.m.MessageBox.Action.YES) {
+                        if (that.oDialog1) {
+                            that.oDialog1.setBusy(true);
                         }
-                    }.bind(this)
-                });
-            }
+
+                        $.ajax({
+                            url: that._sBasePath+"/cockpit/deletePromptDetails",   // CAP action
+                            method: "POST",
+                            contentType: "application/json",
+                            headers: that.defaultHeaders,
+                            data: JSON.stringify({
+                                // ID: sUUID
+                                // uuid: sID
+                                uuid: sPromptId
+                            }),
+
+                            success: function () {
+
+                                sap.m.MessageToast.show(oBundle.getText("promptDeletedSuccess"));
+                                var updatedData = aData.filter(function (item) {
+                                    return item.UUID !== sPromptId;
+                                });
+                                if (sFragmentName === "promptlibpr") {
+                                    oPromptModel.refresh();
+                                    oTable.removeSelections(true);
+                                    if (oTable.getBinding("items")) {
+                                        oTable.getBinding("items").refresh();
+                                    }
+                                } else {
+                                    oModel.setData(updatedData);
+                                    oModel.refresh(true);
+
+                                    if (that.oDialog1) {
+                                        that.oDialog1.setBusy(false);
+                                    }
+                                }
+                            },
+
+                            error: function (error) {
+
+                                if (that.oDialog1) {
+                                    that.oDialog1.setBusy(false);
+                                }
+
+                                console.error("Delete error:", error);
+
+                                var errMsg = oBundle.getText("promptDeleteError");
+                                try {
+                                    errMsg = JSON.parse(error.responseText).error.message;
+                                } catch (e) { }
+
+                                sap.m.MessageBox.error(errMsg);
+                            }
+                        });
+                    }
+                }
+            });
         },
         onClearFil: function () {
             var oView = this.getView();
@@ -7739,9 +8374,50 @@ sap.ui.define([
                 }
             }
         },
+        resolveModelName: function (apiModelText) {
+ 
+            const model = apiModelText?.toLowerCase();
+ 
+            if (
+                model === "anthropic--claude-3.5-sonnet" ||
+                model === "anthropic--claude-3-haiku" ||
+                model === "anthropic--claude-3-sonnet" ||
+                model === "anthropic--claude-4.5-opus" ||
+                model === "anthropic--claude-4-sonnet"
+            ) {
+                return "claude-opus4.5";
+            }
+ 
+            if (
+                model === "gpt-5" ||
+                model === "gpt-5-mini" ||
+                model === "gpt-5-nano"
+            ) {
+                return "gpt5";
+            }
+ 
+            if (model === "mistralai--mistral-large-instruct") {
+                return "mistral-large";
+            }
+ 
+            if (model === "mistralai--mistral-small-instruct") {
+                return "mistral-small";
+            }
+ 
+            if (
+                model === "gpt-4o" ||
+                model === "gpt-4.1-nano" ||
+                model === "gpt-4.1"
+            ) {
+                return "gpt-4o";
+            }
+ 
+ 
+            return null;
+        },
         // end of  madhu
         // Start of Aishwarya for KnowledgeBase Search
-        KBImpliment: async function () {
+         KBImpliment: async function () {
             ////rag call to AI with sys and prompt
             var that = this;
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
@@ -7752,9 +8428,9 @@ sap.ui.define([
             var oViewModel = this.getView().getModel("viewModel").getData();
             var oToken, usedToken;
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
-
+ 
             var sPromt = "", oTextArea = "", oUsage = "", sysMsg = "", fromattedtext = "", osysMsgVal = "", apiModelSelect = "", apiModelText = "", oPromtModel = null;
-
+ 
             oUsage = this.getView().getModel("TokenLimit").oData.usedToken;
             osysMsgVal = that.getView().byId("descTxtArea").getValue();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", osysMsgVal);
@@ -7765,7 +8441,7 @@ sap.ui.define([
             fromattedtext = that.getView().byId("Citations");
             apiModelSelect = that.getView().byId("selModel").getSelectedKey();
             apiModelText = that.getView().byId("selModel").getValue();
-
+ 
             const oMsgModel = this.getView().getModel("msgModel");
             var oModel = this.getView().getModel("appmodel");
             var contentPath = "/BSContent";
@@ -7786,7 +8462,7 @@ sap.ui.define([
                 }
             ];
             this.getView().getModel("msgModel").setProperty("/aMsg", aMessages);
-
+ 
             if (sSelectedIconTab == "BPM" || sSelectedIconTab == "PCT") {
                 var reupload = false;
                 var airesp = this.getView().getModel("airesponseDetailModel").getProperty("/resp");
@@ -7801,13 +8477,13 @@ sap.ui.define([
             isUserContent = true;
             if (!isUserContent && (!promptMsgData || promptMsgData === "")) {
                 MessageBox.warning(oBundle.getText("userInputMsg"));
-
+ 
                 return;
             }
             var localData = oPromptModel.getData();
             var existsInLocalData = localData.some(item => item.PROMPT_TEMPLATE === promptMsgData);
-
-
+ 
+ 
             var isFirstResponse = true;
             Utility.createAndFetchPromptDetails(
                 promptMsgData,
@@ -7816,12 +8492,20 @@ sap.ui.define([
                 this,
                 oPromptModel,
                 oBundle,
-                isFirstResponse,
-                this._sBasePath
+                isFirstResponse
             );
-
+ 
             var oViewModel = this.getView().getModel("viewModel");
             var payload = Utility.createPayloadBasedOnModel(apiModelText, aMessages, oViewModel, this);
+ 
+            // Resolve modelName: updating the model name fro KB payload
+            const resolvedModelName = this.resolveModelName(apiModelText);
+ 
+            // Update payload ONLY if mapping exists
+            if (resolvedModelName) {
+                payload.modelName = resolvedModelName;
+            }
+ 
             var apiKMUrl = "";
             var oPayload = {};
             var ceArr = [];
@@ -7836,15 +8520,15 @@ sap.ui.define([
                     streaming: true,
                     modelPayload: JSON.stringify(payload)
                 };
-
+ 
                 var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
                 var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-
+ 
                 this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
-
+ 
                 try {
                     busyDialog.open();
-
+ 
                     const response = await fetch(apiKMUrl, {
                         method: "POST",
                         headers: {
@@ -7853,7 +8537,7 @@ sap.ui.define([
                         },
                         body: JSON.stringify(oPayload)
                     });
-
+ 
                     if (!response.ok) {
                         const errText = await response.text().catch(() => "");
                         throw new Error(`HTTP ${response.status}: ${errText || response.statusText}`);
@@ -7878,28 +8562,28 @@ sap.ui.define([
                     // ======== STREAMING ========
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
-
+ 
                     const oDetailModel = this.getOwnerComponent().getModel("airesponseDetailModel");
                     const oTokenModel = this.getView().getModel("TokenLimit");
-
+ 
                     const tokenPath = `/${sSelectedIconTab}/${apiModelText}`;
-
+ 
                     const tokenDefaults = oTokenModel.getProperty(tokenPath) || { TotalToken: 0, UsageToken: 0 };
                     oTokenModel.setProperty(tokenPath, tokenDefaults);
                     oTokenModel.refresh(true);
-
+ 
                     if (oDetailModel) {
                         oDetailModel.setProperty("/resp", "");
                         oDetailModel.setProperty("/citationArr", []);
                         oDetailModel.refresh(true);
                     }
-
+ 
                     let buffer = "";
                     let finalText = "";
                     let usedToken = 0;
                     const streamedEvents = [];
                     let hasShownFirstToken = false;
-
+ 
                     const parseLine = (line) => {
                         const trimmed = (line || "").trim();
                         if (!trimmed) return null;
@@ -7907,7 +8591,7 @@ sap.ui.define([
                         const payloadStr = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
                         try { return JSON.parse(payloadStr); } catch { return null; }
                     };
-
+ 
                     const pushCitations = (meta) => {
                         if (!meta || !oDetailModel) return;
                         const arr = Array.isArray(meta) ? meta : (typeof meta === "object" ? [meta] : []);
@@ -7925,16 +8609,16 @@ sap.ui.define([
                         oDetailModel.setProperty("/citationArr", existing);
                         oDetailModel.refresh(true);
                     };
-
+ 
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
-
+ 
                         buffer += decoder.decode(value, { stream: true });
-
+ 
                         const lines = buffer.split("\n");
                         buffer = lines.pop() || ""; // keep partial line
-
+ 
                         for (const line of lines) {
                             const evt = parseLine(line);
                             if (!evt) continue;
@@ -7944,7 +8628,7 @@ sap.ui.define([
                                 try { busyDialog.close(); } catch (e) { }
                                 try { BusyIndicator.hide(); } catch (e) { }
                             }
-
+ 
                             // Stream content per token/word
                             if (evt.type === "content" && evt?.data?.chunk && oDetailModel) {
                                 finalText += evt.data.chunk;               // preserves backend spacing
@@ -7952,8 +8636,8 @@ sap.ui.define([
                                 oDetailModel.refresh(true);
                                 if (evt?.data?.metadata) pushCitations(evt.data.metadata);
                             }
-
-
+ 
+ 
                             // Live tokens: update whenever token_usage appears
                             if (evt?.data?.token_usage) {
                                 const usage = evt.data.token_usage;
@@ -7964,13 +8648,13 @@ sap.ui.define([
                                     if (oTokenModel.updateBindings) oTokenModel.updateBindings(true);
                                 }
                             }
-
+ 
                             if (evt?.data?.metadata && evt.type !== "content") {
                                 pushCitations(evt.data.metadata);
                             }
                         }
                     }
-
+ 
                     if (buffer.trim()) {
                         const evt = parseLine(buffer);
                         if (evt) {
@@ -7997,20 +8681,20 @@ sap.ui.define([
                             }
                         }
                     }
-
+ 
                     // if (sSelectedIconTab == "PCT") {
                     //     that.getView().byId("nextBtn").setVisible(true);
                     //     MessageBox.information(oBundle.getText("nextMsg"));
-
+ 
                     // }
-
+ 
                     // ======== END STREAMING ========
                     busyDialog.close();
-
+ 
                     const safeEvents = Array.isArray(streamedEvents) ? streamedEvents : [];
                     const { message: oResMsg, usedTokens: oUsedToken, rawText: sResponse } =
                         await this.KnowledgeBase(safeEvents, busyDialog);
-
+ 
                     var codeLanguage = "";
                     //scenario == "coderem" ||
                     if (sSelectedIconTab == "tstocode") {
@@ -8033,7 +8717,7 @@ sap.ui.define([
                     var scenario = this.selectedKeyFunct();
                     var tknUsed = tokenData[scenario][selectedAI].TotalToken;
                     this.getView().getModel("TokenLimit").setProperty("/token", tknUsed);
-
+ 
                     this.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
                     this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
                     // }
@@ -8051,7 +8735,7 @@ sap.ui.define([
                         fileCont
                     );
                     this.sendTokenUsageLog(usedToken, promptMsgData);
-
+ 
                 } catch (error) {
                     MessageBox.error("error");
                 } finally {
@@ -8144,24 +8828,29 @@ sap.ui.define([
             // Fallback: plain text wrapped
             return [{ type: "text/plain", content: rawText }];
         },
-        // KBModelSelect: function (apiModelText) {
-        //     ////restricted to only below models for RAG KB
-        //     switch (apiModelText) {
-        //         case "gpt-5":
-        //             return this._sBasePath + `/kb-integration/RagQueryGPT5`;
-        //         case "gpt-4o":
-        //             return this._sBasePath + `/kb-integration/RagQueryGPT4o`;
-        //         case "anthropic--claude-3.5-sonnet":
-        //             return this._sBasePath + `/kb-integration/RagQueryClaude3.5`;
-        //         case "mistralai--mistral-small-instruct":
-        //             return this._sBasePath + `/kb-integration/RagQueryMistralSmall`;
-        //         case "mistralai--mistral-large-instruct":
-        //             return this._sBasePath + `/kb-integration/RagQueryMistralLarge`;
-        //         default:
-        //             return false;
-        //     }
-        // },
-        // KB upload files function
+KBModelSelect: function (apiModelText) {
+
+            switch (apiModelText) {
+                case "gpt-5":
+                case "gpt-4o":
+                case "gpt-4.1":
+                case "gpt-4.1-nano":
+                case "gpt-5-mini":
+                case "gpt-5-nano":
+                case "anthropic--claude-3.5-sonnet":
+                case "anthropic--claude-4.5-sonnet":
+                case "anthropic--claude-4-sonnet":
+                case "anthropic--claude-3-haiku":
+                case "anthropic--claude-3-sonnet":
+                case "anthropic--claude-4.5-opus":
+                case "mistralai--mistral-small-instruct":
+                case "mistralai--mistral-large-instruct":
+                    return this._sBasePath + `/kb-integration/ragquery`;
+                default:
+                    return "";
+            }
+
+        },
         ragHandleUploadPress: function () {
             var that = this;
             var sProject = this._ProjectDetail;
@@ -8488,16 +9177,22 @@ sap.ui.define([
         },
 
         ////amplifier
-        onSapDocSel: function (sEve) {
-
+       onSapDocSel: function (sEve) {
             this.setBPMKey = sEve.getSource().getSelectedKey();
+            var selectedKey = sEve.getSource().getSelectedKey();
+            this.setBPMKey = selectedKey;      // BPM key
+            this._currentSelectionKey = selectedKey; // COMMON key (important)
+ 
             this.isSystemSaved = true;
             BusyIndicator.show();
             this.onRefresh();
             this.getDataSysMsg();
-        }, onTCTypeSel: function (sEve) {
+        },
+        onTCTypeSel: function (sEve) {
             this.isSystemSaved = true;
             this.setTCGKey = sEve.getSource().getSelectedKey();
+            var selectedKey = sEve.getSource().getSelectedKey();
+            this._currentSelectionKey = selectedKey;
             var selection = "";
             if (sEve.getSource().getSelectedItem().mProperties.text == "Positive") {
                 selection = "positive_scenario";
@@ -8509,6 +9204,26 @@ sap.ui.define([
                 selection = "boundary_scenario";
             }
             this.getView().getModel("tcgModel").setProperty("/selVal", selection);
+            // to avoid multiple calls
+ 
+            var oModel = this.getView().getModel("BSData");
+ 
+            if (oModel) {
+                var data = oModel.getProperty("/messages");
+ 
+                var selectedObj = data.find(item => item.UUID === selectedKey);
+ 
+                if (selectedObj) {
+                    this.getView().byId("multiInputSystem")
+                        .setValue(selectedObj.NAME);
+ 
+                    this.getView().byId("descTxtArea")
+                        .setValue(selectedObj.PROMPT_TEMPLATE);
+ 
+                    return; //  no API call needed
+                }
+            }
+ 
             BusyIndicator.show();
             this.onRefresh();
             this.getDataSysMsg();
@@ -8542,6 +9257,50 @@ sap.ui.define([
             }
             this.getDataSysMsg();
 
+        },
+        openTCGTemplateFragment: async function () {
+            BusyIndicator.show();
+            var that = this;
+            if (!this.TCGtemplate) {
+                this.TCGtemplate = await this.loadFragment({
+                    name: "aicockpitfeq.fragment.TCGFreeText"
+                }).then(function (oDialog) {
+                    this.TCGtemplate = oDialog;
+                    this.TCGtemplate.attachBrowserEvent("keydown", function (oEvent) {
+                        if (oEvent.key === "Escape") {
+                            oEvent.stopPropagation();
+                            oEvent.preventDefault();
+                        }
+                    });
+                    oDialog.open();
+                    BusyIndicator.hide();
+
+                }.bind(this));
+            } else {
+                BusyIndicator.hide();
+            }
+        },
+        saveTcgFreeText: function () {
+            ///keep as it is
+            this.getView().byId("selDocList").setValueState("None");
+            for (var i = 0; i < this.getView().getDependents().length; i++) {
+                if (this.getView().getDependents()[i]._dialog) {
+                    this.getView().getDependents()[i]._dialog.close();
+                } else {
+                    this.getView().getDependents()[i].close();
+                }
+            }
+        },
+
+        saveTCGInfo: function () {
+            var oFileUploader = this.getView().byId("fileUploader1");
+            this.getView().byId("viewDocBtn").setVisible(false);
+            this.getView().byId("docNameText").setVisible(false);
+            var aFiles = (oFileUploader && oFileUploader.oFileUpload && oFileUploader.oFileUpload.files) ? oFileUploader.oFileUpload.files : [];
+            this.getView().byId("docNameText").setText("Template");
+            this.getView().byId("docNameText").setVisible(true);
+            this.getView().byId("viewDocBtn").setVisible(true);
+            this.closeSysKeyFr();
         },
         onopenPCTsysFrg: async function () {
             if (!this.pctFrg) {
@@ -8919,18 +9678,55 @@ sap.ui.define([
                 gitModel.setProperty("/isFileSelected", true);
             }
         },
+        
         onViewTemplate: function () {
-
             if (!this._selectedTemplateKey) {
                 sap.m.MessageToast.show("No template selected");
                 return;
             }
-
-            var url = this._sBasePath + "/cockpit/viewTemplate?key=" + encodeURIComponent(this._selectedTemplateKey);
-
-            window.open(url, "_blank");
+            let key = encodeURIComponent(this._selectedTemplateKey);
+            let url = this._sBasePath + "/cockpit/viewTemplate(key='" + key + "')";
+            // Show busy indicator
+            sap.ui.core.BusyIndicator.show(0);
+            $.ajax({
+                url: url,
+                method: "GET",
+                success: function (response) {
+                    sap.ui.core.BusyIndicator.hide();
+                    try {
+                        // Parse the response (it's a JSON string)
+                        let data = typeof response === 'string' ? JSON.parse(response) : response;
+                        // If response has a 'value' property (OData wrapper), extract it
+                        if (data.value) {
+                            data = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+                        }
+                        // Convert Base64 to Blob
+                        let byteCharacters = atob(data.content);
+                        let byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        let byteArray = new Uint8Array(byteNumbers);
+                        let blob = new Blob([byteArray], { type: data.contentType });
+                        // Create object URL and open in new tab
+                        let blobUrl = URL.createObjectURL(blob);
+                        window.open(blobUrl, "_blank");
+                        // Clean up the object URL after a delay
+                        setTimeout(function () {
+                            URL.revokeObjectURL(blobUrl);
+                        }, 10000);
+                    } catch (e) {
+                        console.error("Error processing response:", e);
+                        sap.m.MessageToast.show("Error displaying template");
+                    }
+                },
+                error: function (err) {
+                    sap.ui.core.BusyIndicator.hide();
+                    console.error("Error fetching template:", err);
+                    sap.m.MessageToast.show("Failed to fetch template");
+                }
+            });
         },
-
 
         onTemplateUpload: function (oEvent) {
             var that = this;
@@ -9016,6 +9812,784 @@ sap.ui.define([
             this.setDocGenKey = selectedKey;
             this._tempScenarioKey = "DocGen";
             this.getDataSysMsgDocGen();
+        },
+
+        pctkbwithstep3: async function () {
+            BusyIndicator.show();
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            var oViewModel = this.getView().getModel("viewModel");
+            var that = this;
+            var modelId = this.getView().byId("selModel").getSelectedKey();
+            var modelName = this.getView().byId("selModel").getValue();
+            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            var allMessages = [];
+            var oModel = this.getView().getModel("appmodel");
+            var fileData = oModel.getProperty("/BSContent");
+            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            var tokensUsed = 0;
+            this.getView().getModel("tcgModel").setProperty("/allResponses", []);
+            var aiModelName = that.getView().byId("selModel").getValue();
+            var respValue = this.getOwnerComponent()
+                .getModel("airesponseDetailModel")
+                .getProperty("/resp");
+            var messages = [];
+            var attachments = [];
+
+            /*  System message ALWAYS */
+            aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{step_2_output}/g, respValue);
+            messages.push({
+                role: "system",
+                content: aMsgContentSystemDesc
+            });
+
+
+
+
+
+
+            var kbPayload = {
+                "step_number": 3,
+                "model": aiModelName,
+                temperature: Number(oViewModel.getProperty("/comnPopUpModelParamTemp") || 0.7),
+                top_p: Number(oViewModel.getProperty("/comnPopUpModelParamTopP") || 0.95),
+                max_tokens: Number(oViewModel.getProperty("/comnPopUpModelParamMaxLength") || 4000),
+                session_id: "",
+                messages: messages,
+
+            };
+
+            if (attachments.length > 0) {
+                kbPayload.attachments = attachments;
+            }
+
+
+
+
+            if (fileData === "") {
+                BusyIndicator.hide();
+                MessageBox.error("Please upload a File!");
+                this.getView().byId("selDocList").setValueState("Error");
+                this.getView().byId("selDocList").setValueStateText("Upload/Select File");
+                return;
+            }
+            // else if (Array.isArray(fileData) == true) {
+            //     BusyIndicator.hide();
+            //     sap.m.MessageBox.warning(oBundle.getText("wrongTemplate"));
+            // }
+            else if (fileData.url && bRagEnabled === true) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.warning(oBundle.getText("kbTCGFileSel"));
+            }
+            else if (fileData !== "") {
+                //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
+                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
+                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                this.onPctStepOutput(aMessages);
+                if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
+                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                allMessages.push(histPayload);
+
+                //var apiKMUrl = "/kb-integration/PCT_STEP3";
+                var apiKMUrl = this._sBasePath + "/kbintegration/pct";
+                try {
+                    const response = await fetch(apiKMUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(this.defaultHeaders || {})
+                        },
+                        body: JSON.stringify(kbPayload)
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text().catch(() => "");
+                        throw new Error(`PCT call failed for : ${response.status} ${errText}`);
+                    }
+                    const rawText = await response.text();
+
+                    // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                    const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+                    var tokenConsumed = {};
+                    var citationIndex = [];
+                    parsedResponse[0].citations.forEach((item) => {
+                        if (!item) return;
+                        const filePath = item.download_url || item.file_path || "";
+                        const filename = item.filename || "Unknown";
+                        const link = item.download_url;
+                        if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                    });
+                    citationIndex.forEach(c => {
+                        const key = `${c.fname}|${c.link}`;
+                        if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                    });
+                    tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step3_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+
+                } catch (err) {
+                    BusyIndicator.hide();
+                    sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                } finally {
+                    // BusyIndicator.hide();
+                }
+                const oSideNavigation = this.byId("sideNavigation"),
+                    bExpanded = oSideNavigation.getExpanded();
+                oSideNavigation.setExpanded(false);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
+                this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
+                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+                var tokenData = this.getView().getModel("TokenLimit").oData;
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                var scenario = this.selectedKeyFunct();
+                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+                this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
+                var resp = "";
+                var cit = [];
+                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (var r = 0; r < tcgRespArr.length; r++) {
+
+                    resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
+                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    }
+                    // for(var t=0;t<tcgRespArr.length;t++){
+                    // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
+                    // }
+
+                }
+                this.getView().byId("prgIndicator").setPercentValue("100%");
+                this.getView().byId("prgIndicator").setDisplayValue("Completed");
+                this.getView().byId("nextBtn").setVisible(false);
+                // that.onPctStepOutput(reAMessages);
+                MessageBox.success("All Steps Completed!");
+
+                this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
+                this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+                this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+                //this._addToHistoryLogGeneric(resp);
+                var oResMsg = {
+                    role: 'assistant',
+                    content: resp
+                };
+                var totToken = 0;
+                var fileCont = true;
+                var oViewModel = that.getView().getModel("viewModel");
+                Utility.handleTabResponseDynamic(
+                    scenario,
+                    that,
+                    resp,
+                    oResMsg,
+                    promptMsgData,
+                    totToken,
+                    tknallotted,
+                    oViewModel,
+                    fileCont
+                );
+
+                BusyIndicator.hide();
+            }
+        },
+        pctkbwithstep2: async function () {
+            BusyIndicator.show();
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            var oViewModel = this.getView().getModel("viewModel");
+            var that = this;
+            var modelId = this.getView().byId("selModel").getSelectedKey();
+            var modelName = this.getView().byId("selModel").getValue();
+            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            var allMessages = [];
+            var oModel = this.getView().getModel("appmodel");
+            var fileData = oModel.getProperty("/BSContent");
+            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            var tokensUsed = 0;
+            this.getView().getModel("tcgModel").setProperty("/allResponses", []);
+            var aiModelName = that.getView().byId("selModel").getValue();
+            var respValue = this.getOwnerComponent()
+                .getModel("airesponseDetailModel")
+                .getProperty("/resp");
+            var messages = [];
+            var attachments = [];
+
+            /*  System message ALWAYS */
+            aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{step_1_output}/g, respValue);
+            messages.push({
+                role: "system",
+                content: aMsgContentSystemDesc
+            });
+
+
+
+
+
+
+            var kbPayload = {
+                step_number: 2,
+                "model": aiModelName,
+                temperature: Number(oViewModel.getProperty("/comnPopUpModelParamTemp") || 0.7),
+                top_p: Number(oViewModel.getProperty("/comnPopUpModelParamTopP") || 0.95),
+                max_tokens: Number(oViewModel.getProperty("/comnPopUpModelParamMaxLength") || 4000),
+                session_id: " ",
+                messages: messages,
+
+            };
+
+            if (attachments.length > 0) {
+                kbPayload.attachments = attachments;
+            }
+
+
+
+
+            if (fileData === "") {
+                BusyIndicator.hide();
+                MessageBox.error("Please upload a File!");
+                this.getView().byId("selDocList").setValueState("Error");
+                this.getView().byId("selDocList").setValueStateText("Upload/Select File");
+                return;
+            }
+            // else if (Array.isArray(fileData) == true) {
+            //     BusyIndicator.hide();
+            //     sap.m.MessageBox.warning(oBundle.getText("wrongTemplate"));
+            // }
+            else if (fileData.url && bRagEnabled === true) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.warning(oBundle.getText("kbTCGFileSel"));
+            }
+            else if (fileData !== "") {
+                //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
+                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
+                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                this.onPctStepOutput(aMessages);
+                if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
+                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                allMessages.push(histPayload);
+                //kbPayload.system_prompt.spec.template = aMessages;
+                //var apiKMUrl = "/kb-integration/PCT_STEP2";
+                var apiKMUrl = this._sBasePath + "/kbintegration/pct";
+                try {
+                    const response = await fetch(apiKMUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(this.defaultHeaders || {})
+                        },
+                        body: JSON.stringify(kbPayload)
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text().catch(() => "");
+                        throw new Error(`PCT call failed for : ${response.status} ${errText}`);
+                    }
+                    const rawText = await response.text();
+
+                    // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                    const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+                    var tokenConsumed = {};
+                    var citationIndex = [];
+
+                    tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step2_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+
+                } catch (err) {
+                    BusyIndicator.hide();
+                    sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                } finally {
+                    // BusyIndicator.hide();
+                }
+                const oSideNavigation = this.byId("sideNavigation"),
+                    bExpanded = oSideNavigation.getExpanded();
+                oSideNavigation.setExpanded(false);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
+                this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
+                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+                var tokenData = this.getView().getModel("TokenLimit").oData;
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                var scenario = this.selectedKeyFunct();
+                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+                this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
+                var resp = "";
+                var cit = [];
+                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (var r = 0; r < tcgRespArr.length; r++) {
+
+                    resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
+                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    }
+                    // for(var t=0;t<tcgRespArr.length;t++){
+                    // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
+                    // }
+
+                }
+                this.getView().byId("pctSysMsgBtn").setVisible(true);
+                this.onPctStepOutput(kbPayload.messages);
+                this.getView().byId("nextBtn").setVisible(true);
+                MessageBox.information(oBundle.getText("nextMsg"));
+
+                this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
+                this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+                this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+                //this._addToHistoryLogGeneric(resp);
+                var oResMsg = {
+                    role: 'assistant',
+                    content: resp
+                };
+                var totToken = 0;
+                var fileCont = true;
+                var oViewModel = that.getView().getModel("viewModel");
+                Utility.handleTabResponseDynamic(
+                    scenario,
+                    that,
+                    resp,
+                    oResMsg,
+                    promptMsgData,
+                    totToken,
+                    tknallotted,
+                    oViewModel,
+                    fileCont
+                );
+
+                BusyIndicator.hide();
+            }
+        },
+
+        PCTKBwithTCG: async function () {
+            BusyIndicator.show();
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            var oViewModel = this.getView().getModel("viewModel");
+            var that = this;
+            var modelId = this.getView().byId("selModel").getSelectedKey();
+            var modelName = this.getView().byId("selModel").getValue();
+            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            var allMessages = [];
+            var oModel = this.getView().getModel("appmodel");
+            var fileData = oModel.getProperty("/BSContent");
+            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            var tokensUsed = 0;
+            this.getView().getModel("tcgModel").setProperty("/allResponses", []);
+            var aiModelName = that.getView().byId("selModel").getValue();
+
+            var messages = [];
+            var attachments = [];
+
+            /* System message ALWAYS */
+            //aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
+
+            aMsgContentSystemDesc = aMsgContentSystemDesc
+                .replace(/\{requirement_file}/g, fileData)
+                .replace(/\{additional_info}/g, promptMsgData || "");
+
+            messages.push({
+                role: "system",
+                content: aMsgContentSystemDesc
+            });
+
+            /*  IMAGE case */
+            if (
+                Array.isArray(fileData) &&
+                fileData.length > 0 &&
+                fileData[0].type === "image_url"
+            ) {
+                messages.push({
+                    role: "user",
+                    content: [
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: fileData[0].image_url.url
+                            }
+                        },
+                        {
+                            type: "text",
+                            text: "Analyze the BPMN process diagram above and identify all decision points and paths."
+                        }
+                    ]
+                });
+            }
+
+            /* ATTACHMENT case (NOT image) */
+            else if (fileData && fileData.data && fileData.filename) {
+
+                messages.push({
+                    role: "user",
+                    content: promptMsgData || "Please analyze the attached document."
+                });
+
+                attachments.push({
+                    type: "file",
+                    filename: fileData.filename,
+                    content_type: fileData.contentType || "application/octet-stream",
+                    data: fileData.data   // base64
+                });
+            }
+
+            /* Final payload */
+            var kbPayload = {
+                "step_number": 1,
+                "model": aiModelName,
+                temperature: Number(oViewModel.getProperty("/comnPopUpModelParamTemp") || 0.7),
+                top_p: Number(oViewModel.getProperty("/comnPopUpModelParamTopP") || 0.95),
+                max_tokens: Number(oViewModel.getProperty("/comnPopUpModelParamMaxLength") || 4000),
+                "session_id": "",
+                messages: messages,
+
+
+
+            };
+
+            if (attachments.length > 0) {
+                kbPayload.attachments = attachments;
+            }
+
+
+
+
+            if (fileData === "") {
+                BusyIndicator.hide();
+                MessageBox.error("Please upload a File!");
+                this.getView().byId("selDocList").setValueState("Error");
+                this.getView().byId("selDocList").setValueStateText("Upload/Select File");
+                return;
+            }
+            // else if (Array.isArray(fileData) == true) {
+            //     BusyIndicator.hide();
+            //     sap.m.MessageBox.warning(oBundle.getText("wrongTemplate"));
+            // }
+            else if (fileData.url && bRagEnabled === true) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.warning(oBundle.getText("kbTCGFileSel"));
+            }
+            else if (fileData !== "") {
+                //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
+                aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
+                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                this.onPctStepOutput(aMessages);
+                if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
+                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                allMessages.push(histPayload);
+
+                //var apiKMUrl = "/kb-integration/PCT_STEP1";
+                var apiKMUrl = this._sBasePath + "/kbintegration/pct";
+                try {
+                    const response = await fetch(apiKMUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(this.defaultHeaders || {})
+                        },
+                        body: JSON.stringify(kbPayload)
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text().catch(() => "");
+                        throw new Error(`PCT call failed for : ${response.status} ${errText}`);
+                    }
+                    const rawText = await response.text();
+
+                    // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                    const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+                    var tokenConsumed = {};
+                    var citationIndex = [];
+
+                    tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step1_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+
+                } catch (err) {
+                    BusyIndicator.hide();
+                    sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                } finally {
+                    // BusyIndicator.hide();
+                }
+                const oSideNavigation = this.byId("sideNavigation"),
+                    bExpanded = oSideNavigation.getExpanded();
+                oSideNavigation.setExpanded(false);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
+                this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
+                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+                var tokenData = this.getView().getModel("TokenLimit").oData;
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                var scenario = this.selectedKeyFunct();
+                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+                this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
+                var resp = "";
+                var cit = [];
+                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (var r = 0; r < tcgRespArr.length; r++) {
+
+                    resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
+                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    }
+                    // for(var t=0;t<tcgRespArr.length;t++){
+                    // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
+                    // }
+
+                }
+                this.getView().byId("pctSysMsgBtn").setVisible(true);
+                this.onPctStepOutput(kbPayload.messages);
+                this.getView().byId("nextBtn").setVisible(true);
+                MessageBox.information(oBundle.getText("nextMsg"));
+
+                this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
+                this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+                this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+                //this._addToHistoryLogGeneric(resp);
+                var oResMsg = {
+                    role: 'assistant',
+                    content: resp
+                };
+                var totToken = 0;
+                var fileCont = true;
+                var oViewModel = that.getView().getModel("viewModel");
+                Utility.handleTabResponseDynamic(
+                    scenario,
+                    that,
+                    resp,
+                    oResMsg,
+                    promptMsgData,
+                    totToken,
+                    tknallotted,
+                    oViewModel,
+                    fileCont
+                );
+
+                BusyIndicator.hide();
+            }
+        },
+        aicallforBPM_onlyKB: async function () {
+            BusyIndicator.show();
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            var oViewModel = this.getView().getModel("viewModel");
+            var that = this;
+            var modelId = this.getView().byId("selModel").getSelectedKey();
+            var modelName = this.getView().byId("selModel").getValue();
+            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            var allMessages = [];
+            var oModel = this.getView().getModel("appmodel");
+            var fileData = oModel.getProperty("/BSContent");
+            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            var tokensUsed = 0;
+            this.getView().getModel("tcgModel").setProperty("/allResponses", []);
+            var aiModelName = this.getView().byId("selModel").getValue();
+
+            var messages = [];
+            var attachments = [];
+
+            aMsgContentSystemDesc = aMsgContentSystemDesc
+                .replace(/\{\{\?requirement_file\}\}/g, fileData || "")
+                .replace(/\{\{\?additional_info\}\}/g, promptMsgData || "");
+
+
+            messages.push({
+                role: "system",
+                content: aMsgContentSystemDesc
+            });
+
+            // IMAGE case
+            if (
+                Array.isArray(fileData) &&
+                fileData.length > 0 &&
+                fileData[0].type === "image_url"
+            ) {
+                messages.push({
+                    role: "user",
+                    content: [
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: fileData[0].image_url.url
+                            }
+                        },
+                        {
+                            type: "text",
+                            text: promptMsgData || "Testing"
+                        }
+                    ]
+                });
+            }
+
+            //ATTACHMENT case (NOT image)
+            else if (fileData && fileData.data && fileData.filename) {
+
+                messages.push({
+                    role: "user",
+                    content: promptMsgData || "Please analyze the attached document."
+                });
+
+                attachments.push({
+                    type: "file",
+                    filename: fileData.filename,
+                    content_type: fileData.contentType || "application/octet-stream",
+                    data: fileData.data   // base64
+                });
+            }
+
+
+            var kbPayload = {
+                "model": aiModelName,
+                temperature: Number(oViewModel.getProperty("/comnPopUpModelParamTemp") || 0.7),
+                top_p: Number(oViewModel.getProperty("/comnPopUpModelParamTopP") || 0.95),
+                max_tokens: Number(oViewModel.getProperty("/comnPopUpModelParamMaxLength") || 4000),
+                messages: messages,
+            };
+
+            if (attachments.length > 0) {
+                kbPayload.attachments = attachments;
+            }
+            if (fileData === "") {
+                BusyIndicator.hide();
+                MessageBox.error("Please upload a File!");
+                this.getView().byId("selDocList").setValueState("Error");
+                this.getView().byId("selDocList").setValueStateText("Upload/Select File");
+                return;
+            }
+
+            else if (fileData.url) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.warning(oBundle.getText("kbTCGFileSel"));
+            }
+            else if (fileData !== "") {
+                //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
+                //aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
+
+                aMsgContentSystemDesc = aMsgContentSystemDesc
+                    .replace(/\{\{\?requirement_file\}\}/g, fileData || "")
+                    .replace(/\{\{\?additional_info\}\}/g, promptMsgData || "");
+
+                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+
+                if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
+                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                allMessages.push(histPayload);
+
+                //var apiKMUrl = "/kb-integration/BPM";
+                var apiKMUrl = this._sBasePath + "/kbintegration/bpm";
+                try {
+                    const response = await fetch(apiKMUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(this.defaultHeaders || {})
+                        },
+                        body: JSON.stringify(kbPayload)
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text().catch(() => "");
+                        throw new Error(`BPM call failed for : ${response.status} ${errText}`);
+                    }
+                    const rawText = await response.text();
+
+                    // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                    const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+                    var tokenConsumed = {};
+                    var citationIndex = [];
+                    parsedResponse[0].citations.forEach((item) => {
+                        if (!item) return;
+                        const filePath = item.download_url || item.file_path || "";
+                        const filename = item.filename || "Unknown";
+                        const link = item.download_url;
+                        if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                    });
+                    citationIndex.forEach(c => {
+                        const key = `${c.fname}|${c.link}`;
+                        if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                    });
+                    tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].bpm_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+
+                } catch (err) {
+                    BusyIndicator.hide();
+                    sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                } finally {
+                    // BusyIndicator.hide();
+                }
+                const oSideNavigation = this.byId("sideNavigation"),
+                    bExpanded = oSideNavigation.getExpanded();
+                oSideNavigation.setExpanded(false);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
+                this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
+                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+                var tokenData = this.getView().getModel("TokenLimit").oData;
+                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                var scenario = this.selectedKeyFunct();
+                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+                this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
+                var resp = "";
+                var cit = [];
+                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (var r = 0; r < tcgRespArr.length; r++) {
+
+                    resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
+                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    }
+
+
+                }
+
+
+                this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
+                this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+                this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+                //this._addToHistoryLogGeneric(resp);
+                var oResMsg = {
+                    role: 'assistant',
+                    content: resp
+                };
+                var totToken = 0;
+                var fileCont = true;
+                var oViewModel = that.getView().getModel("viewModel");
+                Utility.handleTabResponseDynamic(
+                    scenario,
+                    that,
+                    resp,
+                    oResMsg,
+                    promptMsgData,
+                    totToken,
+                    tknallotted,
+                    oViewModel,
+                    fileCont
+                );
+
+                BusyIndicator.hide();
+            }
+
         },
         getDataSysMsgDocGen: function () {
             var that = this;
