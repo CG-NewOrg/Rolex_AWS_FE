@@ -1,0 +1,99 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:tnt="sap.tnt"
+    xmlns:f="sap.f"
+    xmlns:l="sap.ui.layout"
+    xmlns:fb="sap.ui.comp.filterbar"
+    controllerName="aicockpitfeq.controller.KnowB">
+    <Dialog id="kbDialog"
+            title="Knowledge Base"
+            contentWidth="80%"
+            contentHeight="80%"
+            stretch="true"
+            class="sapUiContentPadding"
+            draggable="true"
+            resizable="true">
+       <VBox id="chatContainer">
+        <ScrollContainer id="chatScrollContainer"
+                    width="98%"
+                    height="63vh"
+                    vertical="true"
+                    class="scrollContainer">
+                <VBox id="chatContent" width="100%">
+                    <items>
+                        <List id="chatList" items="{path : 'chatModel>/data' , templateShareable:false}" backgroundDesign="Transparent" growing="true"
+                            showNoData="false" growingScrollToLoad="true">
+                            <CustomListItem>
+                                <VBox>
+                                    <items>
+                                        <VBox justifyContent="End" alignItems="End" class="Human2 sapUiSmallMarginEnd">
+                                            <Text text="{chatModel>userMessage}" class="Human sapUiTinyMargin"/>
+                                        </VBox>
+                                        <VBox class="question">
+                                            <Text text="{chatModel>aiResponse}" id="idAiResponseText1" class="sapUiTinyMargin AIChat"/>
+                                                <VBox id="id_citations">
+                                                <items>
+                                                    <HBox items="{path : 'chatModel>Citations' , templateShareable:false}">
+                                                        <items>
+                                                            <VBox>
+                                                                <Link text="{path: 'chatModel>citation'}" press=".onCitationPress" class="sapUiSmallMarginBegin sapUITinyMargin linkText">
+                                                                    <customData>
+                                                                        <core:CustomData key="index" value="{chatModel>index}"/>
+                                                                    </customData>
+                                                                </Link>
+ 
+                                                                <Link text="{chatModel>source}"
+                                                                href="{chatModel>link}"
+                                                                target="_blank"
+                                                                class="noFadeLink sapUiSmallMarginBegin sapUITinyMargin metadataText linkText"
+                                                                visible="{= ${chatModel>source} !== ''}"/>
+ 
+                                                                <Text text="{chatModel>page}"
+                                                                class="sapUiSmallMarginBegin sapUITinyMargin metadataText"
+                                                                visible="{= ${chatModel>page} !== ''}"/>
+                                                            </VBox>
+                                                        </items>
+                                                    </HBox>
+                                                    <HBox items="{path : 'chatModel>Citations', length: 1 , templateShareable:false}">
+                                                        <items>
+                                                            <Link text="{path: 'chatModel>usecaseUrl'}" press=".onUsecaseURLPressNew" class="sapUiSmallMarginBegin sapUITinyMargin linkText">
+                                                                <customData>
+                                                                    <core:CustomData key="index" value="{chatModel>index}"/>
+                                                                </customData>
+                                                            </Link>
+                                                        </items>
+                                                    </HBox>
+                                                </items>
+                                            </VBox>
+                                        </VBox>
+                                    </items>
+                                </VBox>
+                            </CustomListItem>
+                        </List>
+                    </items>
+                </VBox>
+            </ScrollContainer>
+        </VBox>
+       
+        <HBox class="userInputArea" alignItems="Center" justifyContent="Center" id="id_UserInputArea" width="100%">
+            <VBox alignItems="Center">
+                <TextArea id="userInput" class="userInput sapUiTinyMargin" placeholder="Type your message here..." width="1150px"/>
+                <Text text="Powered by Generative AI. Please validate the information before use."
+                    class="sapUiTinyMarginTop disclaimerText"
+                    textAlign="Center"/>
+            </VBox>
+    </HBox>        
+       
+ <buttons>
+        <Button tooltip="Refresh" icon="sap-icon://refresh" type="Emphasized" press=".refresh" class="sapUiTinyMarginBeginEnd" />
+                                <Button tooltip="Export to PDF" icon="sap-icon://download"  press=".onDownloadPDF" class="sapUiTinyMarginBeginEnd"/>
+                                <Button tooltip="Export to Doc" icon="sap-icon://document"  press=".generateWordContent" class="sapUiTinyMarginBeginEnd"/>
+                                <Button tooltip="Send to AI" icon="sap-icon://machine" press=".KBIntegration" class="sapUiTinyMarginBeginEnd"/>
+                                <Button tooltip="Close" icon="sap-icon://decline" press=".onCloseDialog"/>
+                         
+    </buttons>
+    </Dialog>
+</core:FragmentDefinition>
+ 

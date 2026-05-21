@@ -1,0 +1,74 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="false"
+        contentWidth="80%"
+        contentHeight="80%"
+        title="System Key"
+        class="customDialogSize"
+    >
+        <VBox class="sapUiSmallMargin">
+            <SearchField
+                id="sysMsgSearch"
+                width="90%"
+                class="sapUiSmallMargin"
+                liveChange=".searchSysPrompt"
+                placeholder="Search system messages"
+            />
+
+            <List
+                id="sysMsgList"
+                items="{
+                    path: 'BSData>/messages'
+                }"
+                visible="{= ${switchTempModel>/roleofTemplate} === 'system'}"
+            >
+                <items>
+                    <StandardListItem
+                        press=".onSystemSelect"
+                        type="Active"
+                        title="{BSData>NAME}"
+                        description="{= (${BSData>PROMPT_TEMPLATE} 
+                                          ? ${BSData>PROMPT_TEMPLATE} 
+                                          : ${BSData>NAME})}"
+                        tooltip="{= (${BSData>PROMPT_TEMPLATE} 
+                                      ? ${BSData>PROMPT_TEMPLATE} 
+                                      : ${BSData>NAME})}"
+                    />
+                </items>
+            </List>
+
+            <List
+                items="{path: 'BSPromptData>/'}"
+                visible="false"
+            >
+                <CustomListItem
+                    type="Active"
+                    press=".onPromptSelect"
+                >
+                    <Text
+                        text="{BSPromptData>PROMPT_TEMPLATE}"
+                        tooltip="{BSPromptData>PROMPT_TEMPLATE}"
+                        wrapping="true"
+                    />
+                </CustomListItem>
+            </List>
+        </VBox>
+
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer/>
+                <Button
+                    press=".closeSysKeyFr"
+                    text="{i18n>close}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

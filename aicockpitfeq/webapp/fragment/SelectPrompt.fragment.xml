@@ -1,0 +1,56 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.f"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="false"
+        contentWidth="80%"
+        contentHeight="80%"
+        title="Prompt"
+        class="customDialogSizePrompt"
+    >
+        <VBox class="sapUiSmallMargin">
+            <SearchField
+                id="promptSearch"
+                width="90%"
+                class="sapUiSmallMargin"
+                liveChange=".searchPrompt"
+                placeholder="Search prompts"
+            />
+            <List
+                id="promptList"
+                items="{path: 'BSPromptData>/',sorter: {path: 'creationTimestamp', descending: false} }"
+                itemActionCount="1"
+                itemActionPress=".onDeletePrompt"
+            >
+                <StandardListItem
+                    title="{BSPromptData>NAME}"
+                    description="{BSPromptData>PROMPT_TEMPLATE}"
+                    type="Active"
+                    press=".onPromptSelect"
+                >
+                    <ListItemAction
+                        icon="sap-icon://delete"
+                        text="Delete Prompt"
+                        visible="{vFlagMod>/isAdmin}"
+                    />
+                </StandardListItem>
+               
+            </List>
+        </VBox>
+
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    press=".closeSysKeyFr"
+                    text="{i18n>close}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

@@ -1,0 +1,103 @@
+_schema-version: "3.2"
+ID: CGAICockpitQ
+version: 0.0.1
+modules:
+  - name: CGAICockpitQ-destination-content
+    type: com.sap.application.content
+    requires:
+      - name: CGAICockpitQ-destination-service
+        parameters:
+          content-target: true
+      - name: CGAICockpitQ_html_repo_host
+        parameters:
+          service-key:
+            name: CGAICockpitQ_html_repo_host-key
+      - name: uaa_CGAICockpitQ
+        parameters:
+          service-key:
+            name: uaa_CGAICockpitQ-key
+    parameters:
+      content:
+        instance:
+          destinations:
+            - Name: CGAICockpitQ_html_repo_host
+              ServiceInstanceName: CGAICockpitQ-html5-app-host-service
+              ServiceKeyName: CGAICockpitQ_html_repo_host-key
+              sap.cloud.service: aiCockpitQ
+            - Authentication: OAuth2UserTokenExchange
+              Name: aiCockpit_uaa_CGAICockpitQ
+              ServiceInstanceName: CGAICockpitQ-xsuaa-service
+              ServiceKeyName: uaa_CGAICockpitQ-key
+              sap.cloud.service: aiCockpitQ
+          existing_destinations_policy: update
+    build-parameters:
+      no-source: true
+
+  - name: CGAICockpitQ-app-content
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: CGAICockpitQ_html_repo_host
+        parameters:
+          content-target: true
+    build-parameters:
+      build-result: resources
+      requires:
+        - artifacts:
+            - aicockpitfeq.zip
+          name: aicockpitfeq
+          target-path: resources/
+
+  - name: aicockpitfeq
+    type: html5
+    path: aicockpitfeq
+    build-parameters:
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+      supported-platforms: []
+
+resources:
+ 
+  - name: uaa_CGAICockpitQ
+    type: org.cloudfoundry.managed-service
+    parameters:
+      path: ./xs-security.json
+      service: xsuaa
+      service-plan: application
+      service-name: CGAICockpitQ-xsuaa-service
+
+  - name: CGAICockpitQ_html_repo_host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-name: CGAICockpitQ-html5-app-host-service
+      service-plan: app-host
+
+  - name: CGAICockpitQ-html5-repo-runtime
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-runtime
+
+  - name: CGAICockpitQ-destination-service
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-name: CGAICockpitQ-destination-service
+      service-plan: lite
+      config:
+        HTML5Runtime_enabled: true
+        init_data:
+          instance:
+            destinations:
+              - Name: ui5
+                Type: HTTP
+                ProxyType: Internet
+                URL: https://ui5.sap.com
+                Authentication: NoAuthentication
+            existing_destinations_policy: update
+        version: 1.0.0
+

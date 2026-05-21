@@ -1,0 +1,52 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="false"
+        stretch="false"
+        contentWidth="83%"
+        title="Process Cycle Test - System Messages"
+        id="pctsteptitle"
+    >
+            <!-- <VBox
+            class="sapUiSmallMargin"
+            items="{stepModel>/output}"
+            justifyContent="SpaceAround"
+        > <items>
+            <TextArea
+                maxLength="true"
+                editable="false"
+                growing="false"
+                rows="5"
+                value="{stepModel>sysMessage}"
+                width="100%"
+            />
+             </items>
+        </VBox>  -->
+         <VBox justifyContent="SpaceAround">
+          <List items="{stepModel>/output}">
+                        <items>
+                            <StandardListItem
+                                title="{stepModel>step}"
+                                description="{path:'stepModel>sysMessage'}"
+                                wrapping="true"
+                                wrapCharLimit="800"
+                            />
+                        </items>
+                    </List></VBox>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    press=".closeSysKeyFr"
+                    text="{i18n>close}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

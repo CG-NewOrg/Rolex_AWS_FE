@@ -1,0 +1,12 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+    <Dialog title="Project Lists" resizable="true">
+        <content>
+        <!-- id="projectList" -->
+            <List items="{prjModel>/projects}">
+                <StandardListItem title="{prjModel>project}" type="Active" press=".onProjectSelected" selected="true"/>
+            </List>
+            <!-- <Text id="userDBnotAddedTxt" text="" visible="false"/> -->
+             <Text text="{prjModel>/userDBnotAddedTxt}" visible="{prjModel>/userDBnotAddedVis}"/>
+        </content>  
+    </Dialog>
+</core:FragmentDefinition>

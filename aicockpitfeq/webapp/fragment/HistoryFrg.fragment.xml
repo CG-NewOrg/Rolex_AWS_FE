@@ -1,0 +1,38 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="false"
+        stretch="false"
+        contentWidth="83%"
+        title="{i18n>history}"
+    >
+        <VBox class="sapUiTinyMargin">           
+                    <List items="{histM>/historyData}">
+                        <items>
+                            <StandardListItem
+                                title="Prompt: {histM>promptHistory}"
+                                description="AI Response: {path:'histM>aiResponseHistory'}"
+                                wrapping="true"
+                                wrapCharLimit="800"
+                            />
+                        </items>
+                    </List>
+
+        </VBox>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    press=".closeHistory"
+                    text="{i18n>close}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

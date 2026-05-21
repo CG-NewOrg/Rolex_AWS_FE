@@ -1,0 +1,85 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="false"
+        stretch="false"
+        contentWidth="83%"
+        id="gitDialog"
+        title=""
+    >
+        <VBox
+            class="sapUiSmallMargin"
+            id="gitInfo"
+        >
+            <Label text="Please provide Git Repo URL: " />
+            <Input
+                value=""
+                width="100%"
+                id="gitRepoURL"
+            />
+            <Label text="Please provide Git User Name: " />
+            <Input
+                value=""
+                width="100%"
+                id="gitUserName"
+            />
+            <Label text="Please provide Git PAT Token: " />
+            <Input
+                value=""
+                width="100%"
+                id="gitPATToken"
+            />
+        </VBox>
+        <VBox
+            class="sapUiSmallMargin"
+            id="gitCommit"
+            visible="false"
+        >
+            <Label text="Please enter your commit message" showColon="true" />
+            <Input
+                id="commitMessageInput"
+                value=""
+                width="100%"
+            />
+            <Label text="Please enter your branch name" showColon="true" />
+            <Input
+                id="branchNameInput"
+                value=""
+                width="100%"
+            />
+            <Label text="Please enter File Name" showColon="true" />
+            <Input
+                id="fileNameCustom"
+                value=""
+                enabled="true"
+                width="100%"
+            />
+        </VBox>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    id="commitGitBtn"
+                    text="Commit"
+                    visible="false"
+                    press=".onCommitMessageConfirm"
+                />
+                <Button
+                id="getBranchBtn"
+                    press=".getBranch"
+                    text="{i18n>getBranch}"
+                />
+                <Button
+                    press=".closeSysKeyFr"
+                    text="{i18n>close}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

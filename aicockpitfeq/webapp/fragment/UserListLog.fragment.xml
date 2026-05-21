@@ -1,0 +1,831 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:tnt="sap.tnt"
+    xmlns:f="sap.f"
+    xmlns:layout="sap.ui.layout"
+    xmlns:fb="sap.ui.comp.filterbar"
+>
+    <Dialog
+        id="idUserLogDialog"
+        resizable="false"
+        stretch="false"
+        contentWidth="83%"
+        afterClose=".onLogDialogClose"
+        title="{path:'switchFragments>/frg/frName',formatter:'.formatter.userLogListTitle'} | {NetworkGraphModel>/loggedInUserName}"
+    >
+        <Panel>
+            <!-- DynamicPage Title -->
+            <headerToolbar>
+                <!-- <OverflowToolbar>
+                    <Title text="Panel with picture" />
+                </OverflowToolbar> -->
+            </headerToolbar>
+            <content>
+                <VBox>
+                    <fb:FilterBar
+                        persistencyKey="myPersKey"
+                        useToolbar="false"
+                        search=".onFilterLogs"
+                        filterChange=".onFilterLogs"
+                        showGoOnFB="true"
+                        showClearOnFB="true"
+                        clear=".onClearFil"
+                        id="filterBar1"
+                    >
+                        <fb:filterGroupItems>
+                            <fb:FilterGroupItem
+                                name="Search"
+                                label="Search"
+                                groupName="Group1"
+                                visibleInFilterBar="true"
+                            >
+                                <fb:control>
+                                    <SearchField
+                                        id="idUserLogSearch"
+                                        width="100%"
+                                        tooltip="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? 'Search by Prompt Template, Project ID, Updated By' : ${switchFragments>/frg/frName} === 'knowlBAdmin' ? 'Search by File Name' : ${switchFragments>/frg/frName} === 'admin' ? 'Search by User Name, Date, Total Duration' : 'Search by Date, Total Duration' }"
+                                        liveChange=".onFilterLogs"
+                                        placeholder="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? 'Search by Prompt Template, Project ID, Updated By' : ${switchFragments>/frg/frName} === 'knowlBAdmin' ? 'Search by File Name' : ${switchFragments>/frg/frName} === 'admin' ? 'Search by User Name, Date, Total Duration' : 'Search by Date, Total Duration' }"
+                                    />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="Date Added"
+                                label="Date Added"
+                                groupName="Group1"
+                                visibleInFilterBar="true"
+                                hiddenFilter="false"
+                            >
+                                <fb:control>
+                                    <DatePicker
+                                        id="idStartDate"
+                                        valueFormat="yyyy-MM-dd"
+                                        displayFormat="long"
+                                    />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="End Date"
+                                label="End Date"
+                                groupName="Group1"
+                                visibleInFilterBar="false"
+                            >
+                                <fb:control>
+                                    <DatePicker
+                                        id="idEndDate"
+                                        valueFormat="yyyy-MM-dd"
+                                        displayFormat="long"
+                                    />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="Project"
+                                label="Project"
+                                groupName="Group1"
+                                visibleInFilterBar="false"
+                            >
+                                <fb:control>
+                                    <Input id="projectInput" />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+
+                            <fb:FilterGroupItem
+                                name="Email"
+                                label="Email"
+                                groupName="Group1"
+                                visible="false"
+                                visibleInFilterBar="true"
+                                hiddenFilter="{path:'switchFragments>/frg/frName',formatter:'.formatter.hideinFilter1'}"
+                            >
+                                <fb:control>
+                                    <Input id="emailInput" />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+
+                            <fb:FilterGroupItem
+                                name="ID"
+                                label="ID"
+                                groupName="Group1"
+                                visibleInFilterBar="false"
+                                hiddenFilter="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? true : false }"
+                            >
+                                <fb:control>
+                                    <Input value="" />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="Category"
+                                label="Category"
+                                groupName="Group1"
+                                visibleInFilterBar="true"
+                                hiddenFilter="{path:'switchFragments>/frg/frName',formatter:'.formatter.hideinFilter2'}"
+                            >
+                                <fb:control>
+                                    <Select
+                                        forceSelection="true"
+                                        items="{
+							            path: 'catModel>/',templateShareable:false}"
+                                        selectedKey="bdPMO"
+                                        change=".catSelChange"
+                                        id="categorySelect"
+                                    >
+                                        <core:Item
+                                            key="{catModel>catkey}"
+                                            text="{catModel>catText}"
+                                        />
+                                    </Select>
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="Message Type"
+                                label="Message Type"
+                                groupName="Group1"
+                                visibleInFilterBar="true"
+                                hiddenFilter="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? false : true }"
+                            >
+                                <fb:control>
+                                    <Select
+                                        id="msgSelected"
+                                        forceSelection="false"
+                                        selectedKey="user"
+                                        items="{
+							            path: 'msgtypeModel>/',templateShareable:false
+					                    	}"
+                                        change=".onMsgSel"
+                                    >
+                                        <core:Item
+                                            key="{msgtypeModel>msgkey}"
+                                            text="{msgtypeModel>msgText}"
+                                        />
+                                    </Select>
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="Project ID"
+                                label="Project ID"
+                                groupName="Group1"
+                                visibleInFilterBar="false"
+                                hiddenFilter="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? false : true }"
+                            >
+                                <fb:control>
+                                    <!-- <Select
+                                        id="idProjectFilter"
+                                        forceSelection="false"
+                                        items="{
+							path: 'prjModel>/projects'
+						}"
+                                    >
+                                        <core:Item
+                                            key="{prjModel>project}"
+                                            text="{prjModel>project}"
+                                        />
+                                    </Select> -->
+                                    <Input id="idProjectFilter" />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <fb:FilterGroupItem
+                                name="User ID"
+                                label="User ID"
+                                groupName="Group1"
+                                visibleInFilterBar="true"
+                                hiddenFilter="{path:'switchFragments>/frg/frName',formatter:'.formatter.hideinFilter1'}"
+                            >
+                                <fb:control>
+                                    <Input id="idPromptUserId" />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                            <!-- <fb:FilterGroupItem
+                                name="Date Added"
+                                label="Date Added"
+                                groupName="Group1"
+                                visibleInFilterBar="false"
+                                hiddenFilter="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? false : true }"
+                            >
+                                <fb:control>
+                                    <Input id="idPromptDateAdded" />
+                                </fb:control>
+                            </fb:FilterGroupItem> -->
+                            <fb:FilterGroupItem
+                                name="Updated At"
+                                label="Updated At"
+                                groupName="Group1"
+                                visibleInFilterBar="false"
+                                hiddenFilter="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? false : true }"
+                            >
+                                <fb:control>
+                                    <Input />
+                                </fb:control>
+                            </fb:FilterGroupItem>
+                        </fb:filterGroupItems>
+                    </fb:FilterBar>
+                    <Table
+                        id="idUserLogTable"
+                        sticky="ColumnHeaders"
+                        visible="{path:'switchFragments>/frg/frName',formatter:'.formatter.listLogTablevisibilityUA'}"
+                        items="{path: 'UserloginModel>/', sorter: {path: 'sortDate', descending: true},templateShareable:false}"
+                    >
+                        <headerToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Button
+                                    tooltip="Sort"
+                                    icon="sap-icon://sort"
+                                    press=".handleSortButtonPressed"
+                                />
+                                <Button
+                                    tooltip="Excel Download"
+                                    icon="sap-icon://excel-attachment"
+                                    press=".onTableExport"
+                                />
+                            </OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <Column
+                                width="10em"
+                                visible="{= ${switchFragments>/frg/frName} === 'admin' ? true : false }"
+                            >
+                                <Text text="{i18n>usrName}" />
+                            </Column>
+                            <Column
+                                visible="{= ${switchFragments>/frg/frName} === 'admin' ? true : false }"
+                            >
+                                <Text text="{i18n>userID}" />
+                            </Column>
+                            <Column width="12em">
+                                <Text text="{i18n>project}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>date}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>totDur}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>tokUsd}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>noOfSesh}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>modelToken}" />
+                            </Column>
+                        </columns>
+                        <items>
+                            <ColumnListItem
+                                type="{path:'switchFragments>/frg/frName',formatter:'.formatter.typeNav'}"
+                                press=".adminPromptsUsed"
+                            >
+                                <cells>
+                                    <Text text="{UserloginModel>USERNAME}" />
+                                    <Text text="{UserloginModel>EMAIL_ID}" />
+                                    <Text text="{UserloginModel>project}" />
+                                    <Text text="{UserloginModel>date}" />
+                                    <Text
+                                        text="{UserloginModel>totalDuration}"
+                                    />
+                                    <Text
+                                        text="{UserloginModel>totalTokensConsumed}"
+                                    />
+                                    <Text
+                                        text="{UserloginModel>totalSessions}"
+                                    />
+                                    <List items="{path:'UserloginModel>models',templateShareable:false}">
+                                        <items>
+                                            <CustomListItem>
+                                                <Text
+                                                    text="{parts: [{path: 'UserloginModel>model_name'}, {path: 'UserloginModel>tokens_used'}], formatter: '.formatter.formatModelUsage'}"
+                                                />
+                                            </CustomListItem>
+                                        </items>
+                                    </List>
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
+                    <Table
+                        id="kbTable"
+                        sticky="ColumnHeaders"
+                        visible="{= ${switchFragments>/frg/frName} === 'knowlBAdmin' ? true : false }"
+                        items="{path:'ObjectFileList>/files',templateShareable:false}"
+                    >
+                        <headerToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Link
+                                    text="Sharepoint"
+                                    target="_blank"
+                                    href="https://capgemini.sharepoint.com/:f:/s/SharepointIndexer/IgBroT7xfgIgRYHdquxRL8DtAW1N-2Kwmxjb6sUrXGmM0rA?e=ZUHTOR"
+                                    class="sapUiTinyMarginEnd"
+                                />
+                                <unified:FileUploader
+                                    buttonOnly="true"
+                                    id="fileUploaderKBAdmin"
+                                    multiple="true"
+                                    name="myFileUpload"
+                                    uploadUrl="upload/"
+                                    iconOnly="true"
+                                    tooltip="{i18n>browseButtonTooltip}"
+                                    icon="sap-icon://upload"
+                                    style="Emphasized"
+                                    change=".onUploadFile"
+                                    class="sapUiTinyMarginBegin"
+                                />
+                                <Button
+                                    id="btnKbRefresh"
+                                    tooltip="Refresh"
+                                    icon="sap-icon://refresh"
+                                    press=".onKbRefresh"
+                                    visible="{= ${switchFragments>/frg/frName} === 'knowlBAdmin' }"
+                                />
+                                <Button
+                                    tooltip="Sort"
+                                    icon="sap-icon://sort"
+                                    press=".handleSortButtonPressed"
+                                />
+                                <Button
+                                    tooltip="Excel Download"
+                                    icon="sap-icon://excel-attachment"
+                                    press=".onTableExport"
+                                />
+                                <!--   press="promptRegExport" -->
+                            </OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <Column width="12em">
+                                <Text text="{i18n>project}" />
+                            </Column>
+                            <Column width="24em">
+                                <Text text="{i18n>fileName}" />
+                            </Column>
+                            <Column width="8em">
+                                <Text text="{i18n>viewUrl}" />
+                            </Column>
+                            <Column width="16em">
+                                <Text text="{i18n>lastModified}" />
+                            </Column>
+                            <Column
+                                hAlign="Center"
+                                width="4rem"
+                            >
+                                <Text text="Delete" />
+                            </Column>
+                            <!-- <Column width="12em">
+                                <Text text="{i18n>uploadedBy}" />
+                            </Column> -->
+                        </columns>
+
+                        <items>
+                            <ColumnListItem>
+                                <cells>
+                                    <Text text="{ObjectFileList>project}" />
+
+                                    <Text text="{ObjectFileList>filename}" />
+
+                                    <Link
+                                        text="{i18n>viewUrlOpen}"
+                                        href="{ObjectFileList>view_url}"
+                                        enabled="{= !!${ObjectFileList>view_url} }"
+                                        target="_blank"
+                                    />
+
+                                    <Text
+                                        text="{
+                                        path: 'ObjectFileList>last_modified',
+                                        formatter: '.formatDate'
+                                    }"
+                                    />
+                                    <Button
+                                        icon="sap-icon://delete"
+                                        type="Transparent"
+                                        tooltip="Delete File"
+                                        press=".onFileDelete"
+                                    />
+                                    <!-- <Text
+                                        text="{path:'ObjectFileList>UpdatedDate',formatter: '.formatter.dateCoversion'}"
+                                    /> -->
+                                    <!-- <Text text="{ObjectFileList>uplBy}" /> -->
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
+                    <Table
+                        id="idPromptRegistryTable"
+                        sticky="ColumnHeaders"
+                        mode="SingleSelectLeft"
+                        visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? true : false }"
+                        items="{path:'allPromptsModel>/', sorter: {path: 'Date_Added', descending: true},templateShareable:false}"
+                    >
+                        <headerToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Button
+                                    tooltip="Sort"
+                                    icon="sap-icon://sort"
+                                    press=".handleSortButtonPressed"
+                                />
+                                <Button
+                                    tooltip="Excel Download"
+                                    icon="sap-icon://excel-attachment"
+                                    press=".onTableExport"
+                                />
+                            </OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <!-- <Column width="10rem">
+                                <Text
+                                    text="{i18n>id}"
+                                    wrapping="true"
+                                />
+                            </Column> -->
+                            <Column width="16rem">
+                                <Text
+                                    text="{i18n>prmTemp}"
+                                    maxLines="5"
+                                />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>dateAdd}" />
+                            </Column>
+                            <Column visible="false">
+                                <Text text="{i18n>cat}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>prjId}" />
+                            </Column>
+                            <Column visible="false">
+                                <Text text="{i18n>msgtype}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>userID}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>prmName}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>updBy}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>updAt}" />
+                            </Column>
+                        </columns>
+                        <items>
+                            <ColumnListItem>
+                                <cells>
+                                    <!-- <Text text="{allPromptsModel>ID}" /> -->
+                                    <Text
+                                        text="{allPromptsModel>Prompt_Template}"
+                                    />
+                                    <Text
+                                        text="{path:'allPromptsModel>Date_Added',formatter: '.formatter.dateCoversion'}"
+                                    />
+                                    <Text text="{allPromptsModel>Category}" />
+                                    <Text text="{allPromptsModel>ProjectId}" />
+                                    <Text text="{allPromptsModel>MsgType}" />
+                                    <Text text="{allPromptsModel>UserId}" />
+                                    <Text text="{allPromptsModel>name}" />
+                                    <Text
+                                        text="{path:'allPromptsModel>UpdatedBy'}"
+                                    />
+                                    <Text
+                                        text="{path:'allPromptsModel>UpdatedAt',formatter: '.formatter.formatDateTime'}"
+                                    />
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
+                    <Table
+                        sticky="ColumnHeaders"
+                        visible="false"
+                        items="{path: 'PromptsUsedModel>/rows', sorter: {path: 'date', descending: true},templateShareable:false}"
+                        id="idPromptUsed"
+                    >
+                        <!-- visible="{= ${switchFragments>/frg/frName} === 'promptsUsed' ? true : false }" -->
+                        <headerToolbar>
+                            <OverflowToolbar>
+                                <ToolbarSpacer />
+                                <Button
+                                    tooltip="Sort"
+                                    icon="sap-icon://sort"
+                                    press=".handleSortButtonPressed"
+                                />
+                                <Button
+                                    tooltip="Excel Download"
+                                    icon="sap-icon://excel-attachment"
+                                    press=".onTableExport"
+                                />
+                            </OverflowToolbar>
+                        </headerToolbar>
+                        <columns>
+                            <!-- <Column width="8rem">
+                                <Text text="{i18n>userID}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>project}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>date}" />
+                            </Column>
+                            <Column width="16rem">
+                                <Text text="{i18n>sysKey}" />
+                            </Column>
+                            <Column width="16rem">
+                                <Text text="{i18n>prompts}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>totToken}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>modelToken}" />
+                            </Column> -->
+                            <Column width="8rem">
+                                <Text text="{i18n>userID}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>project}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>date}" />
+                            </Column>
+                            <Column width="16rem">
+                                <Text text="{i18n>sysKey}-{i18n>prompts}" />
+                            </Column>
+                            <Column>
+                                <Text text="{i18n>totToken}" />
+                            </Column>
+                            <Column mergeDuplicates="true">
+                                <Text text="{i18n>modelToken}" />
+                            </Column>
+                        </columns>
+                        <items>
+                            <ColumnListItem>
+                                <cells>
+                                    <Text text="{PromptsUsedModel>user_id}" />
+                                    <Text text="{PromptsUsedModel>project}" />
+                                    <Text text="{PromptsUsedModel>date}" />
+                                    <ObjectIdentifier
+                                        title="{PromptsUsedModel>system_id}"
+                                        text="{PromptsUsedModel>prompt}"
+                                    />
+                                    <!--<Text text="{PromptsUsedModel>system_id}{PromptsUsedModel>prompt}" /> <List
+                                        items="{PromptsUsedModel>ids}"
+                                        showSeparators="All"
+                                        width="100%"
+                                    >
+                                        <items>
+                                            <StandardListItem
+                                                title="{PromptsUsedModel>}"
+                                                wrapping="true"
+                                            />
+                                        </items>
+                                    </List> -->
+                                    <!-- <List
+                                        items="{PromptsUsedModel>prompts}"
+                                        showSeparators="All"
+                                        width="100%"
+                                    >
+                                        <items>
+                                            <StandardListItem
+                                                title="{PromptsUsedModel>}"
+                                                wrapping="true"
+                                            />
+                                        </items>
+                                    </List> -->
+                                    <!-- <ObjectNumber
+                                        number="{PromptsUsedModel>tokens_used}"
+                                        emphasized="false"
+                                        textAlign="Center"
+                                    /> -->
+                                    <ObjectNumber
+                                        number="{PromptsUsedModel>token_consumed}"
+                                        emphasized="false"
+                                        textAlign="Center"
+                                    />
+
+                                    <!-- <Text text="{PromptsUsedModel>modelToken}" /> -->
+                                    <!-- <Text
+                                        wrapping="true"
+                                        text="{
+                                    parts: [
+                                        { path: 'PromptsUsedModel>model_name' },
+                                        { path: 'PromptsUsedModel>tokens_used' }
+                                    ],
+                                    formatter: '.formatter.formatModelUsage'
+                                }"
+                                    />-->
+                                </cells>
+                            </ColumnListItem>
+                        </items>
+                    </Table>
+                </VBox>
+                <Panel
+                    id="adminPanel"
+                    visible="false"
+                >
+                    <VBox>
+                        <HBox
+                            alignItems="Center"
+                            class="sapUiTinyMarginBottom"
+                        >
+                            <Button
+                                id="backBtn"
+                                icon="sap-icon://nav-back"
+                                press=".onBack"
+                                type="Emphasized"
+                            />
+                            <ToolbarSpacer />
+                            <HBox
+                                alignItems="Center"
+                                class="sapUiSmallMarginBegin"
+                            >
+                                <Label
+                                    text="User ID:"
+                                    class="sapUiTinyMarginEnd"
+                                />
+                                <Text
+                                    text="{promptsUsedDetail>/rows/0/user_id}"
+                                    wrapping="false"
+                                />
+                            </HBox>
+
+                            <!-- Project -->
+                            <HBox
+                                alignItems="Center"
+                                class="sapUiSmallMarginBegin"
+                            >
+                                <Label
+                                    text="Project:"
+                                    class="sapUiTinyMarginEnd"
+                                />
+                                <Text
+                                    text="{promptsUsedDetail>/rows/0/project}"
+                                    wrapping="false"
+                                />
+                            </HBox>
+
+                            <!-- Date -->
+                            <HBox
+                                alignItems="Center"
+                                class="sapUiSmallMarginBegin"
+                            >
+                                <Label
+                                    text="Date:"
+                                    class="sapUiTinyMarginEnd"
+                                />
+                                <Text
+                                    text="{path:'promptsUsedDetail>/rows/0/date_added',formatter: '.formatter.dateCoversion'}"
+                                    wrapping="false"
+                                />
+                            </HBox>
+                        </HBox>
+                        <Table
+                            sticky="ColumnHeaders"
+                            visible="true"
+                            items="{path: 'promptsUsedDetail>/rows', sorter: {path: 'model_name', descending: false},templateShareable:false}"
+                            id="idPromptUsedAdmin"
+                        >
+                            <headerToolbar>
+                                <OverflowToolbar>
+                                    <ToolbarSpacer />
+                                    <Button
+                                        tooltip="Sort"
+                                        icon="sap-icon://sort"
+                                        press=".handleSortButtonPressed"
+                                    />
+                                    <Button
+                                        tooltip="Excel Download"
+                                        icon="sap-icon://excel-attachment"
+                                        press=".onTableExport"
+                                    />
+                                </OverflowToolbar>
+                            </headerToolbar>
+                            <columns>
+                                 <Column width="22rem" visible="false">
+                                    <Text text="{i18n>sysKey}" />
+                                </Column>
+                                <Column width="16rem" visible="false">
+                                    <Text text="{i18n>prompts}" />
+                                </Column>
+                                <Column width="30rem">
+                                    <Text text="{i18n>sysKey}-{i18n>prompts}" />
+                                </Column>
+                                <Column hAlign="Center">
+                                    <Text text="{i18n>totToken}" />
+                                </Column>
+                                <Column mergeDuplicates="true" hAlign="Center">
+                                    <Text text="{i18n>modelToken}" />
+                                </Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem vAlign="Top">
+                                    <cells>
+                                        <!-- <List
+                                            items="{promptsUsedDetail>ids}"
+                                            showSeparators="None"
+                                            width="100%"
+                                        >
+                                            <items>
+                                                <CustomListItem>
+                                                    <Text
+                                                        text="{promptsUsedDetail>}"
+                                                        wrapping="true"
+                                                        width="100%"
+                                                    />
+                                                </CustomListItem>
+                                            </items>
+                                        </List> -->
+                                        <!-- <List
+                                            items="{promptsUsedDetail>prompts}"
+                                            showSeparators="None"
+                                            width="100%"
+                                        >
+                                            <items>
+                                                <CustomListItem>
+                                                    <Text
+                                                        text="{promptsUsedDetail>}"
+                                                        wrapping="true"
+                                                        width="100%"
+                                                    />
+                                                </CustomListItem>
+                                            </items>
+                                        </List> -->
+                                        <!-- <Text
+                                            text="{promptsUsedDetail>system_id}-{promptsUsedDetail>prompt}"
+                                        /> -->
+                                        <Text
+                                            text="{promptsUsedDetail>system_id}"
+                                        />
+                                        <Text
+                                            text="{promptsUsedDetail>prompt}"
+                                        />
+                                         <ObjectIdentifier
+                                        title="{promptsUsedDetail>system_id}"
+                                        text="{promptsUsedDetail>prompt}"
+                                    />
+                                        <ObjectNumber
+                                            number="{promptsUsedDetail>token_consumed}"
+                                            emphasized="false"
+                                            textAlign="Center"
+                                        />
+                                        <Text
+                                        textAlign="Center"
+                                            text="{promptsUsedDetail>modelToken}"
+                                        />
+                                        <!-- <ObjectNumber
+                                            number="{promptsUsedDetail>tokens_used}"
+                                            emphasized="false"
+                                            textAlign="Center"
+                                        /> -->
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </VBox>
+                </Panel>
+            </content>
+        </Panel>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    text="{i18n>addFile}"
+                    type="Emphasized"
+                    press=".openAddFileFr"
+                    visible="false"
+                    class="sapUiTinyMarginEnd"
+                />
+                <Button
+                    text="Add"
+                    type="Accept"
+                    icon="sap-icon://add"
+                    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' }"
+                    press=".onAddPrompt"
+                />
+
+                <Button
+                    text="Delete"
+                    type="Reject"
+                    icon="sap-icon://delete"
+                    id="delPr"
+                    enabled="{parts: [{path: 'vFlagMod>/isAdmin'}, {path: 'vFlagMod>/isSys'}],formatter:'.formatter.enableSys'}"
+                    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' }"
+                    press=".onDeletePrompt"
+                />
+
+                <Button
+                    text="Update"
+                    type="Emphasized"
+                    icon="sap-icon://edit"
+                    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' }"
+                    press=".onUpdatePrompt"
+                />
+                <Button
+                    text="{i18n>close}"
+                    press=".closeLogDialog"
+                    type="Emphasized"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

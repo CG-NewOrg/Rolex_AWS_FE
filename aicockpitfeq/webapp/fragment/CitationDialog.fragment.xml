@@ -1,0 +1,11 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+	<Dialog id="CitationDialog" title="Citation Content"
+		class="sapUiResponsivePadding--header sapUiResponsivePadding--content sapUiResponsivePadding--footer">
+		<content>
+			<Text text="{citationModel>/content}"/>
+		</content>
+		<buttons>
+			<Button text="Close" press=".onCloseCitationDialog"/>
+		</buttons>
+	</Dialog>
+</core:FragmentDefinition>

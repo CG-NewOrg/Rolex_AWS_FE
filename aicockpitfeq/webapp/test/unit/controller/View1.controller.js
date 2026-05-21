@@ -1,0 +1,16 @@
+/*global QUnit*/
+
+sap.ui.define([
+	"aicockpitfeq/controller/View1.controller"
+], function (Controller) {
+	"use strict";
+
+	QUnit.module("View1 Controller");
+
+	QUnit.test("I should test the View1 controller", function (assert) {
+		let oAppController = new Controller();
+		oAppController.onInit();
+		assert.ok(oAppController);
+	});
+
+});

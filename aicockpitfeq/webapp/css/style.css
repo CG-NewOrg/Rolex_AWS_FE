@@ -1,0 +1,294 @@
+/* Enter your custom styles here */
+.paddingClassBtm{
+    padding-bottom: 70px;
+}
+.borderClass{
+ border-bottom: 1px solid #ccc;
+ box-shadow: 0 0px 2px -2px rgba(0, 0, 0, 0.2)
+}
+.hideTitle{
+      margin-top: -30px;
+}
+/* remember to change this if using another dynamic page in this app */
+.sapFDynamicPageTitleMain>.sapFDynamicPageTitleMainInner .sapFDynamicPageTitleMainHeading {
+display:unset;
+width:100%;
+}
+.sysClass{
+    margin-top: -30px; 
+}
+#listView1.sysClassSimpForm{
+    height: inherit;
+}
+.vbxdetaildetail{
+background: #ffffff !important;
+}
+.sapMPageFooter{
+border-top: 1px solid #ccc;
+background: #ffffff !important;
+}
+.sapMPageWithHeader.sapMPageWithSubHeader .sapMPageHeader {
+    padding-bottom: 0.7rem;
+    background: white;
+}
+.Human {
+    background-color: #dbe7f1;
+    /*background-color: #c031a0;*/
+    color: #000;
+    padding: 10px;
+    border-radius: 10px;
+    margin: 5px;
+    width: fit-content;
+    float: inline-end;
+    text-align: right;
+}
+.AIChat {
+    background-color: #b4d2f1;
+    color: #000;
+    padding: 10px;
+    border-radius: 10px;
+    margin: 5px;
+    max-width: 80%;
+}
+.linkText {
+    color:#0064d9;
+    text-decoration-line: underline;
+    /*background-color: #d1eefc;*/
+}
+.linkText:hover {
+    color: #0064d9;
+    text-decoration-line: underline;
+    background-color: #6618ae;
+}
+ 
+.userInputArea {
+ 
+    position: fixed;
+    left: 0;
+    bottom: 45px;
+    width: 100% !important;
+    color: white;
+    text-align: center;
+}
+.disclaimerText {
+    font-weight: bold !important;
+    font-size: 0.875rem;
+    color: #0e0d0d;
+    text-align: center;
+    width: 100%;
+}
+ 
+.blueIcon .sapUiIcon {
+    color: rgba(0, 102, 255, 0.916) !important;
+}
+.customDialogSizePrompt .sapMText {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+.customDialogSize{
+ width: 40% !important; 
+}
+.txtclass{
+ 
+ white-space: normal;           /* ensure wrapping is allowed */
+  word-break: break-word;        /* break long tokens */
+  overflow-wrap: anywhere;
+
+}
+.chatToggleBtn {
+    position: fixed;
+    /* bottom: 53px; */
+    top:1px;
+    right: 20px;
+    z-index: 1000;
+    color: white;
+    border-radius: 50%;
+    width: 55px;
+  
+}
+.sapUiSizeCompact .sapMBtnInner .sapMBtnIcon.sapMImg {
+    max-width: 2.8rem;
+    max-height: 1.9rem;
+    /* max-height: 2.3rem; */
+    /* app view icon image */
+}
+.chatToggleBtn .sapMBtnIcon.sapUiIcon {
+top:3.5px;
+height:6rem;
+}
+.chatToggleBtn .sapMBtnInner {
+    height: 32px;   
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    background: white !important;
+}
+
+.chatHeader {
+    margin: 10px;
+}
+
+.chatBubble {
+    background: #e0f7fa;
+    border-radius: 12px;
+    padding: 8px;
+    margin: 4px;
+}
+
+.chatDialog .sapMDialogScrollCont {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+
+
+.chatContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.chatList {
+    flex: 1; /* Takes remaining space */
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.chatInputBox {
+    padding: 10px;
+    border-top: 1px solid #ccc;
+    background: #fafafa;
+    display: flex;
+    justify-content: space-between;
+}
+
+.chatFooter {
+    padding: 8px;
+    border-top: 1px solid #ccc;
+    background: #fafafa;
+    display: flex;
+    justify-content: space-between;
+}
+
+.chatHeaderArea {
+flex-shrink: 0;
+background: white;
+z-index: 10;
+}
+
+.sapTntToolHeader.sapMTB{
+    height: 2.5rem !important ;
+}
+
+
+.sapMIBar.sapMTB .sapMBarChild~.sapMBarChild{
+    margin: 0 0.1rem 0 0.1rem;
+}
+/* start of list item colour highlight */
+.sapTntNLI {
+    position: relative;
+    width: 100%;
+}
+ 
+.sapTntNLI .sapUiIcon,
+.sapTntNLI .sapMText {
+    color: #1a1a1a;
+}
+ 
+.sapTntNLI:not(.sapTntNLIDisabled):hover {
+    background-color: #e6f0ff;
+}
+ 
+.sapTntNLI.sapTntNLIActive {
+    background-color: #d0e2ff;
+}
+ 
+.sapTntNLI.sapTntNLISelected {
+    background-color: #2b69c7dd !important;
+}
+ 
+.sapTntNLI.sapTntNLISelected .sapUiIcon,
+.sapTntNLI.sapTntNLISelected .sapMText {
+    color: #ffffff !important;
+}
+ 
+.sapTntNLI.sapTntNLISelected:hover {
+    background-color: #084298;
+}
+ 
+.sapTntNLCollapsed .sapTntNLI.sapTntNLISelected {
+    background-color: #2b69c7dd !important;
+}
+ 
+.sapTntNLCollapsed .sapTntNLI.sapTntNLISelected .sapUiIcon {
+    color: #ffffff !important;
+}
+ 
+.sapTntNLISelected::before,
+.sapTntNLIActive::before {
+    display: none !important;
+}
+/* end of list item colour highlight */
+.panelClassDet{
+    height: fit-content !important;
+
+}
+.vboxDetClass{
+height: fit-content !important;
+}
+
+.j4cBtn {
+    position: fixed;
+    /* bottom: 53px; */
+    top:4px;
+    right: 30px;
+    z-index: 1000;
+    border-radius: 50%;
+    width: 45px;
+}
+.spaceClass{
+    /* detaildeatil token limit */
+    padding-right: 2px;
+}
+/* Common button style (apply same sizing for both) */
+.equalBtn .sapMBtnInner {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    padding: 0;
+    background: white !important;
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.equalBtn .sapMBtnIcon {
+    width: 20px !important;
+    height: 20px !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+}
+/* Standard SAP icon inside the button */
+.equalBtn .sapMBtnIcon.sapUiIcon {
+    font-size: 20px;
+    line-height: 1;
+}
+.equalBtn {
+    position: fixed !important;
+    top: 0px;        /* place near the header */
+    right: 30px;      /* adjust for second button if needed */
+    z-index: 9999;    /* keep above page */
+}
+.equalBtn img {
+    width: 100%;
+    height: 100%;
+  object-fit: cover;
+    transform: scale(1.3);
+}
+/* .copyBtn {
+position: absolute !important;
+right: 16px;
+z-index: 10 !important; 
+} */

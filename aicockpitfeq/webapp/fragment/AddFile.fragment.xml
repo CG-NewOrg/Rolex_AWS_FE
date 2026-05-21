@@ -1,0 +1,53 @@
+<core:FragmentDefinition 
+	xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+	xmlns:l="sap.ui.layout"
+	xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+    xmlns:u="sap.ui.unified"
+	>
+	 <Dialog resizable="false" contentWidth="80%" contentHeight="80%" title="{systemKeysModel>/fragmentName}"> 
+     	<VBox class="sapUiSmallMargin">
+		<!-- </ToolbarSpacer> -->
+        	<u:FileUploader
+			id="fileUploader"
+			name="myFileUpload"
+			uploadUrl="upload/"
+			tooltip="Upload your file to the local server"
+			uploadComplete=".handleUploadComplete"/>
+         <List headerText="Custom Content" mode="Delete" items="{path: 'fileModel>/'}" >
+		<CustomListItem>
+			<HBox>
+				<core:Icon size="2rem" src="{path:'fileModel>fileType',formatter:'.formatter.setIcon'}" class="sapUiSmallMarginBegin sapUiSmallMarginTopBottom" />
+				<VBox class="sapUiSmallMarginBegin sapUiSmallMarginTopBottom" >
+					<Link text="file name" target="{ProductPicUrl}" press=".handlePress"/>
+					<HBox>
+                    <Label text="{i18n>uplBy}"/>
+                    <Text text="firstName LastName"/>
+                    </HBox>
+                    <HBox>
+                    <Label text="{i18n>uplOn}"/>
+                    <Text text="10.06.2020"/>
+                    <Label text="{i18n>fileSize}"/>
+                    <Text text="{fileModel>fileSize}"/>
+                    </HBox>
+					<Label text="{i18n>status}"/>
+					<HBox>
+                    <Text text="{fileModel>status}"/>
+                    <Button icon="sap-icon://decline" press=".cancelFile"/>
+					</HBox>
+				</VBox>
+			</HBox>
+		</CustomListItem>
+        </List>
+        	</VBox>
+        <footer>
+				<Toolbar>
+					<ToolbarSpacer/>
+                     <Button press=".onCancel" text="{i18n>close}"/>
+				</Toolbar>
+				
+			</footer> 
+     		 </Dialog>  
+</core:FragmentDefinition>

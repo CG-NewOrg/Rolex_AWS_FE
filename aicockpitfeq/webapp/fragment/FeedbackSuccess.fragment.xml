@@ -1,0 +1,32 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="true"
+        title="{i18n>ty}"
+    >
+        <VBox class="sapUiSmallMargin" >
+        	<core:Icon
+			src="sap-icon://feedback"
+			 />
+        <Label text="{i18n>ty}"></Label>
+        <Label text="{i18n>tyMsg}"></Label>
+        </VBox>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <HBox>
+                    <Button
+                        press=".closeSysKeyFr"
+                        text="{i18n>close}"
+                    />
+                </HBox>
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

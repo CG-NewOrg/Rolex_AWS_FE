@@ -1,0 +1,56 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core">
+
+    <Dialog
+        id="TemplateDialog"
+        title="Select Template"
+        contentWidth="500px"
+        contentHeight="400px"
+        draggable="true"
+        resizable="true">
+
+        <List
+            id="templateList"
+            items="{ObjectFileList>/}"
+            mode="SingleSelectMaster"
+            includeItemInSelection="true"
+            selectionChange=".onTemplateSelect">
+
+            <items>
+                <CustomListItem>
+                    <HBox
+                        justifyContent="SpaceBetween"
+                        width="100%"
+                        alignItems="Center">
+
+                        <!-- File Name -->
+                        <VBox class="fileNamePadding sapUiTinyMarginBegin" >
+                            <Text text="{ObjectFileList>Name}" />
+                        </VBox>
+
+                        <!-- Delete Button -->
+                        <VBox class="sapUiTinyMarginEnd">
+                            <Button
+                                icon="sap-icon://delete"
+                                type="Transparent"
+                                tooltip="Delete Template"
+                                visible="{vFlagMod>/isAdmin}"
+                                press=".onFileDelete"/>
+                        </VBox>
+
+                    </HBox>
+                </CustomListItem>
+            </items>
+
+        </List>
+
+        <endButton>
+            <Button
+                text="Close"
+                press=".onCloseTemplateDialog"/>
+        </endButton>
+
+    </Dialog>
+
+</core:FragmentDefinition>

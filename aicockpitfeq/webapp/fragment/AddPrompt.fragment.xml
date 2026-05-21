@@ -1,0 +1,99 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="true"
+        title="{enSysPromp>/temp}"
+    >
+        <VBox class="sapUiSmallMargin">
+            <f:SimpleForm
+                editable="true"
+                layout="ColumnLayout"
+                title=""
+                columnsM="2"
+                columnsL="2"
+                columnsXL="2"
+            >
+                <f:content>
+                    <Label text="{ parts: [{path:'savePrmModel>/spec/defaults/msgType'},{path:'enSysPromp>/isUpdate'}],formatter:'.formatter.setIDText'}" />
+                    <Input
+                        value="{enSysPromp>/sysKey}"
+                        editable="false"
+                        id="vis"
+                        visible="false"
+                    />
+                    <Input
+                        value="{savePrmModel>/name}"
+                        editable="{enSysPromp>/en}"
+                        width="100%"
+                        visible="true"
+                    >
+                        <layoutData>
+                            <FlexItemData growFactor="1" />
+                        </layoutData>
+                    </Input>
+                
+                    <Label text="{i18n>cat}" />
+                    <Select
+                        forceSelection="true"
+                        items="{path: 'catModel>/'}"
+                        selectedKey="{savePrmModel>/scenario}"
+                        change=".addPromptCatChange"
+                        id="addPrmCatChange"
+                        enabled="{scenarioEn>/isAddPromptOpen}"
+                    >
+                        <core:Item
+                            key="{catModel>catkey}"
+                            text="{catModel>catText}"
+                        />
+                    </Select>
+                    <!-- <Input value="{savePrmModel>/scenario}" /> -->
+                    <Label text="{i18n>msgType}" />
+                    <Input
+                        value="{savePrmModel>/spec/defaults/msgType}"
+                        editable="false"
+                    />
+                    <Label text="{i18n>usrId}" />
+                    <Input
+                        value="{savePrmModel>/spec/defaults/UserId}"
+                        editable="false"
+                    />
+                    <Label text="{path:'savePrmModel>/spec/defaults/msgType',formatter:'.formatter.setMsgText'}" />
+                    <TextArea
+                        value="{savePrmModel>/spec/template/0/content}"
+                        editable="true"
+                        rows="3"
+                    />
+                    <Label text="{i18n>updBy}" />
+                    <Input
+                        value="{savePrmModel>/spec/defaults/updBy}"
+                        editable="false"
+                    />
+                    <Label text="{i18n>prjId}" />
+                    <Input
+                        value="{savePrmModel>/spec/defaults/ProjectId}"
+                        editable="false"
+                    />
+                </f:content>
+            </f:SimpleForm>
+        </VBox>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    press=".savefromAddPrompt"
+                    text="{i18n>save}"
+                />
+                <Button
+                    press=".closeAddPrompt"
+                    text="{i18n>cancel}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

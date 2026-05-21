@@ -1,0 +1,33 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:mvc="sap.ui.core.mvc">
+
+    <SelectDialog
+        title="Select File"
+        noDataText="No Files Found" 
+        liveChange=".onFileSearch"
+        confirm=".selChangeDoc"
+        cancel=".closeSysKeyFr"
+        multiSelect="{appModel>/bAiAssistant}"
+        items="{
+            path: 'ObjectFileList>/',
+            templateShareable: false
+        }"
+        class="sapUiSmallMargin">
+        <!-- <StandardListItem
+            title="{ObjectFileList>Name}"
+        /> -->
+        <CustomListItem>
+            <HBox justifyContent="SpaceBetween" width="100%" class="customListItemPadding">
+                <VBox  class="fileNamePadding sapUiTinyMarginBegin">
+                    <Text  text="{ObjectFileList>Name}" />
+                </VBox>
+                <VBox class="sapUiTinyMarginEnd">
+                    <Button text="Delete" press=".onFileDelete" enabled="{vFlagMod>/isAdmin}" visible="true"/>
+                </VBox>
+            </HBox>
+        </CustomListItem>
+    </SelectDialog>
+
+</core:FragmentDefinition>

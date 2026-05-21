@@ -1,0 +1,33 @@
+<core:FragmentDefinition xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+	xmlns:l="sap.ui.layout"
+	xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+	>
+	 <Dialog  resizable="false"
+        stretch="false"
+        contentWidth="83%" title="{i18n>editAI}">  
+		<VBox >
+        <TextArea
+                            value="{airesponseDetailModel>/resp}"
+                            class="sapUiTinyMargin"
+                            width="100%"
+                            id="editAIPCT"
+                            height="100%"
+                            growing="true"
+                            editable="true"
+                        />
+        </VBox>
+            	<footer>
+				
+				<Toolbar>
+					<ToolbarSpacer/>
+					<Button press=".saveAIResponse" enabled="true" text="{i18n>save}"/>
+					<Button press=".closeSysKeyFr" text="{i18n>cancel}"/>
+				</Toolbar>
+				
+			</footer>
+		
+		 </Dialog>  
+</core:FragmentDefinition>

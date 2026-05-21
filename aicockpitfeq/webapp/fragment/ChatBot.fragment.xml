@@ -1,0 +1,105 @@
+<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">
+  <Dialog id="chatDialog"
+          class="chatDialog sapUiNoContentPadding"
+          contentWidth="950px"
+          contentHeight="75%"
+          verticalScrolling="false"
+          draggable="true"
+          resizable="false">
+ 
+    <customHeader>
+      <Bar>
+        <contentMiddle>
+          <Title text="Knowledge Base"/>
+        </contentMiddle>
+        <contentRight>
+          <Button icon="sap-icon://decline"
+                  tooltip="Close"
+                  type="Transparent"
+                  press=".onCloseChat"/>
+        </contentRight>
+      </Bar>
+    </customHeader>
+ 
+    <content>
+      <Page enableScrolling="true" showHeader="false" >
+     
+<subHeader>
+  <OverflowToolbar id="chatSubHeader" design="Transparent" >
+    <Button text="New Chat"
+            type="Emphasized"
+            icon="sap-icon://add"
+            press=".onNewChat"
+            class="sapUiTinyMarginEnd"/>
+ 
+    <ToolbarSpacer/>
+ 
+    <Select id="chatModelSelect"
+            width="220px"
+            items="{ path: 'chatModel>/gptModels' }"
+            selectedKey="d7bcd076748c9c61"
+            class="sapUiTinyMarginEnd">
+      <core:Item key="{chatModel>key}" text="{chatModel>text}"/>
+    </Select>
+ 
+    <Label text="{i18n>enableRAGSearch}" design="Bold" class="sapUiTinyMarginEnd"/>
+    <CheckBox id="RagSwitch2" class="chxbx" selected="{ragModel>/chatBotRagEnabled}"/>
+  </OverflowToolbar>
+</subHeader>
+ 
+<content>
+  <VBox class="sapUiContentPadding">
+    <List id="chatListChatBot"
+          width="100%"
+          backgroundDesign="Transparent"
+          items="{ path : 'chatModel>/data', templateShareable:false }"
+          showNoData="false"
+          growing="false">
+ 
+      <CustomListItem>
+        <content>
+         <VBox>
+                           
+                            <VBox justifyContent="End" alignItems="End"  visible="{path: 'chatModel>userMessage', formatter: '.hasText'}" class="Human2 sapUiSmallMarginEnd">
+                                <Text text="{chatModel>userMessage}" class="Human sapUiTinyMargin"/>
+                            </VBox>
+ 
+                           
+                            <VBox class="question">
+                                <Text text="{chatModel>aiResponse}" id="idAiResponseTextChatBot" class="sapUiTinyMargin AIChat"/>
+                            </VBox>
+ 
+                     
+                            <VBox
+                                visible="{path: 'chatModel>Citations', formatter: '.isCitationsVisible'}"
+                                items="{chatModel>Citations}"
+                                class="sapUiSmallMarginBegin">
+                                <Link text="{chatModel>fname}" href="{chatModel>link}" target="_blank"/>
+                            </VBox>
+          </VBox>
+        </content>
+      </CustomListItem>
+ 
+    </List>
+    </VBox>
+</content>
+ 
+      </Page>
+    </content>
+ 
+   
+    <footer>
+      <Toolbar class="chatFooter">
+        <Input id="chatInput" placeholder="Message..." width="80%" submit=".onSendMessage"/>
+        <Button id="micButton" icon="sap-icon://microphone" press=".onVoiceInput"/>
+        <ToggleButton id="speakerToggle"
+                      icon="sap-icon://sound-off"
+                      pressed="false"
+                      tooltip="Read replies aloud"
+                      press=".onSpeakerToggle"/>
+        <Button id="sendButton" icon="sap-icon://paper-plane" tooltip="Send to Knowledge Base" press=".onSendMessage"/>
+      </Toolbar>
+    </footer>
+ 
+  </Dialog>
+</core:FragmentDefinition>

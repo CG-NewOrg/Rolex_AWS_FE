@@ -1,0 +1,45 @@
+{
+  "authenticationMethod": "route",
+  "welcomeFile": "/index.html",
+  "routes": [
+    {
+      "source": "^/cockpit/(.*)$",
+      "destination": "CGAICOCKPIT_BE_Q",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/odata/v4/cockpit/$1"
+    },
+    {
+      "source": "^/deployments/(.*)$",
+      "destination": "AI_CORE_CGAI_COCKPIT_Q",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/inference/deployments/$1"
+    },
+    {
+      "source": "^/lm/(.*)$",
+      "destination": "AI_CORE_CGAI_COCKPIT_Q",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/lm/$1"
+    },
+    {
+      "source": "^/resources/(.*)$",
+      "target": "/resources/$1",
+      "authenticationType": "xsuaa",
+      "destination": "ui5"
+    },
+       {
+      "source": "^/user-api(.*)",
+      "target": "/$1",
+      "service": "sap-approuter-userapi",
+      "authenticationType": "xsuaa"
+    },
+     {
+       "source": "^(.*)$",
+       "target": "$1",
+       "service": "html5-apps-repo-rt",
+       "authenticationType": "xsuaa"
+     }
+  ]
+}

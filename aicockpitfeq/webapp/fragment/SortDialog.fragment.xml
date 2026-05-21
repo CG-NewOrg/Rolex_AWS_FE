@@ -1,0 +1,89 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+>
+  <ViewSettingsDialog confirm=".handleSortDialogConfirm">
+        <sortItems>
+            <!-- User/Admin -->
+            <ViewSettingsItem
+                text="Username"
+                key="USERNAME"  
+            />
+            <ViewSettingsItem
+                text="Email"
+                key="EMAIL_ID"
+            />
+            <!-- <ViewSettingsItem text="Project" key="project" selected="true"/> -->
+            <ViewSettingsItem
+                text="Date"
+                key="date"
+            />
+            <ViewSettingsItem
+                text="Total Duration"
+                key="totalDuration"
+            />
+            <ViewSettingsItem
+                text="Total Tokens Consumed"
+                key="totalTokensConsumed"
+            />
+            <ViewSettingsItem
+                text="Total Sessions"
+                key="totalSessions"
+            />
+            <!-- <ViewSettingsItem text="Model Token" key="model_name"/> -->
+ 
+            <!-- promptlibpr -->
+            <ViewSettingsItem
+                text="Prompt Template"
+                key="Prompt_Template"
+            />
+            <ViewSettingsItem
+                text="Date Added"
+                key="Date_Added"
+            />
+            <ViewSettingsItem
+                text="Prompt Name"
+                key="name"
+            />
+ 
+            <!-- knowlbadmin -->
+            <ViewSettingsItem
+                text="File Name"
+                key="Name"
+            />
+            <ViewSettingsItem
+                text="File Description"
+                key="Key"
+            />
+            <ViewSettingsItem
+                text="Uploaded Date"
+                key="UpdatedDate"
+            />
+ 
+            <!-- promptsUsed -->
+            <ViewSettingsItem
+                text="System Key"
+                key="ids"
+            />
+            <ViewSettingsItem
+                text="Prompts"
+                key="prompts"
+            />
+            <ViewSettingsItem
+                text="User ID"
+                key="user_id"
+            />
+            <ViewSettingsItem
+                text="Date Added"
+                key="date"
+            />
+            <ViewSettingsItem
+                text="Total Tokens"
+                key="tokens_used"
+            />
+        </sortItems>
+    </ViewSettingsDialog>
+
+</core:FragmentDefinition>
+
+ 

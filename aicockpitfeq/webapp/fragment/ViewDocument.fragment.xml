@@ -1,0 +1,54 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:layout="sap.ui.layout"
+>
+    <Dialog
+        resizable="false"
+        contentWidth="80%"
+        contentHeight="80%"
+        title="{i18n>preview}"
+        verticalScrolling="false"
+    >
+        <VBox class="sapUiSmallMargin">
+            <Label text="{fileViewModel>/Name}" />
+            <!-- <TextArea maxLength="true"  growing="true" wrapping="None" value="{i18n>loremImpsumTxt}" width="100%" height="100%"></TextArea> -->
+            <TextArea
+                value="{appmodel>/BSContent}"
+                visible="{path: 'appmodel>/BSContent', formatter: '.formatter.isTextContent'}"
+                maxLength="true"  growing="true" wrapping="None"
+                rows="18"
+                width="100%" height="100%"
+                valueLiveUpdate="false"
+                change=".onBSFileContentAreaChange"
+            />
+
+            <PDFViewer
+                height="500px"
+                source="{fileViewModel>/srcUrl}"
+                isTrustedSource="true"
+                visible="false"
+                
+            />
+            <Image
+                id="imagepreview" 
+                src="{fileViewModel>/srcUrl}"
+                visible="{path: 'fileViewModel>/srcUrl', formatter: '.formatter.isImageContent'}"
+                class="image-max-size"
+                
+            />
+        </VBox>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    press=".closeSysKeyFr"
+                    text="{i18n>close}"
+                />
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>
