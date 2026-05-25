@@ -676,8 +676,8 @@ sap.ui.define([
         },
         processAPIResponse: async function (oController, payloadNonStream, response, apiModelName, busyDialog, apiUrl) {
             let oUsedToken, oResMsg, sResponse;
-            // busyDialog.open();
-            // find the switchId for this tab
+            // Capture run context at start to detect tab switches during async processing
+            var runContext = oController._activeRun ? { ...oController._activeRun } : null;
             var sSelectedIconTab = oController.selectedKeyFunct();
             // var oTextAreaId = tabToSwitchId[sSelectedIconTab];
             // const oTextArea = oController.getView().byId(oTextAreaId);
@@ -1112,6 +1112,11 @@ sap.ui.define([
                                     // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
                                     //oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+                                    // Guard: stop if user switched tabs
+                                    if (runContext && oController._activeRun && oController._activeRun.id !== runContext.id) {
+                                        try { busyDialog.close(); } catch(e) {}
+                                        return { message: { role: "assistant", content: "" }, usedTokens: 0, rawText: "" };
+                                    }
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
                                     busyDialog.close();
                                     await nextFrame();
@@ -1353,6 +1358,10 @@ sap.ui.define([
             oToken,
             oViewModel,
             fileCont) {
+            // Guard against cross-tab updates: if a newer run switched tabs on the same controller, ignore this update
+            if (context && context._activeRun && context._activeRun.tabKey !== tabKey) {
+                return;
+            }
             const fallbackMap = {
                 all: { responseKey: "respKey_all", threadKey: "thread_all", viewModelKey: "allTabs", logPath: "/historyLog" },
             };
@@ -1470,6 +1479,11 @@ sap.ui.define([
             busyDialog,
             promptMsgData
         }) {
+            // Guard against cross-tab updates: if a newer run switched tabs on the same controller, ignore this update
+            if (context && context._activeRun && context._activeRun.tabKey !== tabKey) {
+                try { busyDialog && busyDialog.close && busyDialog.close(); } catch (e) {}
+                return;
+            }
             const map = {
                 BS: ["BSResponseContent", "/BSThread", "/historyLogBS", "BStoken"]
             };

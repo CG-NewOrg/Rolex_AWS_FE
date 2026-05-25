@@ -36,7 +36,7 @@
                                 type="Transparent"
                                 tooltip="Delete Template"
                                 visible="{vFlagMod>/isAdmin}"
-                                press=".onFileDelete"/>
+                                press=".onTemplateFileDelete"/>
                         </VBox>
 
                     </HBox>

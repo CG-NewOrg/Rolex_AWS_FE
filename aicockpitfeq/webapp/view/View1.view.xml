@@ -607,80 +607,75 @@
                                 class="borderClass"
                             >
                                 <fr:content>
-                                    <VBox width="100%">
-                                        <HBox
-                                            alignItems="Center"
-                                            width="100%"
+                                     <VBox width="100%">
+                                   <HBox alignItems="Center" width="100%">
+                                        <items>
+                                            <Label text="Template :" design = "Bold" class="sapUiTinyMarginEnd">
+                                                <layoutData>
+                                                    <FlexItemData alignSelf="End"/>
+                                                </layoutData>
+                                            </Label>
+ 
+                                            <Switch
+                                                id="templateToggle"
+                                                state="{viewModel>/templateToggle}"
+                                                change=".onTemplateToggle"
+                                                class="sapUiTinyMarginEnd"/>
+ 
+                                        </items>
+                                    </HBox>
+                                    <VBox id="templateSection" visible="{viewModel>/templateToggle}" width="100%" >
+                                    <Label text="Select Saved Template:" class="sapUiSmallMarginTop"/>
+                                    <HBox justifyContent="Start">
+                                      
+                                     <Input
+                                            id="selTemplateList"
+                                            showValueHelp="true"
+                                            valueHelpRequest=".onOpenTemplateDialog"
+                                            liveChange=".onLiveChange"
+                                            valueState="None"
                                         >
-                                            <items>
-                                                <Label
-                                                    text="Template :"
-                                                    design="Bold"
-                                                    class="sapUiTinyMarginBottom sapUiTinyMarginEnd"
-                                                >
-                                                    <layoutData>
-                                                        <FlexItemData
-                                                            alignSelf="End"
-                                                        />
-                                                    </layoutData>
-                                                </Label>
-
-                                                <unified:FileUploader
-                                                    buttonOnly="true"
-                                                    id="TemplateUploader"
-                                                    multiple="false"
-                                                    change=".onTemplateUpload"
-                                                    icon="sap-icon://upload"
-                                                    iconOnly="true"
-                                                    style="Emphasized"
-                                                    tooltip="Upload Template (.docx)"
-                                                    fileType="docx"
-                                                    class="sapUiSmallMarginEnd sapUiTinyMarginBottom"
-                                                />
-
-                                                <Button
-                                                    icon="sap-icon://document-text"
-                                                    tooltip="Select Template"
-                                                    press=".onOpenTemplateDialog"
-                                                    class="sapUiSmallMarginEnd sapUiTinyMarginBottom"
-                                                />
-
-                                                <Link
-                                                    id="TemplateLink"
-                                                    text="Sample template (.docx)"
-                                                    target="_blank"
-                                                    class="sapUiTinyMarginEnd sapUiTinyMarginBottom"
-                                                />
-
-                                                <core:Icon
-                                                    src="sap-icon://message-information"
-                                                    class="sapUiTinyMarginBegin"
-                                                    tooltip="{i18n>TemplateFormatTooltip}"
-                                                />
-                                            </items>
-                                        </HBox>
-                                        <HBox
-                                            id="templateInfoBox"
-                                            visible="false"
-                                            justifyContent="End"
-                                            width="100%"
-                                        >
-                                            <items>
-                                                <Text
-                                                    id="selectedTemplateName"
-                                                    visible="false"
-                                                    class="sapUiTinyMarginEnd"
-                                                />
-
-                                                <Button
-                                                    id="viewTemplateBtn"
-                                                    visible="false"
-                                                    icon="sap-icon://vds-file"
-                                                    type="Transparent"
-                                                    press=".onViewTemplate"
-                                                />
-                                            </items>
-                                        </HBox>
+                                            <layoutData>
+                                                <FlexItemData growFactor="1" />
+                                            </layoutData>
+                                        </Input>
+ 
+                                        <unified:FileUploader
+                                            buttonOnly="true"
+                                            id="TemplateUploader"
+                                            multiple="false"
+                                            change=".onTemplateUpload"
+                                            icon="sap-icon://upload"
+                                            iconOnly="true"
+                                            style="Emphasized"
+                                            tooltip="Upload Template (.docx)"
+                                            fileType="docx"
+                                            class="sapUiTinyMarginBegin"/>
+   
+                                    </HBox>
+                                    <HBox
+                                        id="templateInfoBox"
+                                        visible="false"
+                                        justifyContent="End"
+                                        alignItems="Center"
+                                        width="100%"
+                                        class="sapUiTinyMarginTop">
+ 
+                                        <items>
+                                            <Text
+                                                id="selectedTemplateName"
+                                                visible="false"
+                                                class="sapUiTinyMarginEnd"/>
+ 
+                                            <Button
+                                                id="viewTemplateBtn"
+                                                visible="false"
+                                                icon="sap-icon://vds-file"
+                                                type="Transparent"
+                                                press=".onViewTemplate"/>
+                                        </items>
+                                    </HBox>
+                                    </VBox>
                                     </VBox>
                                     <core:Title text="{i18n>files}" />
                                     <VBox width="100%">
@@ -801,51 +796,51 @@
                                                 </HBox>
 
                                                 <HBox alignItems="Center">
-                                                    <Text
-                                                        id="docNameText"
-                                                        visible="false"
-                                                        class="sapUiSmallMarginEnd"
-                                                    />
-                                                    <Button
-                                                        id="viewDocBtn"
-                                                        visible="false"
-                                                        icon="sap-icon://vds-file"
-                                                        press=".viewDoc"
-                                                        tooltip="View Document"
-                                                        class="sapUiMarginBegin"
-                                                    />
-                                                    <List
-                                                        id="ragFileList"
-                                                        items="{ragModel>/ragFiles}"
-                                                        showNoData="false"
-                                                        visible="{ragModel>/currentRagEnabled}"
-                                                        class="sapUiTinyMarginTop"
-                                                    >
-                                                        <CustomListItem>
-                                                            <HBox
-                                                                width="100%"
-                                                                justifyContent="End"
-                                                                alignItems="Center"
-                                                                class="sapUiTinyMargin"
-                                                            >
-                                                                <Text
-                                                                    text="{ragModel>filename}"
-                                                                    wrapping="false"
-                                                                    maxLines="1"
-                                                                    class="sapUiSmallMarginEnd"
-                                                                />
-                                                                <Button
-                                                                    icon="sap-icon://vds-file"
-                                                                    type="Transparent"
-                                                                    tooltip="View Document"
-                                                                    press=".onRagPreviewPress"
-                                                                    class="sapUiTinyMarginEnd"
-                                                                />
-                                                            </HBox>
-                                                        </CustomListItem>
-                                                    </List>
-                                                </HBox>
+                                                <Text
+                                                    id="docNameText"
+                                                    visible="false"
+                                                    class="sapUiSmallMarginEnd"
+                                                />
+                                                <Button
+                                                    id="viewDocBtn"
+                                                    visible="false"
+                                                    icon="sap-icon://vds-file"
+                                                    press=".viewDoc"
+                                                    tooltip="View Document"
+                                                    class="sapUiMarginBegin"
+                                                />
+                                                <List
+                                                    id="ragFileList"
+                                                    items="{ragModel>/ragFiles}"
+                                                    showNoData="false"
+                                                    visible="{ragModel>/currentRagEnabled}"
+                                                    class="sapUiTinyMarginTop"
+                                                >
+                                                    <CustomListItem>
+                                                        <HBox
+                                                            width="100%"
+                                                            justifyContent="End"
+                                                            alignItems="Center"
+                                                            class="sapUiTinyMargin"
+                                                        >
+                                                            <Text
+                                                                text="{ragModel>filename}"
+                                                                wrapping="false"
+                                                                maxLines="1"
+                                                                class="sapUiSmallMarginEnd"
+                                                            />
+                                                            <Button
+                                                                icon="sap-icon://vds-file"
+                                                                type="Transparent"
+                                                                tooltip="View Document"
+                                                                press=".onRagPreviewPress"
+                                                                class="sapUiTinyMarginEnd"
+                                                            />
+                                                        </HBox>
+                                                    </CustomListItem>
+                                                </List>
                                             </HBox>
+                                        </HBox>
                                         </VBox>
                                     </VBox>
                                 </fr:content>
@@ -887,6 +882,7 @@
                                             liveChange=".onLiveChange"
                                             valueState="None"
                                             editable="false"
+                                            tooltip="{responseModel>/originalPrompt}"
                                         >
                                             <suggestionItems>
                                                 <SuggestionItem

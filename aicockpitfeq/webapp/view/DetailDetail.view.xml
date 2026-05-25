@@ -88,10 +88,10 @@
                                 />
                             </VBox>
                         </HBox>
-                        <VBox
-                            id="Citationlink"
-                            items="{airesponseDetailModel>/citationArr}"
-                        >
+<VBox
+    id="Citationlink"
+    items="{airesponseDetailModel>/citationArr}"
+>
                             <items>
                                 <Link
                                     text="{airesponseDetailModel>fname}"
@@ -181,12 +181,18 @@
                         press=".dislikeH"
                         class="sapUiTinyMarginTop"
                     />
-                    <Button 
+                     <Button 
                        tooltip="Download Template"
                        icon = "sap-icon://document-text"
                        press=".onExportTemplate" 
-                       enabled="{airesponseDetailModel>/downloadVis}"  
-                       class="sapUiTinyMarginTop"
+                       enabled="{airesponseDetailModel>/downloadVis}" 
+                        visible="{parts: [
+                        {path: 'viewModel>/templateToggle'},
+                        {path: 'airesponseDetailModel>/downloadVis'}
+                        ],
+                        formatter: '.formatter.formatTemplateDownloadVisibility'
+                        }"
+                        class="sapUiTinyMarginTop"
                    />
                     <Button
                         tooltip="Download PDF"

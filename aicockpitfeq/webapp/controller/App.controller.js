@@ -378,7 +378,8 @@ sap.ui.define([
                 "gpt-4o",
                 "anthropic--claude-3.5-sonnet",
                 "mistralai--mistral-small-instruct",
-                "mistralai--mistral-large-instruct"
+                "mistralai--mistral-large-instruct",
+                "anthropic--claude-4.5-opus"
             ];
             // BusyIndicator.show();
             $.ajax({

@@ -6,9 +6,8 @@ sap.ui.define([
     "sap/ui/model/json/JSONModel",
     "sap/f/FlexibleColumnLayoutSemanticHelper",
     "sap/ui/core/BusyIndicator",
-    "sap/ui/core/routing/HashChanger",
     "aicockpitfeq/util/PdfUtil"
-], (UIComponent, models, fioriLibrary, JSONModel, FlexibleColumnLayoutSemanticHelper, BusyIndicator, HashChanger, PdfUtil) => {
+], (UIComponent, models, fioriLibrary, JSONModel, FlexibleColumnLayoutSemanticHelper, BusyIndicator, PdfUtil) => {
     "use strict";
     return UIComponent.extend("aicockpitfeq.Component", {
         metadata: {
@@ -64,8 +63,7 @@ sap.ui.define([
                 codeResult: "", afterResult: "", codeType: "", codeEdVis: false, multiCE: [], templateKey: "" }; //Added Citation Array by Aishwarya
             var airesponseDetailModel = new JSONModel(respData);
             this.setModel(airesponseDetailModel, "airesponseDetailModel");
-            ////   var historyData = [{promptHistory:"",aiResponseHistory:""}];
-
+          
             var oHistoryModel = new sap.ui.model.json.JSONModel({ historyData: [] });
             this.setModel(oHistoryModel, "historyModel");
             var ragModelData = {
@@ -120,7 +118,7 @@ sap.ui.define([
             var oModel = this.getModel();
             var sLayout = oEvent.getParameters().arguments.layout;
             if (!sLayout) {
-                //  sLayout = fioriLibrary.LayoutType.TwoColumnsMidExpanded;
+               
                 sLayout = fioriLibrary.LayoutType.OneColumn;
             }
             oModel.setProperty("/layout", sLayout);
@@ -145,7 +143,7 @@ sap.ui.define([
                             flagModel = new sap.ui.model.json.JSONModel({ isAdmin: false, isSys: false });
                             that.setModel(flagModel, "flagModel");
                         }
-                        if (data && data.scopes) {
+                        if (data?.scopes) {
                             var xsAppName = data.scopes.find(scopes => scopes.includes("!") && scopes.includes("."))?.split(".")[0];
 
                             if (xsAppName) {
@@ -170,24 +168,7 @@ sap.ui.define([
             });
 
         },
-        //    getUserinfo: function () {
-
-        //     if (sap.ushell && sap.ushell.Container && sap.ushell.Container.getService("UserInfo")) {
-        //         var oUserInfoService = sap.ushell.Container.getService("UserInfo");
-        //         var sUserId = oUserInfoService.getId();
-        //         var sEmailId = oUserInfoService.getEmail();
-        //         if (sEmailId) {
-        //             this._loggedInUser = sEmailId;
-        //         }
-        //         else if (sUserId && sUserId !== 'DEFAULT_USER') {
-        //             this._loggedInUser = sUserId;
-        //         }
-        //     }
-        //     this.getModel("NetworkGraphModel").setProperty("/loggedInUserEmailId", this._loggedInUser);
-
-        //     this.getModel("NetworkGraphModel").setProperty("/loggedInUserName", oUserInfoService.getFullName());
-
-        // },
+       
         getUserinfo: function () {
             var that = this;
             var oNG = this.getModel("NetworkGraphModel");
@@ -198,7 +179,7 @@ sap.ui.define([
 
             // Try FLP user info first (when running inside Work Zone/Launchpad)
             try {
-                if (sap && sap.ushell && sap.ushell.Container) {
+                if (sap?.ushell?.Container) {
                     var oUserInfo = sap.ushell.Container.getService && sap.ushell.Container.getService("UserInfo");
                     if (oUserInfo) {
                         sUserId = (oUserInfo.getId && oUserInfo.getId()) || "";
@@ -245,11 +226,11 @@ sap.ui.define([
         },
 
         getFoundationModels: function () {
-            var sComponentName = this.getManifestObject().getComponentName();
-            var sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
-            var sUrl = sBasePath + "/lm/scenarios/foundation-models/models";
+            let sComponentName = this.getManifestObject().getComponentName();
+            let sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
+            let sUrl = sBasePath + "/lm/scenarios/foundation-models/models";
 
-            var that = this;
+            let that = this;
 
             return fetch(sUrl, {
                 method: "GET",
@@ -263,7 +244,7 @@ sap.ui.define([
                     return response.json();
                 })
                 .then(function (data) {
-                    var tokenData = {};
+                    let tokenData = {};
 
                     if (Array.isArray(data.resources)) {
                         data.resources.forEach(function (modelInfo) {
@@ -289,18 +270,18 @@ sap.ui.define([
                     tokenConfigByTab.tokenVis = false;
                     tokenConfigByTab.usedToken = "";
 
-                    var oTokenModel = new sap.ui.model.json.JSONModel();
+                    let oTokenModel = new sap.ui.model.json.JSONModel();
                     oTokenModel.setData(tokenConfigByTab);
                     that.setModel(oTokenModel, "TokenLimit");
                     that.getModel("TokenLimit").refresh();
 
                     // Bind full foundation models response for UI consumption
-                    var fmRaw = new sap.ui.model.json.JSONModel(data);
+                    let fmRaw = new sap.ui.model.json.JSONModel(data);
                     that.setModel(fmRaw, "FoundationModelsRaw");
 
                     // Flatten for simple list/table/dropdown bindings
-                    var fmList = (Array.isArray(data.resources) ? data.resources : []).map(function (r) {
-                        var v = (r.versions && r.versions[0]) || {};
+                    let fmList = (Array.isArray(data.resources) ? data.resources : []).map(function (r) {
+                        let v = (r.versions && r.versions[0]) || {};
                         return {
                             model: r.model || "",
                             displayName: r.displayName || "",

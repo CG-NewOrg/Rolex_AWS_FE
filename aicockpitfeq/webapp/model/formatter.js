@@ -165,15 +165,17 @@ sap.ui.define([], () => {
         isTextContent: function (value) {
             return typeof value === "string" && value.trim().length > 0;
         },
+        enableSys: function (isAdmin, isSys) {
+            return !isSys;
+        },
         isImageContent: function (value) {
             return typeof value === "string" && value.startsWith("data:image");
         },
-        enableSys:function(isAdmin,isSys){
-            if(isSys==true){
+        formatTemplateDownloadVisibility: function (bToggle, bDownloadVis) {
+            if (!bToggle) {
                 return false;
-            }else{
-                return true;
             }
-        }
+            return !!bDownloadVis;
+        },
     };
 });

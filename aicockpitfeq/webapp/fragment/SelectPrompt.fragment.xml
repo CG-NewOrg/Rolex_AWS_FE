@@ -30,6 +30,7 @@
                 <StandardListItem
                     title="{BSPromptData>NAME}"
                     description="{BSPromptData>PROMPT_TEMPLATE}"
+                    tooltip="{BSPromptData>PROMPT_TEMPLATE}"
                     type="Active"
                     press=".onPromptSelect"
                 >
