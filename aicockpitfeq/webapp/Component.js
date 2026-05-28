@@ -25,7 +25,9 @@ sap.ui.define([
 
             // set the device model
             this.setModel(models.createDeviceModel(), "device");
-            //for flexiblecol
+            var oFlagModel = new JSONModel({ isAdmin: false, isSys: false, isViewer: false });
+            this.setModel(oFlagModel, "flagModel");
+
             var oModel = new JSONModel();
             this.setModel(oModel);
             var oRouter = this.getRouter();
@@ -163,6 +165,16 @@ sap.ui.define([
                     error: function (err) {
                         // eslint-disable-next-line no-console
                         console.error("Failed to fetch user roles:", err);
+                        try {
+                            var flagModel = that.getModel("flagModel");
+                            if (!flagModel) {
+                                flagModel = new sap.ui.model.json.JSONModel({ isAdmin: false, isSys: false, isViewer: false });
+                                that.setModel(flagModel, "flagModel");
+                            }
+                            flagModel.setProperty("/isAdmin", false);
+                        } catch (e) {
+                            // no-op
+                        }
                     }
                 });
             });

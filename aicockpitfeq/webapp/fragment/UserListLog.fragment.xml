@@ -803,16 +803,15 @@
                     press=".onAddPrompt"
                 />
 
-                <Button
-                    text="Delete"
-                    type="Reject"
-                    icon="sap-icon://delete"
-                    id="delPr"
-                    enabled="{parts: [{path: 'vFlagMod>/isAdmin'}, {path: 'vFlagMod>/isSys'}],formatter:'.formatter.enableSys'}"
-                    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' }"
-                    press=".onDeletePrompt"
-                />
-
+               <Button
+    text="Delete"
+    type="Reject"
+    icon="sap-icon://delete"
+    id="delPr"
+    enabled="{parts: [{path: 'vFlagMod>/isAdmin'}, {path: 'vFlagMod>/isSys'}],formatter:'.formatter.enableSys'}"
+    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' &amp;&amp; ${vFlagMod>/isAdmin} === true }"
+    press=".onDeletePrompt"
+/>
                 <Button
                     text="Update"
                     type="Emphasized"

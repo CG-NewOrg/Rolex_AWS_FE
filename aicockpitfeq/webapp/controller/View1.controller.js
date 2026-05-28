@@ -7428,23 +7428,34 @@ sap.ui.define([
                             success: function () {
 
                                 sap.m.MessageToast.show(oBundle.getText("promptDeletedSuccess"));
-                                var updatedData = aData.filter(function (item) {
-                                    return item.UUID !== sPromptId;
-                                });
+
                                 if (sFragmentName === "promptlibpr") {
-                                    oPromptModel.refresh();
                                     oTable.removeSelections(true);
-                                    if (oTable.getBinding("items")) {
-                                        oTable.getBinding("items").refresh();
-                                    }
+                                    var catSel = that.byId("categorySelect").getSelectedKey();
+
+                                    var roleSel = that.byId("msgSelected").getSelectedKey();
+                                    var msgType = (roleSel === "user") ? "prompt" : "sysMsg";
+
+                                    var url = that._sBasePath +
+                                        "/cockpit/getPromptDetails?Category=" + catSel +
+                                        "&MsgType=" + msgType +
+                                        "&ProjectId=" + that._ProjectDetail;
+
+                                    that.onSearch(url, roleSel);
+
                                 } else {
+                                    var updatedData = aData.filter(function (item) {
+                                        return item.UUID !== sPromptId;
+                                    });
+
                                     oModel.setData(updatedData);
                                     oModel.refresh(true);
-
-                                    if (that.oDialog1) {
-                                        that.oDialog1.setBusy(false);
-                                    }
                                 }
+
+                                if (that.oDialog1) {
+                                    that.oDialog1.setBusy(false);
+                                }
+
                             },
 
                             error: function (error) {
