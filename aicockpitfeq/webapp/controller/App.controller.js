@@ -456,7 +456,7 @@ sap.ui.define([
             // var isPopupEdited = oViewModel.getProperty("/isParamPopupEdited");
             var payload;
             var { system, messages: cleanedMessages } = that.sanitizePayloadMessagesforChatbot(aMessages);
-            if (apiModelName === "anthropic--claude-3.5-sonnet") {
+            if (apiModelName === "anthropic--claude-3.5-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.5-sonnet") {
                 payload = that._createAnthropicPayloadFromModelfrChatbot(cleanedMessages, system, oViewModel);
                 //payload = this._createAnthropicPayloadFromModel(aMessages);
             } else if (apiModelName === "mistralai--mistral-large-instruct") {
@@ -516,8 +516,7 @@ sap.ui.define([
                 anthropic_version: "bedrock-2023-05-31",
                 messages: aMessages,
                 max_tokens: 1024,
-                temperature: 0.7,
-                top_p: 0.95
+                temperature: 0.7
             };
         },
 
