@@ -369,7 +369,7 @@
                                 hAlign="Center"
                                 width="4rem"
                             >
-                                <Text text="Delete" />
+                                <Text text="Delete" visible="{vFlagMod>/isAdmin}" />
                             </Column>
                             <!-- <Column width="12em">
                                 <Text text="{i18n>uploadedBy}" />
@@ -401,6 +401,7 @@
                                         type="Transparent"
                                         tooltip="Delete File"
                                         press=".onFileDelete"
+                                        visible="{vFlagMod>/isAdmin}"
                                     />
                                     <!-- <Text
                                         text="{path:'ObjectFileList>UpdatedDate',formatter: '.formatter.dateCoversion'}"
@@ -787,6 +788,15 @@
         </Panel>
         <footer>
             <Toolbar>
+            <Button
+                    id="idUserManagementBtn"
+                    text="User Management"
+                    icon="sap-icon://person-placeholder"
+                    type="Emphasized"
+                    press=".onNavigateToUserManagement"
+                    visible="{= ${switchFragments>/frg/frName} === 'admin' }"
+                    class="sapUiTinyMarginEnd"
+                />
                 <ToolbarSpacer />
                 <Button
                     text="{i18n>addFile}"

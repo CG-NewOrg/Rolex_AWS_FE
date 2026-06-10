@@ -196,9 +196,16 @@ sap.ui.define([
             };
             var sUrl = this._sBasePath + "/cockpit/saveLogout";
             var payload = JSON.stringify({ payload: oPayload });
+            let oHeaders = {
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff",
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
+            };
             // Use sendBeacon so the request survives page unload without timing out (no 504)
             if (navigator.sendBeacon) {
-                navigator.sendBeacon(sUrl, new Blob([payload], { type: "application/json" }));
+                navigator.sendBeacon(sUrl, new Blob([payload], oHeaders, { type: "application/json" }));
             } else {
                 // Fallback for browsers without sendBeacon (synchronous XHR)
                 var xhr = new XMLHttpRequest();
@@ -226,6 +233,15 @@ sap.ui.define([
             if (popUpSel == "" || popUpSel == "knowlBAdmin") {
                 BusyIndicator.show();
 
+                let oHeader = {
+                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "0",
+                    "X-Content-Type-Options": "nosniff",
+                    ...(this.defaultHeaders || {})
+                };
+
                 var sSelectedIconTab = ""
                 if (selDLTab && selDLTab !== "") {
                     sSelectedIconTab = selDLTab;
@@ -245,7 +261,8 @@ sap.ui.define([
                     $.ajax({
                         url: listObjectsUrl,
                         type: "GET",
-                        headers: that.defaultHeaders,
+                        headers: oHeader,
+                       
                         success: function (data) {
                             var fileNames = [];
                             var ObjectStorageFile = new sap.ui.model.json.JSONModel();
@@ -276,10 +293,18 @@ sap.ui.define([
         KBGetFiles: function (sSelectedIconTab) {
             var listObjectsUrl = this._sBasePath + `/kb-integration/ListObjectStoreFiles?category=${sSelectedIconTab}&project=${this._ProjectDetail}`;
             var that = this;
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff",
+                ...(this.defaultHeaders || {})
+            };
             $.ajax({
                 url: listObjectsUrl,
                 type: "GET",
-                headers: that.defaultHeaders,
+                headers: oHeader,
                 success: function (data) {
                     var fileNames = [];
                     var ObjectStorageFile = new sap.ui.model.json.JSONModel();
@@ -337,7 +362,13 @@ sap.ui.define([
                 MessageBox.error("User ID is missing.");
                 return;
             }
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             BusyIndicator.show();
             var sUrl = this._sBasePath + "/cockpit/getProjectDetailsOfUser";
             var oPayload = {
@@ -350,6 +381,7 @@ sap.ui.define([
             $.ajax({
                 url: sUrl,
                 method: "POST",
+                headers: oHeader,
                 contentType: "application/json",
                 data: JSON.stringify(oPayload),
                 success: function (data) {
@@ -358,6 +390,7 @@ sap.ui.define([
                     var roles = result.UserRoles || {};
                     var hasAdminRole = !!roles.hasAdminRole;
                     var hasViewerRole = !!roles.hasViewerRole;
+                    let sMessage = data && data.value ? data.value.message : "";
 
                     var oFlagModel = this.getOwnerComponent().getModel("flagModel");
                     if (oFlagModel) {
@@ -369,6 +402,11 @@ sap.ui.define([
                         }
                     }
 
+                    let oPrjModel = that.getView().getModel("prjModel");
+                    oPrjModel.setProperty("/projects", projects);
+                    oPrjModel.setProperty("/userDBnotAddedTxt", sMessage);
+                    oPrjModel.setProperty("/userDBnotAddedVis", projects.Length === 0);
+
                     this.getOwnerComponent().getModel("NetworkGraphModel").setProperty("/projects", projects);
                     that.getView().getModel("prjModel").setProperty("/projects", projects);
 
@@ -378,7 +416,7 @@ sap.ui.define([
                 error: function () {
                     BusyIndicator.hide();
                     MessageBox.show("Failed to load projects");
-                }.bind(this)
+                }
             });
         },
         openPrjFragment: async function () {
@@ -468,8 +506,12 @@ sap.ui.define([
                             BusyIndicator.hide();
                         }
                     } else {
-                        that.getView().getModel("prjModel").setProperty("/userDBnotAddedVis", false);
-                        that.getView().getModel("prjModel").setProperty("/userDBnotAddedTxt", "");
+                        var oPrjModel = that.getView().getModel("prjModel");
+                        var aProjects = oPrjModel ? oPrjModel.getProperty("/projects") : [];
+                        if (aProjects && aProjects.length > 0) {
+                            oPrjModel.setProperty("/userDBnotAddedVis", false);
+                            oPrjModel.setProperty("/userDBnotAddedTxt", "");
+                        }
                         var aresult = data.value.result;
                         that.sApiUrl = aresult.sqlResponse.APIVERSION;
                         var allowedModels = [
@@ -1241,7 +1283,7 @@ sap.ui.define([
             var that = this;
             var UserloginModel = new sap.ui.model.json.JSONModel();
             oview.setModel(UserloginModel, "UserloginModel");
-
+            this.allow = true;
             var catModel = models.createJSONModel(this, "categoryModel");
             this.getView().setModel(catModel, "catModel");
             if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "admin") {
@@ -1254,10 +1296,18 @@ sap.ui.define([
 
                 /////original app url
                 var oPayload1 = JSON.stringify(oPayload);
+                let oHeaders = {
+                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "0",
+                    "X-Content-Type-Options": "nosniff"
+                };
                 $.ajax({
                     url: sUrl,
                     type: "GET",
                     data: oPayload,
+                    headers: oHeaders,
                     success: function (data, status, xhr) {
                         var flattenedData = [];
 
@@ -1283,10 +1333,14 @@ sap.ui.define([
                     },
 
                     error: function (jqXhr, textStatus, errorMessage) {
-                        console.log(errorMessage);
-                        console.log(JSON.parse(jqXhr.responseText).error.message);
+                        if (JSON.parse(jqXhr.responseText).error.code == "403") {
+                            that.getView().getModel("flagModel").setProperty("/isAdmin", false);
+                        }
+                        that.allow = false;
+                        // console.log(errorMessage);
+                        // console.log(JSON.parse(jqXhr.responseText).error.message);
                         BusyIndicator.hide();
-                        MessageBox.error(jqXhr.responseText);
+                        MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
                     }
                 });
                 if (!this.adminLogList) {
@@ -1303,7 +1357,9 @@ sap.ui.define([
                                 oEvent.preventDefault();
                             }
                         });
-                        this.adminLogList.open();
+                        if (this.allow == true) {
+                            this.adminLogList.open();
+                        }
                     }.bind(this));
                 } else {
                     this.adminLogList.open();
@@ -1319,10 +1375,18 @@ sap.ui.define([
                 var sUrl = this._sBasePath + "/cockpit/getLoginDetails";
 
                 BusyIndicator.show();
+                let oHeader = {
+                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "0",
+                    "X-Content-Type-Options": "nosniff"
+                };
                 $.ajax({
                     url: sUrl,
                     type: "GET",
                     data: oPayload,
+                    headers: oHeader,
                     success: function (data, status, xhr) {
                         var flattenedData = [];
                         var mailId = data.value.result.EMAIL_ID;
@@ -1594,72 +1658,236 @@ sap.ui.define([
                 sIssueDetail = oModel.getProperty("/feedbackForm/issueDesc"),
                 sIssueType = oModel.getProperty("/feedbackForm/issueType"),
                 that = this;
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            const formattedDate = `${year}-${month}-${day}`;
-            const formattedTime = `${hours}:${minutes}:${seconds}`;
-            const dateTime = `${formattedDate} ${formattedTime}`;
-            console.log("Date and Time:", dateTime);
-
-            if (!sPriority || !sIssueDetail || !sIssueSub || !sIssueType) {
-                sap.m.MessageBox.information(oBundle.getText("fillDetails"));
-                return
-            }
-            var oPayload = {
-                "Priority": sPriority,
-                "IssueType": sIssueType,
-                "IssueTitle": sIssueSub,
-                "IssueDetail": sIssueDetail,
-                "UserId": this._loggedInUser,
-                "DateTime": dateTime
-            };
-            var payload = {};
-            payload["payload"] = oPayload;
-            oModel.setProperty("/feedbackDialog", oPayload);
-            BusyIndicator.show();
-
-            var sUrl = this._sBasePath + "/cockpit/createFeedback";
-            $.ajax({
-                url: sUrl,
-                method: "POST",
-                contentType: "application/json",
-                data: JSON.stringify(payload),
-                success: async function (data, status, xhr) {
-                    var oFeedbackInit = {
-                        "priority": "Low",
-                        "issueType": "Technical",
-                        "issueSubject": "",
-                        "issueDesc": "",
-                        "CreatedBy": ""
-                    }
-                    oModel.setProperty("/feedbackForm", oFeedbackInit);
-                    BusyIndicator.hide();
-                    that.closeSysKeyFr();
-                    if (!that.tyfbFragment) {
-                        that.tyfbSuccessFragment = await that.loadFragment({
-                            name: "aicockpitfeq.fragment.FeedbackSuccess"
-                        }).then(function (oDialog7) {
-                            that.tyfbSuccessFragment = oDialog7; // Store the dialog instance
-                            oDialog7.open();
-
-                        }.bind(that));
-                    } else {
-                        that.tyfbSuccessFragment.open();
-
-                    }
-                    // sap.m.MessageBox.information(oBundle.getText("thankYouFeedback"));
-                },
-                error: function (jqXhr, textStatus, errorMessage) {
-                    BusyIndicator.hide();
-                    sap.m.MessageBox.error(oBundle.getText("errContactITTeam"));
+            let noScript = true;
+            let ifTitle = false;
+            let ifDesc = false;
+            const maliciousPatterns = [
+                /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+                /javascript:/gi,
+                /vbscript:/gi,
+                /on\w+\s*=\s*["'][^"']*["']/gi,
+                /eval\s*\(/gi,
+                /document\.write/gi,
+                /document\.cookie/gi,
+                /window\.location/gi,
+                /\.exec\s*\(/gi,
+                /new\s+Function\s*\(/gi,
+                /fromCharCode/gi,
+                /\\x[0-9a-fA-F]{2}/g,
+                /\\u[0-9a-fA-F]{4}/g,
+                /base64_decode/gi,
+                /shell_exec/gi,
+                /system\s*\(/gi,
+                /passthru/gi,
+                /exec\s*\(/gi,
+                /popen\s*\(/gi,
+                /proc_open/gi,
+                /<\?php/gi,
+                /<%[\s\S]*?%>/g,
+                /powershell/gi,
+                /cmd\.exe/gi,
+                /\/bin\/sh/gi,
+                /\/bin\/bash/gi,
+                /wget\s+/gi,
+                /curl\s+.*-o/gi,
+                /nc\s+-e/gi,
+                /rm\s+-rf/gi
+            ];
+            for (const pattern of maliciousPatterns) {
+                if (pattern.test(sIssueSub)) {
+                    noScript = false;
+                    ifTitle = true;
                 }
-            });
+                if (pattern.test(sIssueDetail)) {
+                    noScript = false;
+                    ifDesc = true;
+                }
+            }
+            var xssPatterns = [
+                // JavaScript execution functions
+                { pattern: /\balert\s*\(/gi, name: "alert()" },
+                { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
+                { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
+                { pattern: /\beval\s*\(/gi, name: "eval()" },
+                { pattern: /\bFunction\s*\(/gi, name: "Function()" },
+                { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
+                { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
+                { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
+
+                // Script tags and protocols
+                { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
+                { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
+                { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
+                { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
+                { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
+
+                // Event handlers (on* attributes)
+                { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
+                { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
+                { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
+                { pattern: /\bonload\s*=/gi, name: "onload handler" },
+                { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
+                { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
+                { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
+                { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
+                { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
+                { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
+                { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
+                { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
+
+                // DOM manipulation
+                { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
+                { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
+                { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
+                { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
+                { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
+                { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
+                { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
+
+                // Window/Location manipulation
+                { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
+                { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
+                { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
+                { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
+
+                // Dangerous HTML elements
+                { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
+                { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
+                { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
+                { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
+                { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
+                { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
+                { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
+                { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
+                { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
+                { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
+                { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
+                { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
+
+                // Encoding bypass attempts
+                { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
+                { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
+                { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
+
+                // Expression and binding attacks
+                { pattern: /expression\s*\(/gi, name: "CSS expression()" },
+                { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
+                { pattern: /-moz-binding/gi, name: "Mozilla binding" },
+
+                // Constructor access
+                { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
+                { pattern: /\b__proto__/gi, name: "__proto__ access" },
+                { pattern: /\bprototype\s*\./gi, name: "prototype access" }
+            ];
+
+            // Check each pattern
+            for (var i = 0; i < xssPatterns.length; i++) {
+                if (xssPatterns[i].pattern.test(sIssueSub)) {
+                    // detectedPatterns.
+                    // push(xssPatterns[i].name);
+                    noScript = false;
+                    ifTitle = true;
+                }
+            }
+            for (var i = 0; i < xssPatterns.length; i++) {
+                if (xssPatterns[i].pattern.test(sIssueDetail)) {
+                    // detectedPatterns.push(xssPatterns[i].name);
+                    noScript = false;
+                    ifDesc = true;
+                }
+            }
+            if (noScript == false && ifTitle == true) {
+                this.getView().byId("fbTitleForm").setValueState("Error");
+                this.getView().byId("fbTitleForm").setValueStateText("Malicious data");
+                if (ifDesc == false) {
+                    this.getView().byId("fbDesc").setValueState("None");
+                    this.getView().byId("fbDesc").setValueStateText("");
+                }
+            } else if (noScript == false && ifDesc == true) {
+                this.getView().byId("fbDesc").setValueState("Error");
+                this.getView().byId("fbDesc").setValueStateText("Malicious data");
+                if (ifTitle == false) {
+                    this.getView().byId("fbTitleForm").setValueState("None");
+                    this.getView().byId("fbTitleForm").setValueStateText("");
+                }
+
+            } else {
+                var oBundle = this.getView().getModel("i18n").getResourceBundle();
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const formattedDate = `${year}-${month}-${day}`;
+                const formattedTime = `${hours}:${minutes}:${seconds}`;
+                const dateTime = `${formattedDate} ${formattedTime}`;
+                console.log("Date and Time:", dateTime);
+
+                if (!sPriority || !sIssueDetail || !sIssueSub || !sIssueType) {
+                    sap.m.MessageBox.information(oBundle.getText("fillDetails"));
+                    return
+                }
+                var oPayload = {
+                    "Priority": sPriority,
+                    "IssueType": sIssueType,
+                    "IssueTitle": sIssueSub,
+                    "IssueDetail": sIssueDetail,
+                    "UserId": this._loggedInUser,
+                    "DateTime": dateTime
+                };
+                var payload = {};
+                payload["payload"] = oPayload;
+                oModel.setProperty("/feedbackDialog", oPayload);
+                BusyIndicator.show();
+
+                let oHeader = {
+                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "0",
+                    "X-Content-Type-Options": "nosniff"
+                };
+
+                var sUrl = this._sBasePath + "/cockpit/createFeedback";
+                $.ajax({
+                    url: sUrl,
+                    method: "POST",
+                    headers: oHeader,
+                    contentType: "application/json",
+                    data: JSON.stringify(payload),
+                    success: async function (data, status, xhr) {
+                        var oFeedbackInit = {
+                            "priority": "Low",
+                            "issueType": "Technical",
+                            "issueSubject": "",
+                            "issueDesc": "",
+                            "CreatedBy": ""
+                        }
+                        oModel.setProperty("/feedbackForm", oFeedbackInit);
+                        BusyIndicator.hide();
+                        that.closeSysKeyFr();
+                        if (!that.tyfbFragment) {
+                            that.tyfbSuccessFragment = await that.loadFragment({
+                                name: "aicockpitfeq.fragment.FeedbackSuccess"
+                            }).then(function (oDialog7) {
+                                that.tyfbSuccessFragment = oDialog7; // Store the dialog instance
+                                oDialog7.open();
+
+                            }.bind(that));
+                        } else {
+                            that.tyfbSuccessFragment.open();
+
+                        }
+                        // sap.m.MessageBox.information(oBundle.getText("thankYouFeedback"));
+                    },
+                    error: function (jqXhr, textStatus, errorMessage) {
+                        BusyIndicator.hide();
+                        sap.m.MessageBox.error(oBundle.getText("errContactITTeam"));
+                    }
+                });
+            }
         },
         onPressFeedbackEmail: function () {
             var oModel = this.getView().getModel("appmodel"),
@@ -2301,177 +2529,336 @@ sap.ui.define([
             var systemKeyPayload = "";
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
             var sysContent = "";
-            var scenarioSel = this.getView().byId("navigationList").getSelectedKey();
-            let catSel = "";
-            if (ev.getSource().getId().includes("listView1--saveSysBtn") == true && scenarioSel == "promptlib") {
-                MessageBox.error(oBundle.getText("selFuncTabsBtn"));
+            if (sFragmentName !== "promptlibpr") {
+                sysContent = this.getView().byId("descTxtArea").getValue();
             } else {
-                if (sFragmentName !== "promptlibpr") {
-                    catSel = this.selectedKeyFunct();
-                    sysContent = this.getView().byId("descTxtArea").getValue();
-                    //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                    this.getView().byId("descTxtArea").setEditable(false);
-                    this.getView().byId("multiInputSystem").setEditable(true);
-                    this.getView().byId("saveSysBtn").setVisible(false);
-                    ////      this.getView().byId("deleteSysBtn").setVisible(false);
-                    this.getView().byId("editSys").setVisible(true);
-
-                    var scenario = "";
-                    switch (scenarioSel) {
-                        case "bdPMO":
-                            scenario = "BS";
-                            break;
-                        case "usrCr":
-                            scenario = "User";
-                            break;
-                        case "DocGen":
-                            scenario = "DocGen";
-                            break;
-                        case "fcFSD":
-                            scenario = "fstoconf";
-                            break;
-                        case "osdTSD":
-                            scenario = "fstots";
-                            break;
-                        case "cdGen":
-                            scenario = "tstocode";
-                            break;
-                        case "cdRem":
-                            scenario = "coderem";
-                            break;
-                        case "cdSum":
-                            scenario = "codesum";
-                            break;
-                        case "gitKey":
-                            scenario = "tstocodeGit";
-                            break;
-                        case "tutKey":
-                            scenario = "TUT";
-                            break;
-                        case "bpmKey":
-                            scenario = "BPM";
-                            break;
-                        case "tcgKey":
-                            scenario = "TCG";
-                            break;
-                        case "pctKey":
-                            scenario = "PCT";
-                            break;
-                    }
-                    var sysName = "";
-                    /////var sysName = this.getView().byId("multiInputSystem").getValue();
-                    if (this.isSystemEdited == true) {
-                        sysName = this.getView().byId("multiInputSystem").getValue();
-                    } else {
-                        sysName = this.getView().byId("addSysPrefix").getValue() + this.getView().byId("multiInputSystem").getValue();
-                        this.getView().byId("addSysPart").setVisible(false);
-                        this.getView().byId("multiInputSystem").setValue(sysName);
-                        this.stopEdit = true;
-                        this.getView().byId("addSysPrefix").setVisible(false);
-                        this.getView().byId("infoSys").setVisible(false);
-                    }
-                    this.stopEdit = true;
-                    var createdIn = "";
-                    var updatedIn = "";
-                    if (this.addedFromCurrUser == true) {
-                        createdIn = this._ProjectDetail;
-                    }
-                    if (this.isSystemEdited == true) {
-                        updatedIn = this._ProjectDetail;
-                    }
+                sysContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
+            }
+            let noScript = true;
+            let result = Utility.validatePrompt(sysContent);
+            //noScript=this.validateInput(sysContent);
+            const maliciousPatterns = [
+                /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+                /javascript:/gi,
+                /vbscript:/gi,
+                /on\w+\s*=\s*["'][^"']*["']/gi,
+                /eval\s*\(/gi,
+                /document\.write/gi,
+                /document\.cookie/gi,
+                /window\.location/gi,
+                /\.exec\s*\(/gi,
+                /new\s+Function\s*\(/gi,
+                /fromCharCode/gi,
+                /\\x[0-9a-fA-F]{2}/g,
+                /\\u[0-9a-fA-F]{4}/g,
+                /base64_decode/gi,
+                /shell_exec/gi,
+                /system\s*\(/gi,
+                /passthru/gi,
+                /exec\s*\(/gi,
+                /popen\s*\(/gi,
+                /proc_open/gi,
+                /<\?php/gi,
+                /<%[\s\S]*?%>/g,
+                /powershell/gi,
+                /cmd\.exe/gi,
+                /\/bin\/sh/gi,
+                /\/bin\/bash/gi,
+                /wget\s+/gi,
+                /curl\s+.*-o/gi,
+                /nc\s+-e/gi,
+                /rm\s+-rf/gi
+            ];
+            for (const pattern of maliciousPatterns) {
+                if (pattern.test(sysContent)) {
+                    noScript = false;
                 }
-                if (this.keyConst == sysName && sFragmentName !== "promptlibpr") {
-                    //    if (this.keyConst == sysName && ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                    this.getView().byId("multiInputSystem").setEnabled(true);
-                    this.getView().byId("multiInputSystem").setValueState("Error");
-                    this.getView().byId("multiInputSystem").setValueStateText("Enter Unique System Message ID");
-                    this.getView().byId("editSys").setVisible(false);
-                } else if (sysContent == "" && sFragmentName !== "promptlibpr") {
-                    //} else if (sysContent == "" && ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                    this.getView().byId("descTxtArea").setEditable(true);
-                    this.getView().byId("descTxtArea").setValueState("Error");
-                    this.getView().byId("descTxtArea").setValueStateText("Enter System Message Description");
-                    this.getView().byId("editSys").setVisible(false);
-                } else if (sFragmentName == "promptlibpr") {
-                    catSel = this.getView().byId("categorySelect").getSelectedKey();
-                    sysContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
-                    sysName = this.getView().getModel("savePrmModel").oData.name;
+            }
+            var xssPatterns = [
+                // JavaScript execution functions
+                { pattern: /\balert\s*\(/gi, name: "alert()" },
+                { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
+                { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
+                { pattern: /\beval\s*\(/gi, name: "eval()" },
+                { pattern: /\bFunction\s*\(/gi, name: "Function()" },
+                { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
+                { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
+                { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
+
+                // Script tags and protocols
+                { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
+                { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
+                { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
+                { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
+                { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
+
+                // Event handlers (on* attributes)
+                { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
+                { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
+                { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
+                { pattern: /\bonload\s*=/gi, name: "onload handler" },
+                { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
+                { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
+                { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
+                { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
+                { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
+                { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
+                { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
+                { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
+
+                // DOM manipulation
+                { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
+                { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
+                { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
+                { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
+                { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
+                { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
+                { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
+
+                // Window/Location manipulation
+                { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
+                { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
+                { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
+                { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
+
+                // Dangerous HTML elements
+                { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
+                { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
+                { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
+                { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
+                { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
+                { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
+                { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
+                { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
+                { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
+                { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
+                { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
+                { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
+
+                // Encoding bypass attempts
+                { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
+                { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
+                { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
+
+                // Expression and binding attacks
+                { pattern: /expression\s*\(/gi, name: "CSS expression()" },
+                { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
+                { pattern: /-moz-binding/gi, name: "Mozilla binding" },
+
+                // Constructor access
+                { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
+                { pattern: /\b__proto__/gi, name: "__proto__ access" },
+                { pattern: /\bprototype\s*\./gi, name: "prototype access" }
+            ];
+
+            // Check each pattern
+            for (var i = 0; i < xssPatterns.length; i++) {
+                if (xssPatterns[i].pattern.test(sysContent)) {
+                    // detectedPatterns.push(xssPatterns[i].name);
+                    noScript = false;
                 }
-                // else {
-                // if (sFragmentName !== "promptlibpr") {
-                //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+            }
 
-                systemKeyPayload = {
-                    payload: {
-                        Prompt_Details: sysContent,
-                        Category: catSel,
-                        MsgType: "sysMsg",
-                        ProjectId: this._ProjectDetail,
-                        PromptId: sysName,
-                        UserId: this._loggedInUser,
-                        DateTime: new Date().toISOString(),
-                    }
-                };
-                // } 
-                // else {
-                //     ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
-                //     systemKeyPayload = this.getView().getModel("savePrmModel").oData;
-                //     if (systemKeyPayload.name.includes(this.getView().getModel("enSysPromp").getProperty("/sysKey"))) {
+            if (!result.isAllowed && sFragmentName !== "promptlibpr") {
+                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+                this.getView().byId("descTxtArea").setEditable(true);
+                this.getView().byId("descTxtArea").setValueState("Error");
+                this.getView().byId("descTxtArea").setValueStateText("Malicious data");
+                this.getView().byId("editSys").setVisible(false);
+            } else if (!result.isAllowed && sFragmentName == "promptlibpr") {
+                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+                this.getView().byId("sysPromptDesc").setValueState("Error");
+                this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
+            }
+            else if (noScript == false && sFragmentName !== "promptlibpr") {
 
-                //     } else {
-                //         systemKeyPayload.name = this.getView().getModel("enSysPromp").getProperty("/sysKey") + systemKeyPayload.name;
-                //     }
-                // }
-                var that = this;
+                this.getView().byId("descTxtArea").setEditable(true);
+                this.getView().byId("descTxtArea").setValueState("Error");
+                this.getView().byId("descTxtArea").setValueStateText("Malicious data");
+                this.getView().byId("editSys").setVisible(false);
 
-                $.ajax({
-                    url: this._sBasePath + "/cockpit/createPromptDetails",
-                    method: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify(systemKeyPayload),
-                    success: async function (data, status, xhr) {
-                        if (that.addedFromCurrUser == true) {
-                            sap.m.MessageToast.show("System Message Created");
+            } else if (noScript == false && sFragmentName == "promptlibpr") {
+                this.getView().byId("sysPromptDesc").setValueState("Error");
+                this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
+            } else {
+                var scenarioSel = this.getView().byId("navigationList").getSelectedKey();
+                let catSel = "";
+                if (ev.getSource().getId().includes("listView1--saveSysBtn") == true && scenarioSel == "promptlib") {
+                    MessageBox.error(oBundle.getText("selFuncTabsBtn"));
+                } else {
+                    if (sFragmentName !== "promptlibpr") {
+                        catSel = this.selectedKeyFunct();
+                        //sysContent = this.getView().byId("descTxtArea").getValue();
+                        //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                        this.getView().byId("descTxtArea").setEditable(false);
+                        this.getView().byId("multiInputSystem").setEditable(true);
+                        this.getView().byId("saveSysBtn").setVisible(false);
+                        ////      this.getView().byId("deleteSysBtn").setVisible(false);
+                        this.getView().byId("editSys").setVisible(true);
+
+                        var scenario = "";
+                        switch (scenarioSel) {
+                            case "bdPMO":
+                                scenario = "BS";
+                                break;
+                            case "usrCr":
+                                scenario = "User";
+                                break;
+                            case "DocGen":
+                                scenario = "DocGen";
+                                break;
+                            case "fcFSD":
+                                scenario = "fstoconf";
+                                break;
+                            case "osdTSD":
+                                scenario = "fstots";
+                                break;
+                            case "cdGen":
+                                scenario = "tstocode";
+                                break;
+                            case "cdRem":
+                                scenario = "coderem";
+                                break;
+                            case "cdSum":
+                                scenario = "codesum";
+                                break;
+                            case "gitKey":
+                                scenario = "tstocodeGit";
+                                break;
+                            case "tutKey":
+                                scenario = "TUT";
+                                break;
+                            case "bpmKey":
+                                scenario = "BPM";
+                                break;
+                            case "tcgKey":
+                                scenario = "TCG";
+                                break;
+                            case "pctKey":
+                                scenario = "PCT";
+                                break;
                         }
-                        if (that.isSystemEdited == true) {
-                            sap.m.MessageToast.show("System Message Updated");
-                        }
-                        that.getDataSysMsg();
-                        if (sFragmentName === "promptlibpr") {
-                            //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                            that.getView().byId("idPromptRegistryTable").removeSelections(true);
-                            if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
-                                that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
-                                var catSel = that.getView().byId("categorySelect").getSelectedKey();
-                                //var url = "/cockpit/getPromptDetails?scenario=" + catSel + "&version=0.0.1&ProjectId=" + that._ProjectDetail;
-                                var roleSel = "sysMsg"
-                                var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + roleSel + "&ProjectId=" + that._ProjectDetail;
-
-                                that.onSearch(url, roleSel);
-                            }
-                            that.closeAddPrompt();
+                        var sysName = "";
+                        /////var sysName = this.getView().byId("multiInputSystem").getValue();
+                        if (this.isSystemEdited == true) {
+                            sysName = this.getView().byId("multiInputSystem").getValue();
                         } else {
-                            that.isSystemSaved = true;
-                            that.isSystemEdited = false;
-
-                            that.getView().byId("saveSysBtn").setVisible(false);
-                            that.getView().byId("addExBtn").setVisible(true);
-                            that.getView().byId("descTxtArea").setEditable(false);
-                            that.getView().byId("multiInputSystem").setEnabled(true);
-                            that.getView().byId("editSys").setVisible(true);
-                            ///       that.disableInputsysmsg(that.getView().byId("multiInputSystem"));
-                            that.getFiles();
+                            sysName = this.getView().byId("addSysPrefix").getValue() + this.getView().byId("multiInputSystem").getValue();
+                            this.getView().byId("addSysPart").setVisible(false);
+                            this.getView().byId("multiInputSystem").setValue(sysName);
+                            this.stopEdit = true;
+                            this.getView().byId("addSysPrefix").setVisible(false);
+                            this.getView().byId("infoSys").setVisible(false);
                         }
-                    },
-                    error: function (jqXhr, textStatus, errorMessage) {
-                        that.getView().byId("descTxtArea").setValue("");
-                        that.getView().byId("multiInputSystem").setValue("");
-                        that.getView().byId("editSys").setVisible(false);
-                        BusyIndicator.hide();
-                        MessageBox.error(JSON.parse(jqXhr.responseText).message);
+                        this.stopEdit = true;
+                        var createdIn = "";
+                        var updatedIn = "";
+                        if (this.addedFromCurrUser == true) {
+                            createdIn = this._ProjectDetail;
+                        }
+                        if (this.isSystemEdited == true) {
+                            updatedIn = this._ProjectDetail;
+                        }
                     }
-                });
-                // }
+                    if (this.keyConst == sysName && sFragmentName !== "promptlibpr") {
+                        //    if (this.keyConst == sysName && ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                        this.getView().byId("multiInputSystem").setEnabled(true);
+                        this.getView().byId("multiInputSystem").setValueState("Error");
+                        this.getView().byId("multiInputSystem").setValueStateText("Enter Unique System Message ID");
+                        this.getView().byId("editSys").setVisible(false);
+                    } else if (sysContent == "" && sFragmentName !== "promptlibpr") {
+                        //} else if (sysContent == "" && ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                        this.getView().byId("descTxtArea").setEditable(true);
+                        this.getView().byId("descTxtArea").setValueState("Error");
+                        this.getView().byId("descTxtArea").setValueStateText("Enter System Message Description");
+                        this.getView().byId("editSys").setVisible(false);
+                    } else if (sFragmentName == "promptlibpr") {
+                        catSel = this.getView().byId("categorySelect").getSelectedKey();
+                        sysContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
+                        sysName = this.getView().getModel("savePrmModel").oData.name;
+                    }
+                    // else {
+                    // if (sFragmentName !== "promptlibpr") {
+                    //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+
+                    systemKeyPayload = {
+                        payload: {
+                            Prompt_Details: sysContent,
+                            Category: catSel,
+                            MsgType: "sysMsg",
+                            ProjectId: this._ProjectDetail,
+                            PromptId: sysName,
+                            UserId: this._loggedInUser,
+                            DateTime: new Date().toISOString(),
+                        }
+                    };
+                    // } 
+                    // else {
+                    //     ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
+                    //     systemKeyPayload = this.getView().getModel("savePrmModel").oData;
+                    //     if (systemKeyPayload.name.includes(this.getView().getModel("enSysPromp").getProperty("/sysKey"))) {
+
+                    //     } else {
+                    //         systemKeyPayload.name = this.getView().getModel("enSysPromp").getProperty("/sysKey") + systemKeyPayload.name;
+                    //     }
+                    // }
+                    var that = this;
+                    let oHeader = {
+                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                        "X-Frame-Options": "DENY",
+                        "X-XSS-Protection": "0",
+                        "X-Content-Type-Options": "nosniff"
+                    };
+                    $.ajax({
+                        url: this._sBasePath + "/cockpit/createPromptDetails",
+                        method: "POST",
+                        headers: oHeader,
+                        contentType: "application/json",
+                        data: JSON.stringify(systemKeyPayload),
+                        success: async function (data, status, xhr) {
+                            if (that.addedFromCurrUser == true) {
+                                sap.m.MessageToast.show("System Message Created");
+                            }
+                            if (that.isSystemEdited == true) {
+                                sap.m.MessageToast.show("System Message Updated");
+                            }
+                            that.getDataSysMsg();
+                            if (sFragmentName === "promptlibpr") {
+                                //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                                that.getView().byId("idPromptRegistryTable").removeSelections(true);
+                                if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
+                                    that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
+                                    var catSel = that.getView().byId("categorySelect").getSelectedKey();
+                                    //var url = "/cockpit/getPromptDetails?scenario=" + catSel + "&version=0.0.1&ProjectId=" + that._ProjectDetail;
+                                    var roleSel = "sysMsg"
+                                    var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + roleSel + "&ProjectId=" + that._ProjectDetail;
+
+                                    that.onSearch(url, roleSel);
+                                }
+                                that.closeAddPrompt();
+                            } else {
+                                that.isSystemSaved = true;
+                                that.isSystemEdited = false;
+
+                                that.getView().byId("saveSysBtn").setVisible(false);
+                                that.getView().byId("addExBtn").setVisible(true);
+                                that.getView().byId("descTxtArea").setEditable(false);
+                                that.getView().byId("multiInputSystem").setEnabled(true);
+                                that.getView().byId("editSys").setVisible(true);
+                                ///       that.disableInputsysmsg(that.getView().byId("multiInputSystem"));
+                                that.getFiles();
+                            }
+                        },
+                        error: function (jqXhr, textStatus, errorMessage) {
+                            that.getView().byId("descTxtArea").setValue("");
+                            that.getView().byId("multiInputSystem").setValue("");
+                            that.getView().byId("editSys").setVisible(false);
+                            BusyIndicator.hide();
+                            MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
+                        }
+                    });
+                }
             }
         },
 
@@ -2744,6 +3131,13 @@ sap.ui.define([
             var oSource = oEvent.getSource();
             var oItem = oSource;
             var typeDel = "POST";
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             while (oItem && !oItem.getBindingContext("ObjectFileList")) {
                 oItem = oItem.getParent();
             }
@@ -2783,21 +3177,23 @@ sap.ui.define([
             var sUrl = this._sBasePath + "/cockpit/deleteFiles";
             var deleteObjectsUrl = sUrl;
             if (bRagEnabled === true) {
-                oPayload.Kb = true;
+                oPayload.kb = true;
                 delete oPayload.files;
                 oPayload.filenames = [aParts[3]];
                 oPayload.category = this.selectedKeyFunct();
                 oPayload.project = this._ProjectDetail;
-                // deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore"
+                // deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore";
+                deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFilesFromKB";
                 typeDel = "POST";
             }
             if (sFragmentName === "knowlBAdmin") {
-                oPayload.Kb = true;
+                oPayload.kb = true;
                 delete oPayload.files;
                 oPayload.filenames = [aParts[3]];
                 oPayload.category = this.byId("categorySelect").getSelectedKey();
                 oPayload.project = this._ProjectDetail;
-                // deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore"
+                //  deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore";
+                deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFilesFromKB";
                 typeDel = "POST";
             }
 
@@ -2809,6 +3205,7 @@ sap.ui.define([
                         $.ajax({
                             url: deleteObjectsUrl,
                             type: typeDel,
+                            headers: oHeader,
                             contentType: "application/json",
                             data: JSON.stringify(oPayload),
                             success: function (data) {
@@ -2838,7 +3235,19 @@ sap.ui.define([
                                 }
                             },
                             error: function (xhr, status, error) {
+                                let aDependents = _this.getView().getDependents();
+
+                                aDependents.forEach(function (oDependent) {
+                                    let title = oDependent.mProperties.title;
+                                    if (title.includes("Knowledge Base")) {
+                                        bRagEnabled = true;
+                                    }
+                                });
                                 MessageBox.error("Error deleting file: " + JSON.parse(xhr.responseText).error.message);
+
+                                if (JSON.parse(xhr.responseText).error.code == "403") {
+                                    _this.getView().getModel("flagModel").setProperty("/isAdmin", false);
+                                }
                             }
                         });
 
@@ -2908,6 +3317,13 @@ sap.ui.define([
             var sSelectedIconTab = "BS";  //hardcoded as data is only in BSContent
             ////dont remove this hardcodeded value
             var that = this;
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             var sComponentName = this.getOwnerComponent().getManifestObject().getComponentName();
             var sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             var oModel = this.getView().getModel("appmodel");
@@ -2926,6 +3342,7 @@ sap.ui.define([
                 $.ajax({
                     url: objectStoreUrl,
                     type: "GET",
+                    headers: oHeader,
                     success: function (data) {
                         that.executedOnce = false;
                         if (fileExtension === "txt") {
@@ -3228,9 +3645,6 @@ sap.ui.define([
                     case "cdGen":
                         scenario = "tstocode";
                         break;
-                    // case "tstocodeGit":
-                    //      keyConst = "TsCodGit_CG-DevCockpit_";
-                    //     break;
                     case "cdRem":
                         scenario = "coderem";
                         break;
@@ -3325,133 +3739,283 @@ sap.ui.define([
                 catSel = this.selectedKeyFunct();
                 promptContent = this.getView().byId("descTxtAreaPrompt").getValue();
             }
-
-            if (promptContent == "" && sFragmentName == "") {
-                ///  this.getView().byId("descTxtAreaPrompt").setEditable(true);
-                this.getView().byId("descTxtAreaPrompt").setValueState("Error");
-                this.getView().byId("descTxtAreaPrompt").setValueStateText("Enter Prompt Description");
-                this.getView().byId("editPrm").setVisible(false);
-            } else if (promptContent !== "" || sFragmentName == "promptlibpr") {
-                ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
-                //this.getView().byId("multiInputPrompt").setValue(this.getView().byId("addPrName").getValue());
-
-                this.getView().byId("addPrPart").setVisible(false);
-                this.getView().byId("addPrName").setVisible(false);
-                oView.byId("descTxtAreaPrompt").setValueState("None");
+            let noScript = true;
+            let result = Utility.validatePrompt(promptContent);
+            const maliciousPatterns = [
+                /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+                /javascript:/gi,
+                /vbscript:/gi,
+                /on\w+\s*=\s*["'][^"']*["']/gi,
+                /eval\s*\(/gi,
+                /document\.write/gi,
+                /document\.cookie/gi,
+                /window\.location/gi,
+                /\.exec\s*\(/gi,
+                /new\s+Function\s*\(/gi,
+                /fromCharCode/gi,
+                /\\x[0-9a-fA-F]{2}/g,
+                /\\u[0-9a-fA-F]{4}/g,
+                /base64_decode/gi,
+                /shell_exec/gi,
+                /system\s*\(/gi,
+                /passthru/gi,
+                /exec\s*\(/gi,
+                /popen\s*\(/gi,
+                /proc_open/gi,
+                /<\?php/gi,
+                /<%[\s\S]*?%>/g,
+                /powershell/gi,
+                /cmd\.exe/gi,
+                /\/bin\/sh/gi,
+                /\/bin\/bash/gi,
+                /wget\s+/gi,
+                /curl\s+.*-o/gi,
+                /nc\s+-e/gi,
+                /rm\s+-rf/gi
+            ];
+            for (const pattern of maliciousPatterns) {
+                if (pattern.test(promptContent)) {
+                    noScript = false;
+                }
             }
-            var promptPayload1 = {};
+            var xssPatterns = [
+                // JavaScript execution functions
+                { pattern: /\balert\s*\(/gi, name: "alert()" },
+                { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
+                { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
+                { pattern: /\beval\s*\(/gi, name: "eval()" },
+                { pattern: /\bFunction\s*\(/gi, name: "Function()" },
+                { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
+                { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
+                { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
 
-            if (this.getView().getModel("savePrmModel") == undefined) {
-                var scenario = this.selectedKeyFunct();
-                promptPayload1 = {
-                    "name": this.getView().byId("multiInputPrompt").getValue(),
-                    "version": "0.0.1",
-                    "scenario": scenario, //category 
-                    "spec": {
-                        "template": [
-                            {
-                                "role": "user",
-                                "content": ""
+                // Script tags and protocols
+                { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
+                { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
+                { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
+                { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
+                { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
+
+                // Event handlers (on* attributes)
+                { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
+                { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
+                { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
+                { pattern: /\bonload\s*=/gi, name: "onload handler" },
+                { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
+                { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
+                { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
+                { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
+                { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
+                { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
+                { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
+                { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
+
+                // DOM manipulation
+                { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
+                { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
+                { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
+                { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
+                { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
+                { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
+                { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
+
+                // Window/Location manipulation
+                { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
+                { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
+                { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
+                { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
+
+                // Dangerous HTML elements
+                { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
+                { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
+                { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
+                { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
+                { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
+                { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
+                { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
+                { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
+                { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
+                { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
+                { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
+                { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
+
+                // Encoding bypass attempts
+                { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
+                { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
+                { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
+
+                // Expression and binding attacks
+                { pattern: /expression\s*\(/gi, name: "CSS expression()" },
+                { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
+                { pattern: /-moz-binding/gi, name: "Mozilla binding" },
+
+                // Constructor access
+                { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
+                { pattern: /\b__proto__/gi, name: "__proto__ access" },
+                { pattern: /\bprototype\s*\./gi, name: "prototype access" }
+            ];
+
+            // Check each pattern
+            for (var i = 0; i < xssPatterns.length; i++) {
+                if (xssPatterns[i].pattern.test(promptContent)) {
+                    // detectedPatterns.push(xssPatterns[i].name);
+                    noScript = false;
+                }
+            }
+            if (!result.isAllowed && sFragmentName !== "promptlibpr") {
+                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+                this.getView().byId("descTxtAreaPrompt").setEditable(true);
+                this.getView().byId("descTxtAreaPrompt").setValueState("Error");
+                this.getView().byId("descTxtAreaPrompt").setValueStateText("Malicious data");
+                this.getView().byId("editPrm").setVisible(false);
+            } else if (!result.isAllowed && sFragmentName == "promptlibpr") {
+                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+                this.getView().byId("sysPromptDesc").setValueState("Error");
+                this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
+            } else if (noScript == false && sFragmentName !== "promptlibpr") {
+                this.getView().byId("descTxtAreaPrompt").setEditable(true);
+                this.getView().byId("descTxtAreaPrompt").setValueState("Error");
+                this.getView().byId("descTxtAreaPrompt").setValueStateText("Malicious data");
+                this.getView().byId("editPrm").setVisible(false);
+            } else if (noScript == false && sFragmentName == "promptlibpr") {
+                this.getView().byId("sysPromptDesc").setValueState("Error");
+                this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
+            } else {
+                if (promptContent == "" && sFragmentName == "") {
+                    ///  this.getView().byId("descTxtAreaPrompt").setEditable(true);
+                    this.getView().byId("descTxtAreaPrompt").setValueState("Error");
+                    this.getView().byId("descTxtAreaPrompt").setValueStateText("Enter Prompt Description");
+                    this.getView().byId("editPrm").setVisible(false);
+                } else if (promptContent !== "" || sFragmentName == "promptlibpr") {
+                    ////delete this.getView().getModel("savePrmModel").oData.additionalInfo;
+                    //this.getView().byId("multiInputPrompt").setValue(this.getView().byId("addPrName").getValue());
+
+                    this.getView().byId("addPrPart").setVisible(false);
+                    this.getView().byId("addPrName").setVisible(false);
+                    oView.byId("descTxtAreaPrompt").setValueState("None");
+                }
+                var promptPayload1 = {};
+
+                if (this.getView().getModel("savePrmModel") == undefined) {
+                    var scenario = this.selectedKeyFunct();
+                    promptPayload1 = {
+                        "name": this.getView().byId("multiInputPrompt").getValue(),
+                        "version": "0.0.1",
+                        "scenario": scenario, //category 
+                        "spec": {
+                            "template": [
+                                {
+                                    "role": "user",
+                                    "content": ""
+                                }
+                            ],
+                            "defaults": {
+                                "UserId": this._loggedInUser,
+                                "ProjectId": this._ProjectDetail,
+                                "CreatedIn": this._ProjectDetail,
+                                "UpdatedIn": this._ProjectDetail,
+                                "msgType": "Prompt",
+                                "updBy": this._loggedInUserName,
+                                "updAt": new Date().toISOString()
                             }
-                        ],
-                        "defaults": {
-                            "UserId": this._loggedInUser,
-                            "ProjectId": this._ProjectDetail,
-                            "CreatedIn": this._ProjectDetail,
-                            "UpdatedIn": this._ProjectDetail,
-                            "msgType": "Prompt",
-                            "updBy": this._loggedInUserName,
-                            "updAt": new Date().toISOString()
                         }
+                    };
+                } else {
+                    promptPayload1 = this.getView().getModel("savePrmModel").oData;
+                    sPromptId = this.getView().getModel("savePrmModel").oData.name;
+                    if (sFragmentName !== "promptlibpr") {
+                        promptPayload1.scenario = this.selectedKeyFunct();
+                    }
+                }
+                promptPayload1.spec.defaults.updBy = this._loggedInUserName;
+                promptPayload1.spec.defaults.updAt = new Date().toISOString();
+                promptPayload1.spec.template[0].content = promptContent;
+
+
+                if (sFragmentName === "promptlibpr") {
+                    if (catSel) {
+                        promptPayload1.scenario = catSel;
+                    }
+                }
+                var payload = {
+                    payload: {
+                        Prompt_Details: promptContent,
+                        Category: catSel,
+                        MsgType: "prompt",
+                        ProjectId: this._ProjectDetail,
+                        UserId: this._loggedInUser,
+                        DateTime: new Date().toISOString(),
+                        PromptId: sPromptId
                     }
                 };
-            } else {
-                promptPayload1 = this.getView().getModel("savePrmModel").oData;
-                sPromptId = this.getView().getModel("savePrmModel").oData.name;
-                if (sFragmentName !== "promptlibpr") {
-                    promptPayload1.scenario = this.selectedKeyFunct();
-                }
-            }
-            promptPayload1.spec.defaults.updBy = this._loggedInUserName;
-            promptPayload1.spec.defaults.updAt = new Date().toISOString();
-            promptPayload1.spec.template[0].content = promptContent;
+                let oHeader = {
+                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "0",
+                    "X-Content-Type-Options": "nosniff"
+                };
+                var that = this;
 
+                $.ajax({
+                    url: this._sBasePath + "/cockpit/createPromptDetails",
+                    method: "POST",
+                    headers: oHeader,
+                    contentType: "application/json",
+                    data: JSON.stringify(payload),
 
-            if (sFragmentName === "promptlibpr") {
-                if (catSel) {
-                    promptPayload1.scenario = catSel;
-                }
-            }
-            var payload = {
-                payload: {
-                    Prompt_Details: promptContent,
-                    Category: catSel,
-                    MsgType: "prompt",
-                    ProjectId: this._ProjectDetail,
-                    UserId: this._loggedInUser,
-                    DateTime: new Date().toISOString(),
-                    PromptId: sPromptId
-                }
-            };
-            var that = this;
+                    success: function (data) {
 
-            $.ajax({
-                url: this._sBasePath + "/cockpit/createPromptDetails",
-                method: "POST",
-                contentType: "application/json",
-                data: JSON.stringify(payload),
+                        if (sFragmentName === "promptlibpr") {
+                            //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
+                            that.getView().byId("idPromptRegistryTable").removeSelections(true);
+                            if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
+                                that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
+                                var catSel = that.getView().byId("categorySelect").getSelectedKey();
+                                //  var url = "/cockpit/getPromptDetails?scenario=" + catSel + "&version=0.0.1&ProjectId=" + that._ProjectDetail;
+                                var roleSel = "user"
+                                var msgType = "prompt";
+                                var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + msgType + "&ProjectId=" + that._ProjectDetail;
 
-                success: function (data) {
-
-                    if (sFragmentName === "promptlibpr") {
-                        //if (ev.getSource().getId().includes("listView1--saveSysBtn") == true) {
-                        that.getView().byId("idPromptRegistryTable").removeSelections(true);
-                        if (that.getView().byId("idPromptRegistryTable").getBinding("items")) {
-                            that.getView().byId("idPromptRegistryTable").getBinding("items").refresh();
-                            var catSel = that.getView().byId("categorySelect").getSelectedKey();
-                            //  var url = "/cockpit/getPromptDetails?scenario=" + catSel + "&version=0.0.1&ProjectId=" + that._ProjectDetail;
-                            var roleSel = "user"
-                            var msgType = "prompt";
-                            var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + catSel + "&MsgType=" + msgType + "&ProjectId=" + that._ProjectDetail;
-
-                            that.onSearch(url, roleSel);
-                        }
-                        that.closeAddPrompt();
-                    } else {
-                        sap.m.MessageToast.show("Prompt saved successfully");
-                        oView.byId("descTxtAreaPrompt").setEditable(false);
-                        oView.byId("savePrm").setVisible(false);
-                        oView.byId("promptAdd").setVisible(true);
-                        oView.byId("editPrm").setVisible(true);
-
-                        // Ensure GO validation passes after a successful save
-                        that.isPromptAdded = true;
-
-                        // Persist selection into response model so downstream logic sees it
-                        try {
-                            var oRespModel = that.getView().getModel("responseModel");
-                            if (oRespModel) {
-                                oRespModel.setProperty("/originalPrompt", promptContent);
-                                oRespModel.setProperty("/selectedPromptId", sPromptId || oView.byId("multiInputPrompt").getValue());
+                                that.onSearch(url, roleSel);
                             }
-                        } catch (e) {
-                            // no-op
+                            that.closeAddPrompt();
+                        } else {
+                            sap.m.MessageToast.show("Prompt saved successfully");
+                            oView.byId("descTxtAreaPrompt").setEditable(false);
+                            oView.byId("savePrm").setVisible(false);
+                            oView.byId("promptAdd").setVisible(true);
+                            oView.byId("editPrm").setVisible(true);
+
+                            // Ensure GO validation passes after a successful save
+                            that.isPromptAdded = true;
+
+                            // Persist selection into response model so downstream logic sees it
+                            try {
+                                var oRespModel = that.getView().getModel("responseModel");
+                                if (oRespModel) {
+                                    oRespModel.setProperty("/originalPrompt", promptContent);
+                                    oRespModel.setProperty("/selectedPromptId", sPromptId || oView.byId("multiInputPrompt").getValue());
+                                }
+                            } catch (e) {
+                                // no-op
+                            }
+
+                            // that.getDataPromptMsg && that.getDataPromptMsg();
+                            // that.getFiles && that.getFiles();
                         }
+                    },
 
-                        // that.getDataPromptMsg && that.getDataPromptMsg();
-                        // that.getFiles && that.getFiles();
+                    error: function (jqXhr) {
+                        var errMsg = "Error while saving prompt";
+                        try {
+                            errMsg = JSON.parse(jqXhr.responseText).error.message;
+                        } catch (e) { }
+
+                        MessageBox.error(errMsg);
                     }
-                },
-
-                error: function (jqXhr) {
-                    var errMsg = "Error while saving prompt";
-                    try {
-                        errMsg = JSON.parse(jqXhr.responseText).error.message;
-                    } catch (e) { }
-
-                    MessageBox.error(errMsg);
-                }
-            });
+                });
+            }
         },
         onLiveChange: function (oEvent) {
             oEvent.getSource().setProperty("valueState", "None");
@@ -3465,17 +4029,63 @@ sap.ui.define([
                 this.getView().byId("savePrm").setVisible(true);
 
             }
+            let typed, fixed;
             if (oEvent.getParameter("id").includes("multiInputSystem") && this.stopEdit == true) {
-                const typed = oEvent.getParameter("newValue");
-                const fixed = oEvent.getSource().getProperty("value");
+                typed = oEvent.getParameter("newValue");
+                fixed = oEvent.getSource().getProperty("value");
                 if (typed !== fixed) {
-                    this.getView().byId("multiInputSystem").setValue(fixed);
+                    if (oEvent.getParameter("id").includes("multiInputSystem")) {
+                        this.getView().byId("multiInputSystem").setValue(fixed);
+                    } else if (oEvent.getParameter("id").includes("emailID")) {
+                        this.getView().byId("emailID").setValue(fixed);
+                    } else if (oEvent.getParameter("id").includes("updatedBy")) {
+                        this.getView().byId("updatedBy").setValue(fixed);
+                    }
                 }
 
+            }
+            //   if (( oEvent.getParameter("id").includes("emailID") || oEvent.getParameter("id").includes("updatedBy"))) {
+            typed = oEvent.getParameter("newValue");
+            fixed = oEvent.getSource().getProperty("value");
+            let popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+            if (popUpSel == "promptlibpr") {
+                var msgsel = this.getView().byId("msgSelected").getSelectedKey();
+                let msgType = "";
+                if (msgsel == "user") {
+                    msgType = "prompt";
+                } else {
+                    msgType = "sysMsg";
+                }
+                if (typed !== fixed) {
+                    if (oEvent.getParameter("id").includes("emailID")) {
+                        this.getView().byId("emailID").setValue(fixed);
+                    } else if (oEvent.getParameter("id").includes("updatedBy")) {
+                        this.getView().byId("updatedBy").setValue(fixed);
+                    }
+                    else if (oEvent.getParameter("id").includes("msgTypeSP")) {
+                        this.getView().byId("msgTypeSP").setValue(fixed);
+                    }
+                    else if (oEvent.getParameter("id").includes("projectName")) {
+                        this.getView().byId("projectName").setValue(fixed);
+                    }
+                    else if (oEvent.getParameter("id").includes("nameSP") && msgType !== "sysMsg") {
+                        this.getView().byId("nameSP").setValue(fixed);
+                    }
+                    else if (oEvent.getParameter("id").includes("vis")) {
+                        this.getView().byId("vis").setValue(fixed);
+                    }
+                }
             }
         },
         getDataSysMsg: function () {
 
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             var that = this;
             // var busyDialog = new sap.m.BusyDialog();
             // busyDialog.open();
@@ -3489,12 +4099,13 @@ sap.ui.define([
                 $.ajax({
                     url: that._sBasePath + "/cockpit/getPromptDetails",
                     method: "GET",
+                  
                     data: {
                         Category: Category,
                         MsgType: MsgType,
                         ProjectId: ProjectId
                     },
-                    headers: that.defaultHeaders,
+                    headers: { ...oHeader, ...that.defaultHeaders },
 
                     success: function (response) {
                         let finalData = [];
@@ -3629,7 +4240,13 @@ sap.ui.define([
             var that = this;
             var busyDialog = new sap.m.BusyDialog();
             busyDialog.open();
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             var Category = this.selectedKeyFunct();
             var MsgType = "prompt";
             var ProjectId = this._ProjectDetail;
@@ -3643,7 +4260,7 @@ sap.ui.define([
                 $.ajax({
                     url: sUrl,
                     method: "GET",
-                    headers: that.defaultHeaders,
+                    headers: { ...oHeader, ...that.defaultHeaders },
 
                     success: function (response) {
                         busyDialog.close();
@@ -4161,6 +4778,11 @@ sap.ui.define([
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
+                                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                                "X-Frame-Options": "DENY",
+                                "X-XSS-Protection": "0",
+                                "X-Content-Type-Options": "nosniff",
                                 ...(this.defaultHeaders || {})
                             },
                             body: JSON.stringify(kbPayload)
@@ -4330,6 +4952,11 @@ sap.ui.define([
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
+                                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                                        "X-Frame-Options": "DENY",
+                                        "X-XSS-Protection": "0",
+                                        "X-Content-Type-Options": "nosniff",
                                         ...(this.defaultHeaders || {})
                                     },
                                     body: JSON.stringify(kbPayload)
@@ -4424,6 +5051,11 @@ sap.ui.define([
                                     method: "POST",
                                     headers: {
                                         "Content-Type": "application/json",
+                                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                                        "X-Frame-Options": "DENY",
+                                        "X-XSS-Protection": "0",
+                                        "X-Content-Type-Options": "nosniff",
                                         ...(that.defaultHeaders || {})
                                     },
                                     body: JSON.stringify(localPayload)
@@ -4667,7 +5299,7 @@ sap.ui.define([
         },
         MergeButtonTest1: function () {
             var that = this;
-            var sSelectedIconTab = this.selectedKeyFunct();
+
             //RAG changes Aishwarya
             var ragModel = this.getView().getModel("ragModel");
             var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
@@ -4694,6 +5326,8 @@ sap.ui.define([
                 var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
 
                 oQuestionAI = promptMsgData;
+
+
 
                 var contentPath = "/BSContent";
                 var sContent = oModel.getProperty(contentPath); ///file path
@@ -4740,6 +5374,7 @@ sap.ui.define([
             oResponseModel.setProperty("/selectedPromptId", "");
             oResponseModel.setProperty("/originalPrompt", "");
             this.onRagToggle();
+
         },
         onImageUpload: async function () {
             var oFileUploader;
@@ -4824,6 +5459,11 @@ sap.ui.define([
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                        "X-Frame-Options": "DENY",
+                        "X-XSS-Protection": "0",
+                        "X-Content-Type-Options": "nosniff",
                         ...this.defaultHeaders
                     },
                     body: JSON.stringify(payload)
@@ -5396,10 +6036,17 @@ sap.ui.define([
                 system_id: aMsgContentSystemKey,
                 project: this._ProjectDetail
             };
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             $.ajax({
                 url: this._sBasePath + "/cockpit/logTokenUsage",
                 method: "POST",
+                headers: oHeader,
                 contentType: "application/json",
                 data: JSON.stringify({ payload: payload }),
                 success: function (oData) {
@@ -6105,6 +6752,13 @@ sap.ui.define([
 
         _uploadFileNew: function (oFile, category, project) {
             var that = this;
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             return new Promise(function (resolve, reject) {
                 try {
                     var reader = new FileReader();
@@ -6135,6 +6789,7 @@ sap.ui.define([
                         $.ajax({
                             url: that._sBasePath + "/cockpit/uploadFile",
                             type: "POST",
+                            headers: oHeader,
                             contentType: "application/json",
                             data: JSON.stringify(payload),
                             success: function (res) {
@@ -6145,6 +6800,7 @@ sap.ui.define([
                                     $.ajax({
                                         url: that._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')",
                                         type: "GET",
+                                        headers: oHeader,
                                         success: function (detailsData) {
                                             res.fileDetails = detailsData;
                                             console.log("File details retrieved:", detailsData);
@@ -6334,6 +6990,11 @@ sap.ui.define([
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                        "X-Frame-Options": "DENY",
+                        "X-XSS-Protection": "0",
+                        "X-Content-Type-Options": "nosniff",
                         ...this.defaultHeaders
                     },
                     body: JSON.stringify(payload1)
@@ -6538,6 +7199,11 @@ sap.ui.define([
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                        "X-Frame-Options": "DENY",
+                        "X-XSS-Protection": "0",
+                        "X-Content-Type-Options": "nosniff",
                         ...this.defaultHeaders
                     },
                     body: JSON.stringify(payload)
@@ -6614,14 +7280,22 @@ sap.ui.define([
             var sUrl = url;
             // Initialize/reset the model used by Prompt Library table
             var allPromptsModel = new sap.ui.model.json.JSONModel([]);
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             that.getView().setModel(allPromptsModel, "allPromptsModel");
             that.getView().getModel("allPromptsModel").refresh(true);
+
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
                     url: sUrl,
                     method: "GET",
-                    headers: that.defaultHeaders,
+                    headers: oHeader,
                     success: function (data) {
                         try {
                             var items = [];
@@ -6667,7 +7341,7 @@ sap.ui.define([
                                     return $.ajax({
                                         url: that._sBasePath + "/lm/promptTemplates/" + resource.id,
                                         method: "GET",
-                                        headers: that.defaultHeaders
+                                        headers: { ...oHeader, ...that.defaultHeaders }
                                     }).then(function (response) {
                                         if (response && response.spec && response.spec.defaults) {
                                             if (response.spec.defaults.ProjectId === "default" || response.spec.defaults.ProjectId === projectId) {
@@ -6762,10 +7436,17 @@ sap.ui.define([
                 session_id: sessionId,
                 project: projectId
             };
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             $.ajax({
                 url: this._sBasePath + "/cockpit/updateProject",
                 type: "POST",
+                headers: oHeader,
                 contentType: "application/json",
                 data: JSON.stringify(oPayload),
                 success: function (data) {
@@ -6790,11 +7471,19 @@ sap.ui.define([
                 login_time: loginTime
             };
             var payload = {};
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             payload["payload"] = oPayload;
             $.ajax({
                 url: this._sBasePath + '/cockpit/saveLogin',
                 type: "POST",
                 contentType: "application/json",
+                headers: oHeader,
                 data: JSON.stringify(payload),
                 success: function (data, status, xhr) {
                     var sessionId = data.value.result.session_id;
@@ -6936,6 +7625,11 @@ sap.ui.define([
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                        "X-Frame-Options": "DENY",
+                        "X-XSS-Protection": "0",
+                        "X-Content-Type-Options": "nosniff",
                         ...this.defaultHeaders
                     },
                     body: JSON.stringify(payload)
@@ -7413,12 +8107,18 @@ sap.ui.define([
                         if (that.oDialog1) {
                             that.oDialog1.setBusy(true);
                         }
-
+                        let oHeader = {
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff"
+                        };
                         $.ajax({
                             url: that._sBasePath + "/cockpit/deletePromptDetails",   // CAP action
                             method: "POST",
                             contentType: "application/json",
-                            headers: that.defaultHeaders,
+                            headers: oHeader,
                             data: JSON.stringify({
                                 // ID: sUUID
                                 // uuid: sID
@@ -7467,6 +8167,9 @@ sap.ui.define([
                                 console.error("Delete error:", error);
 
                                 var errMsg = oBundle.getText("promptDeleteError");
+                                if (JSON.parse(error.responseText).error.code == "403") {
+                                    that.getView().getModel("flagModel").setProperty("/isAdmin", false);
+                                }
                                 try {
                                     errMsg = JSON.parse(error.responseText).error.message;
                                 } catch (e) { }
@@ -8608,6 +9311,11 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff",
                             ...this.defaultHeaders
                         },
                         body: JSON.stringify(oPayload)
@@ -8975,13 +9683,17 @@ sap.ui.define([
             // https://KMDevCockpitIntegrationApp.cfapps.eu10.hana.ondemand.com/UploadToObjectStore",
             /// https://KMDevCockpitIntegrationAppV2.cfapps.eu10.hana.ondemand.com/UploadToObjectStore
             busyDialog.open();
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
+            };
             $.ajax({
                 url: this._sBasePath + "/kb-integration/UploadToObjectStore",
                 method: "POST",
                 processData: false,
                 contentType: false,
                 data: formData,
+                headers: oHeader,
                 success: function (data) {
                     busyDialog.close();
                     var oFileModel = that.getView().getModel("fileModel");
@@ -9054,6 +9766,13 @@ sap.ui.define([
                                         formData2.append('overwrite', 'true'); // overwrite pass
 
                                         busyDialog.open();
+                                        let oHeader = {
+                                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                                            "X-Frame-Options": "DENY",
+                                            "X-XSS-Protection": "0",
+                                            "X-Content-Type-Options": "nosniff"
+                                        };
                                         $.ajax({
                                             url: this._sBasePath + "/kb-integration/UploadToObjectStore",
                                             method: "POST",
@@ -9061,6 +9780,7 @@ sap.ui.define([
                                             contentType: false,
                                             data: formData2,
                                             dataType: "json",
+                                            header: oHeader,
 
                                             success: function (data2) {
                                                 var oFileModel = that.getView().getModel("fileModel");
@@ -9226,11 +9946,18 @@ sap.ui.define([
                 var promptsUsedDetail = new sap.ui.model.json.JSONModel([]);
                 this.getView().setModel(promptsUsedDetail, "promptsUsedDetail");
                 this.getView().getModel("promptsUsedDetail").refresh();
-
+                let oHeader = {
+                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "0",
+                    "X-Content-Type-Options": "nosniff"
+                };
                 $.ajax({
                     url: this._sBasePath + '/cockpit/getPromptDetailsofUser2_0',
                     type: "POST",
                     contentType: "application/json",
+                    headers: oHeader,
                     data: JSON.stringify(payload),
                     success: function (data, status, xhr) {
                         console.log(data);
@@ -9442,7 +10169,13 @@ sap.ui.define([
             var giturl = this.getView().byId("gitRepoURL").getValue();
             var gituser = this.getView().byId("gitUserName").getValue();
             var gittoken = this.getView().byId("gitPATToken").getValue();
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             this.getOwnerComponent().getModel("gitModel").setProperty("/repoUrl", giturl);
             this.getOwnerComponent().getModel("gitModel").setProperty("/username", gituser);
             this.getOwnerComponent().getModel("gitModel").setProperty("/patToken", gittoken);
@@ -9455,6 +10188,7 @@ sap.ui.define([
                 jQuery.ajax({
                     url: this._sBasePath + "/cockpit/getAllBranches",
                     method: "POST",
+                    headers: oHeader,
                     contentType: "application/json",
                     data: JSON.stringify({
                         payload: {
@@ -9492,9 +10226,17 @@ sap.ui.define([
         loadGitTreeData: function (sSelectedBranch, sGitRepo, sGitUsername, SGitToken) {
             var that = this;
             BusyIndicator.show();
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             jQuery.ajax({
                 url: this._sBasePath + "/cockpit/getGitRepoTreeStructure",
                 method: "POST",
+                headers: oHeader,
                 contentType: "application/json",
                 data: JSON.stringify({
                     payload: {
@@ -9568,11 +10310,18 @@ sap.ui.define([
             var that = this;
             var busyDialog = new sap.m.BusyDialog();
             busyDialog.open();
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             return new Promise(function (resolve, reject) {
                 $.ajax({
                     url: this._sBasePath + "/cockpit/readFileFromGit",
                     method: "POST",
+                    headers: oHeader,
                     data: JSON.stringify({
                         payload: {
                             pathAccess: sFilePath,
@@ -9669,11 +10418,17 @@ sap.ui.define([
             const that = this;
             var sSelectedIconTab = this.selectedKeyFunct();
             const url = this._sBasePath + `/cockpit/getFiles?Category=${sSelectedIconTab}Template&Project=${this._ProjectDetail}`;
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             $.ajax({
                 url: url,
                 type: "GET",
-
+                headers: oHeader,
                 success: function (data) {
 
                     let files = [];
@@ -9746,7 +10501,13 @@ sap.ui.define([
             let _this = this;
             let oSource = oEvent.getSource();
             let oItem = oSource;
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             // Traverse up to find binding context
             while (oItem && !oItem.getBindingContext("ObjectFileList")) {
                 oItem = oItem.getParent();
@@ -9788,6 +10549,7 @@ sap.ui.define([
                             url: this._sBasePath + `/cockpit/deleteFiles`,
                             type: "DELETE",
                             contentType: "application/json",
+                            headers: oHeader,
                             data: JSON.stringify(oPayload),
                             success: function (data) {
                                 if (data) {
@@ -9944,10 +10706,17 @@ sap.ui.define([
                             fileBase64: base64
                         }
                     };
-
+                    let oHeader = {
+                        "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                        "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                        "X-Frame-Options": "DENY",
+                        "X-XSS-Protection": "0",
+                        "X-Content-Type-Options": "nosniff"
+                    }
                     $.ajax({
                         url: that._sBasePath + "/cockpit/uploadFile",
                         type: "POST",
+                        headers: oHeader,
                         contentType: "application/json",
                         data: JSON.stringify(payload),
                         success: function (res) {
@@ -10079,6 +10848,11 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff",
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
                             ...(this.defaultHeaders || {})
                         },
                         body: JSON.stringify(kbPayload)
@@ -10262,6 +11036,11 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff",
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
                             ...(this.defaultHeaders || {})
                         },
                         body: JSON.stringify(kbPayload)
@@ -10475,6 +11254,11 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff",
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
                             ...(this.defaultHeaders || {})
                         },
                         body: JSON.stringify(kbPayload)
@@ -10678,6 +11462,11 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff",
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
                             ...(this.defaultHeaders || {})
                         },
                         body: JSON.stringify(kbPayload)
@@ -10778,10 +11567,17 @@ sap.ui.define([
         getDataSysMsgDocGen: function () {
             var that = this;
             var sUrl = this._sBasePath + "/lm/promptTemplates?scenario=DocGen";
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             $.ajax({
                 url: sUrl,
                 method: "GET",
+                headers: oHeader,
                 success: function (data) {
                     if (data && data.resources && data.resources.length > 0) {
 
@@ -10791,7 +11587,7 @@ sap.ui.define([
                             return $.ajax({
                                 url: that._sBasePath + `/lm/promptTemplates/${resource.id}`,
                                 method: "GET",
-                                headers: that.defaultHeaders
+                                headers: { ...oHeader, ...that.defaultHeaders }
                             }).then(function (response) {
 
                                 if (response?.spec?.template) {
@@ -10835,5 +11631,30 @@ sap.ui.define([
                 }
             });
         },
+
+        onNavigateToUserManagement: function () {
+            if (sap.ushell && sap.ushell.Container) {
+                sap.ushell.Container.getServiceAsync("CrossApplicationNavigation")
+                    .then(function (oCrossAppNavigator) {
+                        oCrossAppNavigator.toExternal({
+                            target: {
+                                semanticObject: "Zumsemobj",
+                                action: "display"
+                            }
+                        });
+                    })
+                    .catch(function (oError) {
+                        console.error("Cross-app navigation failed:", oError);
+                        sap.m.MessageBox.error("Navigation failed. Please try again.");
+                    });
+            } else {
+                sap.m.MessageBox.error(
+                    "Cross-app navigation is not available. Please access this application through the SAP Fiori Launchpad.",
+                    {
+                        title: "Navigation Not Available"
+                    }
+                );
+            }
+        }
     });
 });

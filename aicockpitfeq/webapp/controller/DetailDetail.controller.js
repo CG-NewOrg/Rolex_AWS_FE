@@ -716,7 +716,8 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             }
 
             // 4) Back to single-column layout
-            this.oRouter.navTo("RouteView1", {tabName: this.keytobeSet,
+            this.oRouter.navTo("RouteView1", {
+                tabName: this.keytobeSet,
                 layout: fioriLibrary.LayoutType.OneColumn
             });
         },
@@ -767,6 +768,13 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             this.getOwnerComponent().getModel("gitModel").setProperty("/branchName", sBranchName);
             // var custFileNameEn = this.getView().byId("fileNameCustom").getEnabled();
             var fileName = this.getView().byId("fileNameCustom").getValue();
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             /////////payload, "userName": this.getOwnerComponent().getModel("gitModel").getProperty("/username")
             if (sCommitMessage == "" || sBranchName == "" || fileName == "") {
                 MessageBox.error(oBundle.getText("missingGitDetails"));
@@ -793,6 +801,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                     type: "POST",
                     contentType: "application/json",
                     data: sendPayload,
+                    headers: oHeader,
                     success: function (response) {
                         busyDialog.close();
                         sap.m.MessageToast.show(oBundle.getText("successPushToGit"));
@@ -842,6 +851,14 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             const oModel = this.getView().getModel("airesponseDetailModel");
             const sContent = oModel.getProperty("/resp");
             const templateKey = oModel.getProperty("/templateKey");
+
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             
             if (!sContent) {
                 sap.m.MessageBox.warning("No AI content available");
@@ -861,6 +878,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             $.ajax({
                 url: this._sBasePath + "/cockpit/generateDocument",
                 method: "POST",
+                headers: oHeader,
                 contentType: "application/json",
                 data: JSON.stringify(payload),
                 xhrFields: {

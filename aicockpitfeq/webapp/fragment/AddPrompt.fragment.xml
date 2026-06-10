@@ -26,12 +26,16 @@
                         editable="false"
                         id="vis"
                         visible="false"
+                        liveChange=".onLiveChange"
                     />
                     <Input
                         value="{savePrmModel>/name}"
                         editable="{enSysPromp>/en}"
                         width="100%"
                         visible="true"
+                        id="nameSP"
+                        liveChange=".onLiveChange"
+                        
                     >
                         <layoutData>
                             <FlexItemData growFactor="1" />
@@ -55,27 +59,38 @@
                     <!-- <Input value="{savePrmModel>/scenario}" /> -->
                     <Label text="{i18n>msgType}" />
                     <Input
+                     id="msgTypeSP"
+                    liveChange=".onLiveChange"
                         value="{savePrmModel>/spec/defaults/msgType}"
                         editable="false"
                     />
                     <Label text="{i18n>usrId}" />
                     <Input
+                    id="emailID"
                         value="{savePrmModel>/spec/defaults/UserId}"
                         editable="false"
+                        visible="false"
+                    liveChange=".onLiveChange"
                     />
                     <Label text="{path:'savePrmModel>/spec/defaults/msgType',formatter:'.formatter.setMsgText'}" />
                     <TextArea
                         value="{savePrmModel>/spec/template/0/content}"
                         editable="true"
+                        id="sysPromptDesc"
+                        valueState="None"
                         rows="3"
                     />
-                    <Label text="{i18n>updBy}" />
+                    <Label text="{i18n>uName}" />
                     <Input
+                    id="updatedBy"
                         value="{savePrmModel>/spec/defaults/updBy}"
                         editable="false"
+                        liveChange=".onLiveChange"
                     />
                     <Label text="{i18n>prjId}" />
                     <Input
+                    id="projectName"
+                    liveChange=".onLiveChange"
                         value="{savePrmModel>/spec/defaults/ProjectId}"
                         editable="false"
                     />

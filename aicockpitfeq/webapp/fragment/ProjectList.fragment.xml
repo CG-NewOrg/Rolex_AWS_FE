@@ -2,8 +2,8 @@
     <Dialog title="Project Lists" resizable="true">
         <content>
         <!-- id="projectList" -->
-            <List items="{prjModel>/projects}">
-                <StandardListItem title="{prjModel>project}" type="Active" press=".onProjectSelected" selected="true"/>
+            <List items="{prjModel>/projects}"  visible="{= ${prjModel>/projects}.length > 0 }" noDataText="">
+            <StandardListItem title="{prjModel>project}" type="Active" press=".onProjectSelected"/>
             </List>
             <!-- <Text id="userDBnotAddedTxt" text="" visible="false"/> -->
              <Text text="{prjModel>/userDBnotAddedTxt}" visible="{prjModel>/userDBnotAddedVis}"/>

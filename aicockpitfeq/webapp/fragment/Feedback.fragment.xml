@@ -81,13 +81,15 @@
                         </layoutData>
                     </Select>
                     <Label required="true" text="{i18n>titleT}" />
-                    <Input value="{appmodel>/feedbackForm/issueSubject}">
+                   <Input value="{appmodel>/feedbackForm/issueSubject}" id="fbTitleForm" valueState="None">
                         <layoutData>
                             <FlexItemData growFactor="1" />
                         </layoutData>
                     </Input>
                     <Label required="true" text="{i18n>desc}" />
                     <TextArea
+                        id="fbDesc"
+                        valueState="None"
                         wrapping="Soft"
                         maxLength="200"
                         showExceededText="false"

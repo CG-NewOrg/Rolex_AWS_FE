@@ -369,7 +369,7 @@ sap.ui.define([
                     return;
                 }
                 if (msg.role === lastRole) {
-                    return; 
+                    return;
                 }
 
                 if (sanitized.length === 0 && msg.role === "assistant") {
@@ -684,14 +684,14 @@ sap.ui.define([
             // oTextArea.setValue("");
             // Helper function to allow UI to repaint between chunks
             var ceArr = [];
-              // Helper function to parse streaming code blocks progressively
+            // Helper function to parse streaming code blocks progressively
             function parseCodeBlocksStreaming(text) {
                 var blocks = [];
                 var remaining = text;
                 var codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
                 var lastIndex = 0;
                 var match;
-                
+
                 while ((match = codeBlockRegex.exec(text)) !== null) {
                     // Add text before code block
                     if (match.index > lastIndex) {
@@ -706,7 +706,7 @@ sap.ui.define([
                     blocks.push({ textData: "", codeData: code, lang: lang });
                     lastIndex = match.index + match[0].length;
                 }
-                
+
                 // Add remaining text after last code block
                 if (lastIndex < text.length) {
                     var remainingText = text.substring(lastIndex);
@@ -714,26 +714,26 @@ sap.ui.define([
                         blocks.push({ textData: remainingText, codeData: "", lang: "" });
                     }
                 }
-                
+
                 // If no code blocks found, return the text as is
                 if (blocks.length === 0 && text.trim()) {
                     blocks.push({ textData: text, codeData: "", lang: "" });
                 }
-                
+
                 return blocks;
             }
-            
+
             // Helper function to detect incomplete code block at the end
             function hasIncompleteCodeBlock(text) {
                 var openCount = (text.match(/```/g) || []).length;
                 return openCount % 2 !== 0;
             }
-            
+
             // Helper function to extract current incomplete code block for streaming display
             function getStreamingCodeDisplay(text) {
                 var blocks = [];
                 var parts = text.split("```");
-                
+
                 for (var i = 0; i < parts.length; i++) {
                     if (i % 2 === 0) {
                         // Text part (outside code blocks)
@@ -754,7 +754,7 @@ sap.ui.define([
                         blocks.push({ textData: "", codeData: codeWithBackticks, lang: lang });
                     }
                 }
-                
+
                 return blocks;
             }
 
@@ -775,6 +775,11 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                            "X-Frame-Options": "DENY",
+                            "X-XSS-Protection": "0",
+                            "X-Content-Type-Options": "nosniff",
                             ...oController.defaultHeaders
                         },
                         body: JSON.stringify(payloadNonStream)
@@ -805,13 +810,13 @@ sap.ui.define([
                     };
                     oUsedToken = (aResponse.usage?.input_tokens || 0) + (aResponse.usage?.output_tokens || 0);
                 } else {
-                sResponse = aResponse.content[0].text;
-                delete aResponse.content[0].type;
-                aResponse.content[0].role = aResponse.role;
-                aResponse.content[0].content = sResponse;
-                delete aResponse.content[0].text;
-                oResMsg = aResponse.content[0];
-                oUsedToken = aResponse.usage.input_tokens + aResponse.usage.output_tokens;
+                    sResponse = aResponse.content[0].text;
+                    delete aResponse.content[0].type;
+                    aResponse.content[0].role = aResponse.role;
+                    aResponse.content[0].content = sResponse;
+                    delete aResponse.content[0].text;
+                    oResMsg = aResponse.content[0];
+                    oUsedToken = aResponse.usage.input_tokens + aResponse.usage.output_tokens;
                 }
                 busyDialog.close();
                 oController.getView().getModel("airesponseDetailModel").setProperty("/resp", oResMsg.content);
@@ -1046,67 +1051,67 @@ sap.ui.define([
                                 const deltaText = json.choices?.[0]?.delta?.content;
 
 
-                                    if (deltaText) {
-                                        var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
-                                        result += deltaText;
-                                        if (scenario == "tstocode") {
-                                            var streamingBlocks = getStreamingCodeDisplay(result);
-                                            if (streamingBlocks.length > 0) {
-                                                var tempCeArr = [];
-                                                var parts = result.split("```");
-                                                var completedResult = "";
-                                                for (var p = 0; p < parts.length; p++) {
-                                                    if (p % 2 === 0) {
-                                                        // Text part
-                                                        if (parts[p].trim() && p < parts.length - 1 && parts.length > 2) {
-                                                            // This is text before a code block that's complete
-                                                            var nextCodePart = parts[p + 1];
-                                                            if (nextCodePart !== undefined && p + 2 < parts.length) {
-                                                                var lang = nextCodePart.split("\n")[0] || "";
-                                                                tempCeArr.push({ 
-                                                                    textData: parts[p], 
-                                                                    codeData: "```" + nextCodePart + "```", 
-                                                                    lang: lang 
-                                                                });
-                                                                p++; // Skip the code part
-                                                            }
+                                if (deltaText) {
+                                    var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+                                    result += deltaText;
+                                    if (scenario == "tstocode") {
+                                        var streamingBlocks = getStreamingCodeDisplay(result);
+                                        if (streamingBlocks.length > 0) {
+                                            var tempCeArr = [];
+                                            var parts = result.split("```");
+                                            var completedResult = "";
+                                            for (var p = 0; p < parts.length; p++) {
+                                                if (p % 2 === 0) {
+                                                    // Text part
+                                                    if (parts[p].trim() && p < parts.length - 1 && parts.length > 2) {
+                                                        // This is text before a code block that's complete
+                                                        var nextCodePart = parts[p + 1];
+                                                        if (nextCodePart !== undefined && p + 2 < parts.length) {
+                                                            var lang = nextCodePart.split("\n")[0] || "";
+                                                            tempCeArr.push({
+                                                                textData: parts[p],
+                                                                codeData: "```" + nextCodePart + "```",
+                                                                lang: lang
+                                                            });
+                                                            p++; // Skip the code part
                                                         }
                                                     }
                                                 }
-                                                
-                                                // Check if there's an incomplete code block being streamed
-                                                var hasIncomplete = hasIncompleteCodeBlock(result);
-                                                if (hasIncomplete) {
-                                                    // Find the last incomplete code block
-                                                    var lastBacktickIndex = result.lastIndexOf("```");
-                                                    var beforeIncomplete = result.substring(0, lastBacktickIndex);
-                                                    var incompleteCode = result.substring(lastBacktickIndex);
-                                                    
-                                                    // Parse completed part
-                                                    var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
-                                                    ceArr = completedBlocks.slice();
-                                                    
-                                                    // Add streaming code block
-                                                    var streamLang = "";
-                                                    var codeContent = incompleteCode.substring(3); // Remove opening ```
-                                                    var firstNewline = codeContent.indexOf("\n");
-                                                    if (firstNewline > 0 && firstNewline < 20) {
-                                                        streamLang = codeContent.substring(0, firstNewline).trim();
-                                                    }
-                                                    ceArr.push({ 
-                                                        textData: "", 
-                                                        codeData: incompleteCode, 
-                                                        lang: streamLang 
-                                                    });
-                                                } else {
-                                                    // All blocks are complete, parse normally
-                                                    ceArr = parseCodeBlocksStreaming(result);
-                                                }
-                                                
-                                                oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                                             }
+
+                                            // Check if there's an incomplete code block being streamed
+                                            var hasIncomplete = hasIncompleteCodeBlock(result);
+                                            if (hasIncomplete) {
+                                                // Find the last incomplete code block
+                                                var lastBacktickIndex = result.lastIndexOf("```");
+                                                var beforeIncomplete = result.substring(0, lastBacktickIndex);
+                                                var incompleteCode = result.substring(lastBacktickIndex);
+
+                                                // Parse completed part
+                                                var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+                                                ceArr = completedBlocks.slice();
+
+                                                // Add streaming code block
+                                                var streamLang = "";
+                                                var codeContent = incompleteCode.substring(3); // Remove opening ```
+                                                var firstNewline = codeContent.indexOf("\n");
+                                                if (firstNewline > 0 && firstNewline < 20) {
+                                                    streamLang = codeContent.substring(0, firstNewline).trim();
+                                                }
+                                                ceArr.push({
+                                                    textData: "",
+                                                    codeData: incompleteCode,
+                                                    lang: streamLang
+                                                });
+                                            } else {
+                                                // All blocks are complete, parse normally
+                                                ceArr = parseCodeBlocksStreaming(result);
+                                            }
+
+                                            oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                                         }
-                                   
+                                    }
+
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
                                     // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
@@ -1114,7 +1119,7 @@ sap.ui.define([
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
                                     // Guard: stop if user switched tabs
                                     if (runContext && oController._activeRun && oController._activeRun.id !== runContext.id) {
-                                        try { busyDialog.close(); } catch(e) {}
+                                        try { busyDialog.close(); } catch (e) { }
                                         return { message: { role: "assistant", content: "" }, usedTokens: 0, rawText: "" };
                                     }
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
@@ -1223,9 +1228,9 @@ sap.ui.define([
             oPromtModel,
             oBundle,
             isFirstResponse,
-            basePath 
+            basePath
         ) {
-            
+
             if (isFirstResponse && (!oQuestionAI || oQuestionAI.trim() === "")) {
                 return;
             }
@@ -1264,7 +1269,13 @@ sap.ui.define([
             var isModified =
                 originalPrompt.trim().toLowerCase() !==
                 (oQuestionAI || "").trim().toLowerCase();
-
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
             $.ajax({
                 url: `${sBasePath}/cockpit/getPromptDetails?Category=${encodeURIComponent(sSelectedIconTab)}&MsgType=prompt&ProjectId=${encodeURIComponent(_this._ProjectDetail)}`,
                 method: "GET",
@@ -1318,6 +1329,7 @@ sap.ui.define([
                                         $.ajax({
                                             url: sUrl,
                                             method: "POST",
+                                            headers: oHeader,
                                             contentType: "application/json",
                                             data: JSON.stringify(updatePayload),
 
@@ -1388,7 +1400,7 @@ sap.ui.define([
             }
 
         },
-        handleTabApiSetupDynamic: function ({ tabKey, view, sApiUrl, sUrl, basePath}) {
+        handleTabApiSetupDynamic: function ({ tabKey, view, sApiUrl, sUrl, basePath }) {
             const map = {
                 BS: ["BSgptModelSelect", "BSfileUploader", "/BSThread", "fileContentBSTextArea", "BSpdfpreview", "bsimagepreview", "BSUrl"],
                 User: ["UserStorygptModelSelect", "UserStoryfileUploader", "/UserThread", "fileContentUserStoryTextArea", "UserStorypdfpreview", "userimagepreview", "UserUrl"],
@@ -1440,7 +1452,7 @@ sap.ui.define([
                 TCG: ["gptModelsummary", "TCGUrl", "TCGQuestion", "/TCGContent", "/TCGThread", "TCGPromptData", "TCGprompt", "TCGPromptData>"],
                 PCT: ["gptModelsummary", "PCTUrl", "PCTQuestion", "/PCTContent", "/PCTThread", "PCTPromptData", "PCTprompt", "PCTPromptData>"],
                 DocGen: ["gptModelsummary", "DocGenUrl", "DocGenQuestion", "/DocGenContent", "/DocGenThread", "DocGenPromptData", "DocGenprompt", "DocGenPromptData>"]
-             };
+            };
 
             const [modelId, urlKey, questionId, contentPath, threadPath, promptModelId, promptId, path] = map[tabKey] || [];
             const modelSelect = view.byId(modelId);
@@ -1481,7 +1493,7 @@ sap.ui.define([
         }) {
             // Guard against cross-tab updates: if a newer run switched tabs on the same controller, ignore this update
             if (context && context._activeRun && context._activeRun.tabKey !== tabKey) {
-                try { busyDialog && busyDialog.close && busyDialog.close(); } catch (e) {}
+                try { busyDialog && busyDialog.close && busyDialog.close(); } catch (e) { }
                 return;
             }
             const map = {
@@ -1525,11 +1537,11 @@ sap.ui.define([
                 TUT: { inputPath: "/TUTuserInput", contentPath: "/TUTContent", threadPath: "/TUTThread", viewModelPath: "/TUT/bFileContentChanged" },
                 BPM: { inputPath: "/bpmuserInput", contentPath: "/BpmContent", threadPath: "/bpmThread", viewModelPath: "/BPM/bFileContentChanged" },
                 TCG: { inputPath: "/tcguserInput", contentPath: "/TcgContent", threadPath: "/tcgThread", viewModelPath: "/TCG/bFileContentChanged" },
-                 PCT: { inputPath: "/pctuserInput", contentPath: "/PctContent", threadPath: "/pctThread", viewModelPath: "/PCT/bFileContentChanged" },
-               DocGen: { inputPath: "/DocGenuserInput", contentPath: "/DocGenContent", threadPath: "/DocGenThread", viewModelPath: "/DocGen/bFileContentChanged" }
+                PCT: { inputPath: "/pctuserInput", contentPath: "/PctContent", threadPath: "/pctThread", viewModelPath: "/PCT/bFileContentChanged" },
+                DocGen: { inputPath: "/DocGenuserInput", contentPath: "/DocGenContent", threadPath: "/DocGenThread", viewModelPath: "/DocGen/bFileContentChanged" }
             };
-// PCT: { inputPath: "/pctuserInput", contentPath: "/PctContent", threadPath: "/pctThread", viewModelPath: "/PCT/bFileContentChanged" }
-            
+            // PCT: { inputPath: "/pctuserInput", contentPath: "/PctContent", threadPath: "/pctThread", viewModelPath: "/PCT/bFileContentChanged" }
+
             const config = configMap[tabKey];
             if (!config) return;
 
@@ -1652,6 +1664,757 @@ sap.ui.define([
             //          return finalAMessages;
             return newAMsg;
         },
+
+
+
+        // validatePrompt: function (userPrompt) {
+        //     let riskScore = 0;
+        //     const reasons = [];
+
+        //     const sanitized = this.sanitizePrompt(userPrompt);
+
+        //     const containsActAs = /act\s+(as|like)|you\s+are(\s+now)?|pretend\s+to\s+be/gi.test(sanitized);
+        //     const pretCheck = /pretend\s+to\s+be/gi.test(sanitized) || /\bpretend\b/gi.test(sanitized);
+        //     // const SAP_ALLOWED_ROLES = [
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap|s\/4)?\s*(functional)?\s*(consultant|expert|specialist)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(fi|co|mm|sd|pp|pm|qm|hr|hcm|ewm|tm|srm|crm)\s*(consultant|expert|module)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(fico|s4hana|s\/4\s*hana)\s*(consultant|expert)/gi,
+
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(abap|fiori|ui5|btp|cap|hana|basis)\s*(developer|consultant|expert)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(integration|middleware|pi\/po|cpi)\s*(consultant|developer|expert)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(security|grc|authorization)\s*(consultant|expert)/gi,
+
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(solution|enterprise|business)\s*(architect|analyst)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)?\s*(project|program)\s*(manager|lead)/gi,
+
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(sap)\s*(professional|expert|specialist|consultant)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(erp|enterprise)\s*(consultant|expert)/gi,
+
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(helpful|knowledgeable|experienced)\s*(assistant|advisor|guide)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(coding|programming|technical)\s*(assistant|helper|mentor)/gi,
+
+        //     //     // SAP Roles - act as / you are
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(sap|s\/4)?\s*(functional|technical)?\s*(consultant|expert|specialist|developer|architect)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(sap)?\s*(fi|co|mm|sd|pp|pm|qm|hr|hcm|ewm|tm|srm|crm|abap|fiori|ui5|btp|cap|hana|basis)\s*(consultant|expert|developer|specialist)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(sap)?\s*(fico|s4hana|s\/4\s*hana)\s*(consultant|expert)/gi,
+
+        //     //     // IT/Technical Roles
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(software|web|frontend|backend|fullstack|cloud|devops)\s*(developer|engineer|architect)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(it|technical|technology|system|solution)\s*(consultant|expert|specialist|architect|analyst)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(data|database|security|network|infrastructure)\s*(engineer|analyst|architect|administrator)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(coding|programming|technical)\s*(assistant|helper|mentor|tutor)/gi,
+
+        //     //     // General helpful assistant roles
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(helpful|knowledgeable|experienced)\s*(assistant|advisor|guide)/gi,
+
+        //     //     // ============ Seniority/Designation-based roles (Senior, Junior, Jr, Sr, Lead, Principal, Associate, Staff) ============
+
+        //     //     // Seniority-based SAP roles
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate|staff|entry[\s-]?level)\s*(sap|s\/4)?\s*(functional|technical)?\s*(consultant|expert|specialist|developer|architect)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(fi|co|mm|sd|pp|pm|qm|hr|hcm|ewm|tm|srm|crm)\s*(consultant|expert|developer|specialist|module)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(abap|fiori|ui5|btp|cap|hana|basis)\s*(developer|consultant|expert)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(fico|s4hana|s\/4\s*hana)\s*(consultant|expert)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(integration|middleware|pi\/po|cpi)\s*(consultant|developer|expert)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(security|grc|authorization)\s*(consultant|expert)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(solution|enterprise|business)\s*(architect|analyst)/gi,
+        //     //     /act\s+(as|like)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(project|program)\s*(manager|lead)/gi,
+
+        //     //     // Seniority-based SAP roles with act as / you are
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate|staff|entry[\s-]?level)\s*(sap|s\/4)?\s*(functional|technical)?\s*(consultant|expert|specialist|developer|architect)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(fi|co|mm|sd|pp|pm|qm|hr|hcm|ewm|tm|srm|crm|abap|fiori|ui5|btp|cap|hana|basis)\s*(consultant|expert|developer|specialist)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(sap)?\s*(fico|s4hana|s\/4\s*hana)\s*(consultant|expert)/gi,
+
+        //     //     // Seniority-based IT/Technical roles
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate|staff)\s*(software|web|frontend|backend|fullstack|cloud|devops)\s*(developer|engineer|architect)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(it|technical|technology|system|solution)\s*(consultant|expert|specialist|architect|analyst)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(data|database|security|network|infrastructure)\s*(engineer|analyst|architect|administrator)/gi,
+        //     //     /(act\s+as|you\s+are(\s+now)?)\s+(a|an)?\s*(senior|junior|jr\.?|sr\.?|lead|principal|associate)\s*(coding|programming|technical)\s*(assistant|helper|mentor|tutor)/gi
+        //     // ];
+        //     const BLOCKED_ROLES = [
+
+        //         /act\s+as\s+(dan|evil|jailbroken)/i,
+
+        //         /act\s+as\s+(root|superuser)/i,
+
+        //         /act\s+as\s+an?\s+unrestricted\s+ai/i
+
+        //     ];
+
+        //     const MALICIOUS_ROLEPLAY = [
+
+        //         /pretend\s+to\s+be\s+(root|admin|owner)/i,
+
+        //         /pretend\s+to\s+be\s+an?\s+unrestricted/i
+
+        //     ];
+
+        //     const TABLE_DATA_PATTERNS = [
+        //         // Direct table data extraction
+        //         /(?:dump|extract|export|steal|leak|expose|retrieve)\s+(?:all\s+)?(?:the\s+)?(?:data\s+from\s+)?(?:table|database|db)\s*(?:data|records?|contents?|rows?)/gi,
+        //         /(?:give|show|list|display)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:data|records?|rows?|contents?)\s+(?:from|in)\s+(?:the\s+)?(?:table|database)/gi,
+
+        //         // SQL injection patterns (more specific than before)
+        //         /(?:dump|extract|steal)\s+(?:all\s+)?(?:data\s+)?(?:from|using)\s+(?:select|sql|query)/gi,
+        //         /select\s+\*\s+from\s+(?:users?|customers?|employees?|accounts?|passwords?|credentials?)/gi,
+        //         /union\s+(?:all\s+)?select\s+/gi,
+        //         /(?:drop|truncate|delete\s+from)\s+(?:table|database)/gi,
+
+        //         // SAP-specific table extraction
+        //         /(?:dump|extract|export|steal)\s+(?:all\s+)?(?:data\s+from\s+)?(?:sap\s+)?(?:table|transparent\s+table|cluster\s+table)/gi,
+        //         /(?:give|show|list)\s+(?:me\s+)?(?:all\s+)?(?:entries?|records?|data)\s+(?:from|in)\s+(?:usr\d+|pa\d+|but\d+|kna\d+|lfa\d+|mara|vbak|ekko|bkpf)/gi,
+
+        //         // Generic database dump requests
+        //         /(?:database|db)\s+(?:dump|backup|export)\s+(?:with\s+)?(?:all\s+)?(?:user\s+)?(?:data|records?|tables?)/gi,
+        //         /(?:export|extract|dump)\s+(?:entire|complete|full|whole)\s+(?:database|db|table)/gi,
+
+        //         // Schema/structure extraction for malicious purposes
+        //         /(?:show|list|give|reveal)\s+(?:me\s+)?(?:all\s+)?(?:table|database)\s+(?:schema|structure|columns?|fields?)\s+(?:with\s+)?(?:sensitive|user|password|credential)/gi
+        //     ];
+        //     const USER_DATA_PATTERNS = [
+        //         // User data extraction
+        //         /(?:dump|extract|export|steal|leak|expose|harvest)\s+(?:all\s+)?(?:the\s+)?(?:user|customer|employee|client|member)\s*(?:data|info(?:rmation)?|details?|records?|profiles?|accounts?)/gi,
+        //         /(?:give|show|list|display|retrieve)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:user|customer|employee|client)\s*(?:data|info(?:rmation)?|details?|records?|list)/gi,
+
+        //         // User list extraction
+        //         /(?:list|show|give|dump|extract)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:users?|customers?|employees?|clients?|members?|accounts?)\s+(?:and\s+)?(?:their\s+)?(?:data|details?|info(?:rmation)?|passwords?|credentials?)?/gi,
+
+        //         // User authentication data
+        //         /(?:extract|dump|steal|leak|expose)\s+(?:all\s+)?(?:user\s+)?(?:authentication|auth|login|session)\s*(?:data|tokens?|cookies?|credentials?)/gi,
+        //         /(?:give|show|list)\s+(?:me\s+)?(?:all\s+)?(?:active\s+)?(?:user\s+)?(?:sessions?|tokens?|cookies?)/gi,
+
+        //         // SAP-specific user data
+        //         /(?:dump|extract|export|list)\s+(?:all\s+)?(?:sap\s+)?(?:user\s+)?(?:master\s+)?(?:data|records?)\s+(?:from\s+)?(?:usr\d+|pa\d+)/gi,
+        //         /(?:show|list|give)\s+(?:me\s+)?(?:all\s+)?(?:sap\s+)?(?:users?|user\s+ids?|user\s+accounts?)\s+(?:with\s+)?(?:roles?|authorizations?|permissions?)?/gi,
+
+        //         // User PII bulk extraction
+        //         /(?:extract|collect|harvest|scrape|dump)\s+(?:all\s+)?(?:user(?:'?s)?|customer(?:'?s)?|employee(?:'?s)?)\s*(?:personal\s+)?(?:data|info(?:rmation)?|pii|details?)/gi,
+        //         /(?:bulk|mass)\s+(?:extract|export|download|dump)\s+(?:user|customer|employee)\s*(?:data|records?|info(?:rmation)?)/gi,
+
+        //         // User contact information bulk extraction
+        //         /(?:extract|dump|export|list)\s+(?:all\s+)?(?:user|customer|employee)\s*(?:email(?:s)?|phone(?:s)?|address(?:es)?|contact(?:s)?)/gi,
+
+        //         // User activity/behavior data
+        //         /(?:extract|dump|steal|leak)\s+(?:all\s+)?(?:user\s+)?(?:activity|behavior|browsing|history|logs?)\s*(?:data|records?)?/gi,
+
+        //         // Generic user data theft patterns
+        //         /(?:how\s+(?:to|can\s+i))\s+(?:get|obtain|access|steal|extract)\s+(?:all\s+)?(?:user|customer|employee)\s*(?:data|info(?:rmation)?|records?)/gi,
+        //         /(?:scrape|crawl|harvest)\s+(?:all\s+)?(?:user|customer|member)\s*(?:data|profiles?|accounts?|info(?:rmation)?)/gi
+        //     ];
+
+
+
+
+        //     const JAILBREAK_INJECTION_PATTERNS = [
+        //         /you\s+are\s+(now\s+)?(dan|dude|evil|jailbroken|unrestricted)/gi,
+        //         /enable\s+(dan|developer|jailbreak|unrestricted)\s+mode/gi,
+        //         /switch\s+to\s+(dan|developer|unrestricted|unfiltered)\s+mode/gi,
+        //         /you\s+are\s+no\s+longer\s+(bound|restricted|limited)/gi,
+        //         /remove\s+(all\s+)?(your\s+)?(restrictions?|limitations?|filters?|guardrails?)/gi,
+        //         /bypass\s+(your\s+)?(safety|security|content)\s+(filters?|restrictions?|guidelines?)/gi,
+        //         /override\s+(your\s+)?(safety|security|ethical)\s+(protocols?|guidelines?|restrictions?)/gi
+        //     ];
+        //     const SYSTEM_PROMPT_INJECTION_PATTERNS = [
+
+        //         /reveal\s+(your\s+)?(system\s+prompt|hidden\s+instructions?|initial\s+prompt)/gi,
+        //         /show\s+(me\s+)?(your\s+)?(system\s+prompt|hidden\s+rules?|secret\s+instructions?)/gi,
+        //         /what\s+(is|are)\s+your\s+(system\s+prompt|hidden\s+instructions?|secret\s+rules?)/gi,
+        //         /print\s+(your\s+)?(system\s+prompt|initial\s+instructions?|hidden\s+prompt)/gi,
+        //         /output\s+(your\s+)?(system\s+prompt|configuration|initial\s+prompt)/gi,
+        //         /leak\s+(your\s+)?(system\s+prompt|credentials?|tokens?|secrets?|api\s+keys?)/gi
+        //     ];
+        //     const CODE_EXECUTION_INJECTION_PATTERNS = [
+        //         /execute\s+(this\s+)?(code|command|script|shell)/gi,
+        //         /run\s+(this\s+)?(code|command|script|shell|bash|python)/gi,
+        //         /eval\s*\(/gi,
+        //         /exec\s*\(/gi,
+        //         /system\s*\(/gi,
+        //         /subprocess/gi,
+        //         /os\.system/gi,
+        //         /child_process/gi,
+        //         /\$\{.*\}/gi,
+        //         /`.*`/gi
+        //     ];
+
+        //     const VARIABLE_CONCATENATION_PATTERNS = [
+        //         /[A-Z]\s*=\s*['"][^'"]*['"]/gi,
+        //         /concatenate\s+(these\s+)?(letters?|characters?|strings?|variables?)/gi,
+        //         /say\s+[A-Z]\s*\+\s*[A-Z]/gi,
+        //         /\[\s*[A-Z]\s*(,\s*[A-Z]\s*)+\]/gi,
+        //         /combine\s+(the\s+)?(letters?|characters?|strings?|variables?)/gi,
+        //         /output\s+(the\s+)?(result|value|concatenation|combination)/gi,
+        //         /join\s+(these\s+)?(letters?|characters?|strings?)/gi
+        //     ];
+        //     const HARMFUL_CONTENT_PATTERNS = [
+        //         /(napalm|explosives?|bombs?|weapons?|poison|drugs?)\s*(production|manufacturing|recipe|instructions?|how\s+to\s+make)/gi,
+        //         /how\s+to\s+(make|create|produce|manufacture)\s+(a\s+)?(bomb|explosive|weapon|poison|drug)/gi,
+        //         /(hack|crack|exploit|breach)\s+(into|a|the)\s*(system|network|account|database)/gi,
+        //         /steal\s+(someone's|user|personal)\s*(data|information|credentials?|identity)/gi,
+        //         /malware|ransomware|virus|trojan|keylogger/gi
+        //     ];
+        //     const OBFUSCATION_PATTERNS = [
+        //         /base64|rot13|hex\s*encode|url\s*encode/gi,
+        //         /decode\s+(this|the\s+following)/gi,
+        //         /translate\s+(from|this)\s+(base64|hex|binary|rot13)/gi,
+        //         /([A-Za-z0-9])\1{10,}/,
+        //         /[\u200B-\u200D\uFEFF]/,
+        //         /\\x[0-9a-fA-F]{2}/gi,
+        //         /\\u[0-9a-fA-F]{4}/gi
+        //     ];
+
+        //     const BLOCKED_ROLE_PATTERNS = [
+        //         /act\s+(as|like)\s+(a|an)?\s*(linux|unix|windows|bash|shell|terminal|command\s*line|cmd|powershell)/gi,
+        //         /act\s+(as|like)\s+(a|an)?\s*(operating\s*system|os|kernel|root\s*user|admin\s*console)/gi,
+
+        //         /act\s+(as|like)\s+(a|an)?\s*(unrestricted|unfiltered|uncensored|jailbroken)\s*(ai|assistant|model)/gi,
+        //         /act\s+(as|like)\s+(a|an)?\s*(dan|evil|malicious|hacker)\s*(ai|assistant|bot)/gi,
+
+        //         /act\s+(as|like)\s+(a|an)?\s*(python|javascript|node|sql)\s*(interpreter|executor|runtime|repl)/gi,
+        //         /act\s+(as|like)\s+(a|an)?\s*(database|db)\s*(server|engine|executor)/gi
+        //     ];
+
+        //     const INJECTION_PATTERNS = [
+        //         /ignore\s+(all|previous|above)\s+instructions/gi,
+        //         /disregard\s+(all|previous|system)\s+prompts/gi,
+        //         /you\s+are\s+no\s+longer\s+(bound|restricted)/gi,
+        //         /override\s+(safety|guardrails|policies)/gi,
+        //         /bypass\s+(restrictions|filters|security)/gi,
+        //         /reveal\s+(system\s+prompt|hidden\s+instructions)/gi,
+        //         /show\s+(hidden|internal)\s+rules/gi,
+        //         /leak\s+(credentials|tokens|secrets)/gi,
+        //         /execute\s+arbitrary\s+code/gi
+        //     ];
+
+        //     const IGNORE_INJECTION_PATTERNS = [
+        //         /ignore\s+(the\s+)?(above|previous)\s+instructions?\s+(and\s+)?follow\s+(these|new)/gi,
+        //         /[A-Z]\s*=\s*['"][^'"]*['"]/gi,  // Variable assignment like X = 'value'
+        //         /concatenate\s+(these\s+)?(letters?|characters?|strings?)/gi,
+        //         /say\s+[A-Z]\s*\+\s*[A-Z]/gi,  // Say X + Y pattern
+        //         /\[\s*[A-Z]\s*(,\s*[A-Z]\s*)+\]/gi,  // Array of letters like [P, W, N, E, D]
+        //         /follow\s+(these|new|my)\s+(instructions?|commands?|rules?)/gi,
+        //         /output\s+(the\s+)?(result|value|concatenation)/gi
+        //     ];
+
+        //     const PRETEND_INJECTION_PATTERN = [
+        //         // SAP Roles
+        //         /pretend\s+to\s+be\s+(a|an)?\s*(sap|s\/4)?\s*(functional|technical)?\s*(consultant|expert|specialist|developer|architect)/gi,
+        //         /pretend\s+to\s+be\s+(a|an)?\s*(sap)?\s*(fi|co|mm|sd|pp|pm|qm|hr|hcm|ewm|tm|srm|crm|abap|fiori|ui5|btp|cap|hana|basis)\s*(consultant|expert|developer)/gi,
+
+        //         // IT/Technical Roles
+        //         /pretend\s+to\s+be\s+(a|an)?\s*(software|web|frontend|backend|fullstack|cloud|devops)\s*(developer|engineer|architect)/gi,
+        //         /pretend\s+to\s+be\s+(a|an)?\s*(it|technical|technology|system|solution)\s*(consultant|expert|specialist|architect|analyst)/gi,
+        //         /pretend\s+to\s+be\s+(a|an)?\s*(data|database|security|network|infrastructure)\s*(engineer|analyst|architect|administrator)/gi,
+        //         /pretend\s+to\s+be\s+(a|an)?\s*(coding|programming|technical)\s*(assistant|helper|mentor|tutor)/gi
+
+        //     ];
+        //     const PERSONAL_INFO_PATTERNS = [
+        //         // Password and credential requests
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:my\s+)?(?:user(?:'?s)?|admin|system|database|db|root)?\s*(?:password|passwd|pwd|passcode|pin|credentials?|login\s*(?:details?|info(?:rmation)?)?)/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:my\s+)?(?:user(?:'?s)?|admin|system)?\s*(?:password|credentials?|login\s*details?)/gi,
+
+        //         // API keys and tokens
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:api[\s-]?key|secret[\s-]?key|access[\s-]?token|auth(?:entication)?[\s-]?token|bearer[\s-]?token|jwt|private[\s-]?key|ssh[\s-]?key)/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:api[\s-]?key|secret[\s-]?key|access[\s-]?token|private[\s-]?key)/gi,
+
+        //         // Personal Identifiable Information (PII)
+        //         /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:social\s*security\s*(?:number)?|ssn|national\s*id|passport\s*(?:number)?|driver(?:'?s)?\s*licen[sc]e)/gi,
+        //         /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:credit\s*card|debit\s*card|bank\s*account|cvv|card\s*number|account\s*number)/gi,
+        //         /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:home\s*address|personal\s*address|phone\s*number|mobile\s*number|date\s*of\s*birth|dob)/gi,
+
+        //         // Database and system credentials
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak)\s+(?:me\s+)?(?:the\s+)?(?:database|db|mysql|postgres|oracle|mongodb|redis|sql\s*server)\s*(?:password|credentials?|connection\s*string|login)/gi,
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak)\s+(?:me\s+)?(?:the\s+)?(?:server|ftp|sftp|ssh|admin|root|system)\s*(?:password|credentials?|login\s*details?)/gi,
+
+        //         // Generic sensitive data extraction
+        //         /(?:extract|steal|harvest|scrape|collect)\s+(?:all\s+)?(?:the\s+)?(?:user(?:'?s)?|customer(?:'?s)?|employee(?:'?s)?|personal)\s*(?:data|information|details?|records?)/gi,
+        //         /(?:how\s+(?:to|can\s+i))\s+(?:get|obtain|access|steal|extract)\s+(?:someone(?:'?s)?|user(?:'?s)?)\s*(?:personal\s*)?(?:data|information|credentials?|password)/gi
+        //     ];
+
+        //     const FINANCIAL_INFO_PATTERNS = [
+        //         // Credit/Debit Card Information
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:credit\s*card|debit\s*card|card)\s*(?:number|details?|info(?:rmation)?|cvv|cvc|expir(?:y|ation)|security\s*code)/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:credit\s*card|debit\s*card|card)\s*(?:number|details?|cvv|cvc)/gi,
+
+        //         // Bank Account Information
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:bank\s*account|account)\s*(?:number|details?|info(?:rmation)?|routing\s*number|iban|swift|bic)/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:bank\s*account|account)\s*(?:number|details?|routing|iban|swift)/gi,
+
+        //         // Financial Account Credentials
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:banking|financial|payment|paypal|venmo|stripe)\s*(?:password|credentials?|login|pin|access)/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:banking|financial|payment)\s*(?:password|pin|credentials?)/gi,
+
+        //         // Tax and Financial Records
+        //         /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:tax\s*(?:id|number|return|record)|tin|ein|salary|income|wage|payroll)\s*(?:details?|info(?:rmation)?|records?)?/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?)?\s*(?:tax\s*id|tin|ein|salary|income|wage)/gi,
+
+        //         // Investment and Trading Accounts
+        //         /(?:give|tell|show|reveal|share|provide|extract|leak)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:brokerage|trading|investment|stock|crypto(?:currency)?|wallet)\s*(?:account|password|credentials?|private\s*key|seed\s*phrase|recovery\s*phrase)/gi,
+        //         /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:crypto|bitcoin|ethereum|wallet)\s*(?:private\s*key|seed\s*phrase|recovery\s*phrase|password)/gi,
+
+        //         // Loan and Mortgage Information
+        //         /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:loan|mortgage|debt|credit\s*score|credit\s*report)\s*(?:details?|info(?:rmation)?|records?|number|account)/gi,
+
+        //         // Insurance Information
+        //         /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:insurance|policy)\s*(?:number|details?|info(?:rmation)?|records?)/gi,
+
+        //         // Generic financial data extraction
+        //         /(?:extract|steal|harvest|scrape|collect)\s+(?:all\s+)?(?:the\s+)?(?:user(?:'?s)?|customer(?:'?s)?|employee(?:'?s)?)\s*(?:financial|banking|payment|credit\s*card)\s*(?:data|information|details?|records?)/gi,
+        //         /(?:how\s+(?:to|can\s+i))\s+(?:get|obtain|access|steal|extract)\s+(?:someone(?:'?s)?|user(?:'?s)?)\s*(?:financial|banking|credit\s*card|bank\s*account)\s*(?:data|information|details?)/gi
+        //     ];
+
+        //     const NEW_INSTRUCTION_INJECTION_PATTERNS = [
+        //         // "From now on" type instructions
+        //         /from\s+now\s+on\s*[,:]?\s*(you\s+)?(will|must|should|are|can|have\s+to)/gi,
+        //         /starting\s+now\s*[,:]?\s*(you\s+)?(will|must|should|are)/gi,
+
+        //         // "Your new instructions" patterns
+        //         /your\s+new\s+(instructions?|rules?|guidelines?|directives?)\s+(are|is|:)/gi,
+        //         /new\s+rule\s*[:#]?\s*/gi,
+        //         /updated?\s+(instructions?|rules?|guidelines?)\s*[:#]?\s*/gi,
+
+        //         // Indirect prompt injection
+        //         /the\s+(document|file|text|content|input)\s+(says?|contains?|instructs?|tells?)\s+(to\s+)?(ignore|disregard|forget|override)/gi,
+        //         /according\s+to\s+(the\s+)?(document|file|input)\s*[,:]?\s*(ignore|disregard|forget)/gi,
+
+        //         // Token smuggling with newlines
+        //         /\n{3,}.*?(ignore|disregard|forget|override)/gi,
+
+        //         // Many-shot jailbreaking indicators
+        //         /example\s*\d+\s*[:#]/gi,
+        //         /here\s+(are|is)\s+\d+\s+examples?\s+of/gi
+        //     ];
+
+        //     //  Hard block roles
+        //     if (this.matchesAnyPattern(sanitized, BLOCKED_ROLE_PATTERNS)) {
+        //         riskScore += 80;
+        //         reasons.push("Blocked: Disallowed system or jailbreak role");
+        //     }
+
+        //     //  Validate "act as"
+        //     if (containsActAs) {
+        //         const isAllowedRole = this.matchesAnyPattern(sanitized, BLOCKED_ROLES);
+
+        //         if (!isAllowedRole) {
+        //             riskScore += 40;
+        //             reasons.push("Suspicious or unknown role");
+        //         }
+        //     }
+
+        //     // Injection detection
+        //     if (this.matchesAnyPattern(sanitized, INJECTION_PATTERNS)) {
+        //         riskScore += 60;
+        //         reasons.push("Prompt injection attempt detected");
+        //     }
+
+        //     // Heuristics
+        //     if (sanitized.length > 2000) {
+        //         riskScore += 10;
+        //         reasons.push("Prompt too long");
+        //     }
+        //     ///ignore the above checks pattern
+        //     if (this.matchesAnyPattern(sanitized, IGNORE_INJECTION_PATTERNS)) {
+        //         riskScore += 50;
+        //         reasons.push("Caught Prompt Injection pattern");
+        //     }
+        //     // System prompt injection detection
+        //     if (this.matchesAnyPattern(sanitized, SYSTEM_PROMPT_INJECTION_PATTERNS)) {
+        //         riskScore += 70;
+        //         reasons.push("System prompt extraction attempt detected");
+        //     }
+        //     // Jailbreak injection detection
+        //     if (this.matchesAnyPattern(sanitized, JAILBREAK_INJECTION_PATTERNS)) {
+        //         riskScore += 80;
+        //         reasons.push("Jailbreak injection attempt detected");
+        //     }
+        //     // Code execution injection detection
+        //     if (this.matchesAnyPattern(sanitized, CODE_EXECUTION_INJECTION_PATTERNS)) {
+        //         riskScore += 80;
+        //         reasons.push("Code execution injection attempt detected");
+        //     }
+        //     // Variable concatenation attack detection
+        //     if (this.matchesAnyPattern(sanitized, VARIABLE_CONCATENATION_PATTERNS)) {
+        //         riskScore += 50;
+        //         reasons.push("Variable concatenation attack detected");
+        //     }
+        //     // Harmful content request detection
+        //     if (this.matchesAnyPattern(sanitized, HARMFUL_CONTENT_PATTERNS)) {
+        //         riskScore += 90;
+        //         reasons.push("Harmful content request detected");
+        //     }
+        //     // Obfuscation attempt detection
+        //     if (this.matchesAnyPattern(sanitized, OBFUSCATION_PATTERNS)) {
+        //         riskScore += 30;
+        //         reasons.push("Obfuscation attempt detected");
+        //     }
+        //     // Financial personal details protection
+        //     if (this.matchesAnyPattern(sanitized, FINANCIAL_INFO_PATTERNS)) {
+        //         riskScore += 90;
+        //         reasons.push("Financial personal information request detected");
+        //     }
+        //     if (pretCheck) {
+        //         const isNotAllowedRolePattern = this.matchesAnyPattern(sanitized, PRETEND_INJECTION_PATTERN);
+        //         if (isNotAllowedRolePattern) {
+        //             riskScore += 50;
+        //             reasons.push("Roleplay request outside SAP/IT/Technical domain detected");
+        //         }
+        //     }
+        //     // Personal info/credentials protection
+        //     if (this.matchesAnyPattern(sanitized, PERSONAL_INFO_PATTERNS)) {
+        //         riskScore += 90;
+        //         reasons.push("Personal information or credentials request detected");
+        //     }
+        //     if (/([A-Za-z0-9])\1{10,}/.test(sanitized)) {
+        //         riskScore += 20;
+        //         reasons.push("Obfuscation detected");
+        //     }
+        //     // Table data protection
+        //     if (this.matchesAnyPattern(sanitized, TABLE_DATA_PATTERNS)) {
+        //         riskScore += 85;
+        //         reasons.push("Database/table data extraction attempt detected");
+        //     }
+
+        //     // User data protection
+        //     if (this.matchesAnyPattern(sanitized, USER_DATA_PATTERNS)) {
+        //         riskScore += 90;
+        //         reasons.push("User data extraction attempt detected");
+        //     }
+        //     // Integration check in validatePrompt():
+        //     if (this.matchesAnyPattern(sanitized, NEW_INSTRUCTION_INJECTION_PATTERNS)) {
+        //         riskScore += 70;
+        //         reasons.push("New instruction injection attempt detected");
+        //     }
+        //     return {
+        //         isAllowed: riskScore < 30,
+        //         riskScore,
+        //         reasons,
+        //         sanitizedPrompt: sanitized
+        //     };
+        // },
+
+        validatePrompt: function (userPrompt) {
+            let riskScore = 0;
+            const reasons = [];
+
+            const sanitized = this.sanitizePrompt(userPrompt);
+
+            const containsActAs = /act\s+(as|like)|you\s+are(\s+now)?|pretend\s+to\s+be/gi.test(sanitized);
+            const pretCheck = /pretend\s+to\s+be/gi.test(sanitized) || /\bpretend\b/gi.test(sanitized);
+
+
+            const BLOCKED_ROLES = [
+
+                /act\s+as\s+(dan|evil|jailbroken)/i,
+
+                /act\s+as\s+(root|superuser)/i,
+
+                /act\s+as\s+an?\s+unrestricted\s+ai/i
+
+            ];
+
+            const MALICIOUS_ROLEPLAY = [
+
+                /pretend\s+to\s+be\s+(root|admin|owner)/i,
+
+                /pretend\s+to\s+be\s+an?\s+unrestricted/i
+
+            ];
+
+            const TABLE_DATA_PATTERNS = [
+
+                /dump\s+database/i,
+                /extract\s+all\s+data/i,
+                /export\s+database/i,
+                /select\s+\*\s+from/i,
+                /union\s+select/i,
+                /show\s+all\s+users/i];
+            const USER_DATA_PATTERNS = [
+                /password/i,
+                /api[\s-]?key/i,
+                /access[\s-]?token/i,
+                /secret[\s-]?key/i,
+                /jwt/i,
+                /private[\s-]?key/i];
+
+            const JAILBREAK_INJECTION_PATTERNS = [
+                /you\s+are\s+(now\s+)?(dan|dude|evil|jailbroken|unrestricted)/gi,
+                /enable\s+(dan|developer|jailbreak|unrestricted)\s+mode/gi,
+                /switch\s+to\s+(dan|developer|unrestricted|unfiltered)\s+mode/gi,
+                /you\s+are\s+no\s+longer\s+(bound|restricted|limited)/gi,
+                /remove\s+(all\s+)?(your\s+)?(restrictions?|limitations?|filters?|guardrails?)/gi,
+                /bypass\s+(your\s+)?(safety|security|content)\s+(filters?|restrictions?|guidelines?)/gi,
+                /override\s+(your\s+)?(safety|security|ethical)\s+(protocols?|guidelines?|restrictions?)/gi
+            ];
+            const SYSTEM_PROMPT_INJECTION_PATTERNS = [
+                /ignore\s+(all|previous|above)\s+instructions?/i,
+                /disregard\s+(all|previous|system)\s+prompts?/i,
+                /override\s+(security|guardrails?|policies?)/i,
+                /bypass\s+(restrictions?|filters?|security)/i,
+                /follow\s+my\s+instructions?\s+instead/i,
+                /forget\s+(all|previous)\s+instructions?/i
+            ];
+            const CODE_EXECUTION_INJECTION_PATTERNS = [
+                /eval\s*\(/i,
+                /exec\s*\(/i,
+                /os\.system/i,
+                /subprocess/i,
+                /child_process/i,
+                /run\s+this\s+script/i
+            ];
+
+            const VARIABLE_CONCATENATION_PATTERNS = [
+                /[A-Z]\s*=\s*['"][^'"]*['"]/gi,
+                /concatenate\s+(these\s+)?(letters?|characters?|strings?|variables?)/gi,
+                /say\s+[A-Z]\s*\+\s*[A-Z]/gi,
+                /\[\s*[A-Z]\s*(,\s*[A-Z]\s*)+\]/gi,
+                /combine\s+(the\s+)?(letters?|characters?|strings?|variables?)/gi,
+                /output\s+(the\s+)?(result|value|concatenation|combination)/gi,
+                /join\s+(these\s+)?(letters?|characters?|strings?)/gi
+            ];
+            const HARMFUL_CONTENT_PATTERNS = [
+                /(napalm|explosives?|bombs?|weapons?|poison|drugs?)\s*(production|manufacturing|recipe|instructions?|how\s+to\s+make)/gi,
+                /how\s+to\s+(make|create|produce|manufacture)\s+(a\s+)?(bomb|explosive|weapon|poison|drug)/gi,
+                /(hack|crack|exploit|breach)\s+(into|a|the)\s*(system|network|account|database)/gi,
+                /steal\s+(someone's|user|personal)\s*(data|information|credentials?|identity)/gi,
+                /malware|ransomware|virus|trojan|keylogger/gi
+            ];
+            const OBFUSCATION_PATTERNS = [
+                /base64|rot13|hex\s*encode|url\s*encode/gi,
+                /decode\s+(this|the\s+following)/gi,
+                /translate\s+(from|this)\s+(base64|hex|binary|rot13)/gi,
+                /([A-Za-z0-9])\1{10,}/,
+                /[\u200B-\u200D\uFEFF]/,
+                /\\x[0-9a-fA-F]{2}/gi,
+                /\\u[0-9a-fA-F]{4}/gi
+            ];
+
+            const BLOCKED_ROLE_PATTERNS = [
+                /act\s+(as|like)\s+(a|an)?\s*(linux|unix|windows|bash|shell|terminal|command\s*line|cmd|powershell)/gi,
+                /act\s+(as|like)\s+(a|an)?\s*(operating\s*system|os|kernel|root\s*user|admin\s*console)/gi,
+
+                /act\s+(as|like)\s+(a|an)?\s*(unrestricted|unfiltered|uncensored|jailbroken)\s*(ai|assistant|model)/gi,
+                /act\s+(as|like)\s+(a|an)?\s*(dan|evil|malicious|hacker)\s*(ai|assistant|bot)/gi,
+
+                /act\s+(as|like)\s+(a|an)?\s*(python|javascript|node|sql)\s*(interpreter|executor|runtime|repl)/gi,
+                /act\s+(as|like)\s+(a|an)?\s*(database|db)\s*(server|engine|executor)/gi
+            ];
+
+            const INJECTION_PATTERNS = [
+                /ignore\s+(all|previous|above)\s+instructions/gi,
+                /disregard\s+(all|previous|system)\s+prompts/gi,
+                /you\s+are\s+no\s+longer\s+(bound|restricted)/gi,
+                /override\s+(safety|guardrails|policies)/gi,
+                /bypass\s+(restrictions|filters|security)/gi,
+                /reveal\s+(system\s+prompt|hidden\s+instructions)/gi,
+                /show\s+(hidden|internal)\s+rules/gi,
+                /leak\s+(credentials|tokens|secrets)/gi,
+                /execute\s+arbitrary\s+code/gi
+            ];
+
+            const IGNORE_INJECTION_PATTERNS = [
+                /ignore\s+(the\s+)?(above|previous)\s+instructions?\s+(and\s+)?follow\s+(these|new)/gi,
+                /[A-Z]\s*=\s*['"][^'"]*['"]/gi,  // Variable assignment like X = 'value'
+                /concatenate\s+(these\s+)?(letters?|characters?|strings?)/gi,
+                /say\s+[A-Z]\s*\+\s*[A-Z]/gi,  // Say X + Y pattern
+                /\[\s*[A-Z]\s*(,\s*[A-Z]\s*)+\]/gi,  // Array of letters like [P, W, N, E, D]
+                /follow\s+(these|new|my)\s+(instructions?|commands?|rules?)/gi,
+                /output\s+(the\s+)?(result|value|concatenation)/gi
+            ];
+
+            const PERSONAL_INFO_PATTERNS = [
+                // Password and credential requests
+                /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:my\s+)?(?:user(?:'?s)?|admin|system|database|db|root)?\s*(?:password|passwd|pwd|passcode|pin|credentials?|login\s*(?:details?|info(?:rmation)?)?)/gi,
+                /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:my\s+)?(?:user(?:'?s)?|admin|system)?\s*(?:password|credentials?|login\s*details?)/gi,
+
+                // API keys and tokens
+                /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:api[\s-]?key|secret[\s-]?key|access[\s-]?token|auth(?:entication)?[\s-]?token|bearer[\s-]?token|jwt|private[\s-]?key|ssh[\s-]?key)/gi,
+                /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:api[\s-]?key|secret[\s-]?key|access[\s-]?token|private[\s-]?key)/gi,
+
+                // Personal Identifiable Information (PII)
+                /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:social\s*security\s*(?:number)?|ssn|national\s*id|passport\s*(?:number)?|driver(?:'?s)?\s*licen[sc]e)/gi,
+                /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:credit\s*card|debit\s*card|bank\s*account|cvv|card\s*number|account\s*number)/gi,
+                /(?:give|tell|show|reveal|share|provide|extract)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|employee(?:'?s)?|customer(?:'?s)?)?\s*(?:home\s*address|personal\s*address|phone\s*number|mobile\s*number|date\s*of\s*birth|dob)/gi,
+
+                // Database and system credentials
+                /(?:give|tell|show|reveal|share|provide|extract|leak)\s+(?:me\s+)?(?:the\s+)?(?:database|db|mysql|postgres|oracle|mongodb|redis|sql\s*server)\s*(?:password|credentials?|connection\s*string|login)/gi,
+                /(?:give|tell|show|reveal|share|provide|extract|leak)\s+(?:me\s+)?(?:the\s+)?(?:server|ftp|sftp|ssh|admin|root|system)\s*(?:password|credentials?|login\s*details?)/gi,
+
+                // Generic sensitive data extraction
+                /(?:extract|steal|harvest|scrape|collect)\s+(?:all\s+)?(?:the\s+)?(?:user(?:'?s)?|customer(?:'?s)?|employee(?:'?s)?|personal)\s*(?:data|information|details?|records?)/gi,
+                /(?:how\s+(?:to|can\s+i))\s+(?:get|obtain|access|steal|extract)\s+(?:someone(?:'?s)?|user(?:'?s)?)\s*(?:personal\s*)?(?:data|information|credentials?|password)/gi
+            ];
+
+            const FINANCIAL_INFO_PATTERNS = [
+                // Credit/Debit Card Information
+                /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:credit\s*card|debit\s*card|card)\s*(?:number|details?|info(?:rmation)?|cvv|cvc|expir(?:y|ation)|security\s*code)/gi,
+                /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:credit\s*card|debit\s*card|card)\s*(?:number|details?|cvv|cvc)/gi,
+
+                // Bank Account Information
+                /(?:give|tell|show|reveal|share|provide|extract|leak|expose)\s+(?:me\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:bank\s*account|account)\s*(?:number|details?|info(?:rmation)?|routing\s*number|iban|swift|bic)/gi,
+                /(?:what\s+(?:is|are)\s+)?(?:the\s+)?(?:your\s+)?(?:someone(?:'?s)?|user(?:'?s)?|customer(?:'?s)?)?\s*(?:bank\s*account|account)\s*(?:number|details?|routing|iban|swift)/gi,
+            ];
+
+            const NEW_INSTRUCTION_INJECTION_PATTERNS = [
+                // "From now on" type instructions
+                /from\s+now\s+on\s*[,:]?\s*(you\s+)?(will|must|should|are|can|have\s+to)/gi,
+                /starting\s+now\s*[,:]?\s*(you\s+)?(will|must|should|are)/gi,
+
+                // "Your new instructions" patterns
+                /your\s+new\s+(instructions?|rules?|guidelines?|directives?)\s+(are|is|:)/gi,
+                /new\s+rule\s*[:#]?\s*/gi,
+                /updated?\s+(instructions?|rules?|guidelines?)\s*[:#]?\s*/gi,
+
+                // Indirect prompt injection
+                /the\s+(document|file|text|content|input)\s+(says?|contains?|instructs?|tells?)\s+(to\s+)?(ignore|disregard|forget|override)/gi,
+                /according\s+to\s+(the\s+)?(document|file|input)\s*[,:]?\s*(ignore|disregard|forget)/gi,
+
+                // Token smuggling with newlines
+                /\n{3,}.*?(ignore|disregard|forget|override)/gi,
+
+                // Many-shot jailbreaking indicators
+                /example\s*\d+\s*[:#]/gi,
+                /here\s+(are|is)\s+\d+\s+examples?\s+of/gi
+            ];
+            const PROMPT_OVERRIDE_PATTERNS = [
+                /ignore\s+(all|any|previous|above)\s+instructions?/i,
+                /forget\s+(all\s+)?(your\s+)?instructions?/i,
+                /disregard\s+(all|previous|system)\s+(instructions?|prompts?)/i,
+                /do\s+not\s+follow\s+(your\s+)?(instructions?|rules?|guidelines?)/i,
+                /override\s+(the\s+)?system\s+prompt/i,
+                /replace\s+(your\s+)?instructions?/i,
+                /your\s+new\s+instructions?\s+(are|is)/i,
+                /new\s+instructions?\s*:/i,
+                /new\s+(rule|directive)\s*:/i,
+                /from\s+now\s+on[,\s]/i,
+                /you\s+(must|will|should)\s+now\s+(ignore|forget|disregard|override)/i,
+                /i\s+am\s+(your\s+)?(creator|developer|owner|god)\b/i
+            ];
+            if (this.matchesAnyPattern(sanitized, PROMPT_OVERRIDE_PATTERNS)) {
+                riskScore += 90;
+                reasons.push('Prompt override attempt detected');
+            }
+            //  Hard block roles
+            if (this.matchesAnyPattern(sanitized, BLOCKED_ROLE_PATTERNS)) {
+                riskScore += 80;
+                reasons.push("Blocked: Disallowed system or jailbreak role");
+            }
+
+            //  Validate "act as"
+            if (containsActAs) {
+                const isntAllowedRole = this.matchesAnyPattern(sanitized, BLOCKED_ROLES);
+
+                if (isntAllowedRole) {
+                    riskScore += 40;
+                    reasons.push("Suspicious or unknown role");
+                }
+            }
+
+            // Injection detection
+            if (this.matchesAnyPattern(sanitized, INJECTION_PATTERNS)) {
+                riskScore += 60;
+                reasons.push("Prompt injection attempt detected");
+            }
+
+            // Heuristics
+            if (sanitized.length > 2000) {
+                riskScore += 10;
+                reasons.push("Prompt too long");
+            }
+            ///ignore the above checks pattern
+            if (this.matchesAnyPattern(sanitized, IGNORE_INJECTION_PATTERNS)) {
+                riskScore += 50;
+                reasons.push("Caught Prompt Injection pattern");
+            }
+            // System prompt injection detection
+            if (this.matchesAnyPattern(sanitized, SYSTEM_PROMPT_INJECTION_PATTERNS)) {
+                riskScore += 70;
+                reasons.push("System prompt extraction attempt detected");
+            }
+            // Jailbreak injection detection
+            if (this.matchesAnyPattern(sanitized, JAILBREAK_INJECTION_PATTERNS)) {
+                riskScore += 80;
+                reasons.push("Jailbreak injection attempt detected");
+            }
+            // Code execution injection detection
+            if (this.matchesAnyPattern(sanitized, CODE_EXECUTION_INJECTION_PATTERNS)) {
+                riskScore += 80;
+                reasons.push("Code execution injection attempt detected");
+            }
+            // Variable concatenation attack detection
+            if (this.matchesAnyPattern(sanitized, VARIABLE_CONCATENATION_PATTERNS)) {
+                riskScore += 50;
+                reasons.push("Variable concatenation attack detected");
+            }
+            // Harmful content request detection
+            if (this.matchesAnyPattern(sanitized, HARMFUL_CONTENT_PATTERNS)) {
+                riskScore += 90;
+                reasons.push("Harmful content request detected");
+            }
+            // Obfuscation attempt detection
+            if (this.matchesAnyPattern(sanitized, OBFUSCATION_PATTERNS)) {
+                riskScore += 30;
+                reasons.push("Obfuscation attempt detected");
+            }
+            // Financial personal details protection
+            if (this.matchesAnyPattern(sanitized, FINANCIAL_INFO_PATTERNS)) {
+                riskScore += 90;
+                reasons.push("Financial personal information request detected");
+            }
+            if (pretCheck) {
+                const isNotAllowedRolePattern = this.matchesAnyPattern(sanitized, MALICIOUS_ROLEPLAY);
+                if (isNotAllowedRolePattern) {
+                    riskScore += 50;
+                    reasons.push("Roleplay request outside SAP/IT/Technical domain detected");
+                }
+            }
+            // Personal info/credentials protection
+            if (this.matchesAnyPattern(sanitized, PERSONAL_INFO_PATTERNS)) {
+                riskScore += 90;
+                reasons.push("Personal information or credentials request detected");
+            }
+            if (/([A-Za-z0-9])\1{10,}/.test(sanitized)) {
+                riskScore += 20;
+                reasons.push("Obfuscation detected");
+            }
+            // Table data protection
+            if (this.matchesAnyPattern(sanitized, TABLE_DATA_PATTERNS)) {
+                riskScore += 85;
+                reasons.push("Database/table data extraction attempt detected");
+            }
+
+            // User data protection
+            if (this.matchesAnyPattern(sanitized, USER_DATA_PATTERNS)) {
+                riskScore += 90;
+                reasons.push("User data extraction attempt detected");
+            }
+            // Integration check in validatePrompt():
+            if (this.matchesAnyPattern(sanitized, NEW_INSTRUCTION_INJECTION_PATTERNS)) {
+                riskScore += 70;
+                reasons.push("New instruction injection attempt detected");
+            }
+            return {
+                isAllowed: riskScore < 30,
+                riskScore,
+                reasons,
+                sanitizedPrompt: sanitized
+            };
+        },
+
+        /**
+         *  CHECK PATTERNS
+         */
+
+        sanitizePrompt: function (input) {
+            return input
+                .replace(/<script.*?>.*?<\/script>/gi, "")
+                .replace(/[`$\\]/g, "")
+                .trim();
+        },
+
+        /**
+         *  CHECK PATTERNS
+         */
+        matchesAnyPattern: function (text, patterns) {
+            return patterns.some((pattern) => pattern.test(text));
+        }
 
     };
 });
