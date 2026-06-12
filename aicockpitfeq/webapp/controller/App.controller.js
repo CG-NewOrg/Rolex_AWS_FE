@@ -19,6 +19,9 @@ sap.ui.define([
             //     data: []
             // });
             ////models
+            const aMsgModelForChatBot = models.createJSONModel(this, "aMsgModelChatBot");
+            this.getView().setModel(aMsgModelForChatBot, "aMsgModelForChatBot");
+
             var chatModel = models.createJSONModel(this, "chatAppModel");
             this.getView().setModel(chatModel, "chatModel");
             // Start of Aishwarya
@@ -200,7 +203,7 @@ sap.ui.define([
         onNewChat: function () {
 
             this._stopSpeaking({ resetToggle: false });
-
+            this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", []);
             // (Optional) also stop mic if it was recording
             if (this._recognition && this._isListening) {
                 try { this._recognition.stop(); } catch (e) { }
@@ -376,12 +379,13 @@ sap.ui.define([
                     sap.m.MessageToast.show("Validation failed.");
                     return;
                 }
-                let result = Utility.validatePrompt(query);
+                // let result = Utility.validatePrompt(query);
 
-                if (!result.isAllowed) {
-                    sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
-                    sap.ui.getCore().byId("chatInput").setValue("");
-                } else if (noScript == false) {
+                // if (!result.isAllowed) {
+                //     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+                //     sap.ui.getCore().byId("chatInput").setValue("");
+                // } else 
+                    if (noScript == false) {
                     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- Malicious data");
                     sap.ui.getCore().byId("chatInput").setValue("");
                 } else {
@@ -417,18 +421,25 @@ sap.ui.define([
                         }, 0);
 
                         // sharepoint changes
-                        var aMessages = [
-                            {
-                                "role": "user",
-                                "content": query
-                            }
+                        // var aMessages = [
+                        //     {
+                        //         "role": "user",
+                        //         "content": query
+                        //     }
 
-                        ];
+                        // ];
+                        const aMsgModelChatBot = this.getView().getModel("aMsgModelForChatBot");
+                        const allMsgs = aMsgModelChatBot.oData.aMsg;
+                        allMsgs.push({
+                            "role": "user",
+                            "content": query
+                        });
+                        this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
 
                         var oViewModel = this.getView().getModel("chatModel");
                         that.callChatGPTModelforChatbot();
                         var apiUrl = that.getApiUrlforChatbot(modelText, modelKey, this.sApiUrl);
-                        var payload = that.createPayloadBasedOnModelforChatbot(modelText, aMessages, oViewModel, this);
+                        var payload = that.createPayloadBasedOnModelforChatbot(modelText, allMsgs, oViewModel, this);
 
                         this._chatAbortController = new AbortController();
                         try {
@@ -471,6 +482,13 @@ sap.ui.define([
                             }
 
                             // fallback
+
+                            allMsgs.push({
+                                "role": "assistant",
+                                "content": answer
+                            });
+                            this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
+                            this.getView().getModel("aMsgModelForChatBot").refresh();
                             if (!answer) {
                                 answer = "No response received from model.";
                             }
@@ -751,6 +769,16 @@ sap.ui.define([
                 { role: "system", content: "" },
                 { role: "user", content: userMessage }
             ];
+            const aMsgModelChatBot = this.getView().getModel("aMsgModelForChatBot");
+            const allMsgs = aMsgModelChatBot.oData.aMsg;
+            if (allMsgs.length == 0) {
+                allMsgs.push({ role: "system", content: "" });
+            }
+            allMsgs.push({
+                "role": "user",
+                "content": userMessage
+            });
+            this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
 
             var payload = {
                 category: category,
@@ -758,7 +786,7 @@ sap.ui.define([
                 prompt: userMessage,
                 streaming: false,
                 modelPayload: JSON.stringify({
-                    messages: aMessages,
+                    messages: allMsgs,
                     stream: false
                 })
             };

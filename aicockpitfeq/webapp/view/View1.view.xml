@@ -50,7 +50,6 @@
                         text="{i18n>knowBAdmin}"
                         key="knowlegdeBAdmin"
                         icon="sap-icon://key-user-settings"
-                        visible="{vFlagMod>/isAdmin}"
                     />
                     <tnt:NavigationListItem
                         text="{i18n>prmLib}"

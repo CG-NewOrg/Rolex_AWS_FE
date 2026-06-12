@@ -21,6 +21,7 @@
                 visible="{path: 'appmodel>/BSContent', formatter: '.formatter.isTextContent'}"
                 maxLength="true"  growing="true" wrapping="None"
                 rows="18"
+                editable="false"
                 width="100%" height="100%"
                 valueLiveUpdate="false"
                 change=".onBSFileContentAreaChange"

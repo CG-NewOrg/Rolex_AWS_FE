@@ -262,7 +262,7 @@ sap.ui.define([
                         url: listObjectsUrl,
                         type: "GET",
                         headers: oHeader,
-                       
+
                         success: function (data) {
                             var fileNames = [];
                             var ObjectStorageFile = new sap.ui.model.json.JSONModel();
@@ -1286,6 +1286,7 @@ sap.ui.define([
             this.allow = true;
             var catModel = models.createJSONModel(this, "categoryModel");
             this.getView().setModel(catModel, "catModel");
+
             if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "admin") {
                 //user list log start
                 var oPayload = {
@@ -1337,6 +1338,19 @@ sap.ui.define([
                             that.getView().getModel("flagModel").setProperty("/isAdmin", false);
                         }
                         that.allow = false;
+                        let aDependents = that.getView().getDependents();
+                        aDependents.forEach(function (oDependent) {
+                            var title = oDependent.mProperties.title;
+                            if (title.includes("Admin Log List")) {
+                                if (oDependent.isOpen && oDependent.isOpen()) {
+                                    oDependent.close();
+                                }
+
+                                if (oDependent instanceof sap.m.Dialog || oDependent.isA("sap.ui.core.Fragment")) {
+                                    oDependent.destroy();
+                                }
+                            }
+                        });
                         // console.log(errorMessage);
                         // console.log(JSON.parse(jqXhr.responseText).error.message);
                         BusyIndicator.hide();
@@ -1362,7 +1376,9 @@ sap.ui.define([
                         }
                     }.bind(this));
                 } else {
-                    this.adminLogList.open();
+                    if (this.allow == true) {
+                        this.adminLogList.open();
+                    }
                     BusyIndicator.hide();
                 }
             } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "user") {
@@ -1780,6 +1796,9 @@ sap.ui.define([
                 { pattern: /\bprototype\s*\./gi, name: "prototype access" }
             ];
 
+            let titleRegex = sIssueSub.match(/[^a-zA-Z0-9\s]/g);
+            // let regex = /^[a-zA-Z0-9/\-&]+$/;
+            let descRegex = sIssueDetail.match(/[^a-zA-Z0-9\s]/g);
             // Check each pattern
             for (var i = 0; i < xssPatterns.length; i++) {
                 if (xssPatterns[i].pattern.test(sIssueSub)) {
@@ -1796,6 +1815,7 @@ sap.ui.define([
                     ifDesc = true;
                 }
             }
+
             if (noScript == false && ifTitle == true) {
                 this.getView().byId("fbTitleForm").setValueState("Error");
                 this.getView().byId("fbTitleForm").setValueStateText("Malicious data");
@@ -1811,7 +1831,22 @@ sap.ui.define([
                     this.getView().byId("fbTitleForm").setValueStateText("");
                 }
 
-            } else {
+            } else if (titleRegex) {
+                this.getView().byId("fbTitleForm").setValueState("Error");
+                this.getView().byId("fbTitleForm").setValueStateText("No Special Characters allowed in Title");
+
+                // this.getView().byId("fbDesc").setValueState("None");
+                // this.getView().byId("fbDesc").setValueStateText("");
+
+            }
+            else if (descRegex) {
+                this.getView().byId("fbDesc").setValueState("Error");
+                this.getView().byId("fbDesc").setValueStateText("No Special Characters allowed in Description");
+                // this.getView().byId("fbTitleForm").setValueState("None");
+                // this.getView().byId("fbTitleForm").setValueStateText("");
+
+            }
+            else {
                 var oBundle = this.getView().getModel("i18n").getResourceBundle();
                 const now = new Date();
                 const year = now.getFullYear();
@@ -2535,7 +2570,7 @@ sap.ui.define([
                 sysContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
             }
             let noScript = true;
-            let result = Utility.validatePrompt(sysContent);
+            // let result = Utility.validatePrompt(sysContent);
             //noScript=this.validateInput(sysContent);
             const maliciousPatterns = [
                 /<script\b[^>]*>[\s\S]*?<\/script>/gi,
@@ -2659,18 +2694,19 @@ sap.ui.define([
                 }
             }
 
-            if (!result.isAllowed && sFragmentName !== "promptlibpr") {
-                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
-                this.getView().byId("descTxtArea").setEditable(true);
-                this.getView().byId("descTxtArea").setValueState("Error");
-                this.getView().byId("descTxtArea").setValueStateText("Malicious data");
-                this.getView().byId("editSys").setVisible(false);
-            } else if (!result.isAllowed && sFragmentName == "promptlibpr") {
-                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
-                this.getView().byId("sysPromptDesc").setValueState("Error");
-                this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
-            }
-            else if (noScript == false && sFragmentName !== "promptlibpr") {
+            // if (!result.isAllowed && sFragmentName !== "promptlibpr") {
+            //     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+            //     this.getView().byId("descTxtArea").setEditable(true);
+            //     this.getView().byId("descTxtArea").setValueState("Error");
+            //     this.getView().byId("descTxtArea").setValueStateText("Malicious data");
+            //     this.getView().byId("editSys").setVisible(false);
+            // } else if (!result.isAllowed && sFragmentName == "promptlibpr") {
+            //     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+            //     this.getView().byId("sysPromptDesc").setValueState("Error");
+            //     this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
+            // }
+            // else
+                 if (noScript == false && sFragmentName !== "promptlibpr") {
 
                 this.getView().byId("descTxtArea").setEditable(true);
                 this.getView().byId("descTxtArea").setValueState("Error");
@@ -3740,7 +3776,7 @@ sap.ui.define([
                 promptContent = this.getView().byId("descTxtAreaPrompt").getValue();
             }
             let noScript = true;
-            let result = Utility.validatePrompt(promptContent);
+            // let result = Utility.validatePrompt(promptContent);
             const maliciousPatterns = [
                 /<script\b[^>]*>[\s\S]*?<\/script>/gi,
                 /javascript:/gi,
@@ -3862,17 +3898,18 @@ sap.ui.define([
                     noScript = false;
                 }
             }
-            if (!result.isAllowed && sFragmentName !== "promptlibpr") {
-                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
-                this.getView().byId("descTxtAreaPrompt").setEditable(true);
-                this.getView().byId("descTxtAreaPrompt").setValueState("Error");
-                this.getView().byId("descTxtAreaPrompt").setValueStateText("Malicious data");
-                this.getView().byId("editPrm").setVisible(false);
-            } else if (!result.isAllowed && sFragmentName == "promptlibpr") {
-                sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
-                this.getView().byId("sysPromptDesc").setValueState("Error");
-                this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
-            } else if (noScript == false && sFragmentName !== "promptlibpr") {
+            // if (!result.isAllowed && sFragmentName !== "promptlibpr") {
+            //     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+            //     this.getView().byId("descTxtAreaPrompt").setEditable(true);
+            //     this.getView().byId("descTxtAreaPrompt").setValueState("Error");
+            //     this.getView().byId("descTxtAreaPrompt").setValueStateText("Malicious data");
+            //     this.getView().byId("editPrm").setVisible(false);
+            // } else if (!result.isAllowed && sFragmentName == "promptlibpr") {
+            //     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
+            //     this.getView().byId("sysPromptDesc").setValueState("Error");
+            //     this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
+            // } else
+                 if (noScript == false && sFragmentName !== "promptlibpr") {
                 this.getView().byId("descTxtAreaPrompt").setEditable(true);
                 this.getView().byId("descTxtAreaPrompt").setValueState("Error");
                 this.getView().byId("descTxtAreaPrompt").setValueStateText("Malicious data");
@@ -4076,6 +4113,15 @@ sap.ui.define([
                     }
                 }
             }
+
+            ///feedback
+            if (id == "fbDesc") {
+                this.getView().byId("fbDesc").setValueState("None");
+                this.getView().byId("fbDesc").setValueStateText("");
+            } else if (id == "fbTitleForm") {
+                this.getView().byId("fbTitleForm").setValueState("None");
+                this.getView().byId("fbTitleForm").setValueStateText("");
+            }
         },
         getDataSysMsg: function () {
 
@@ -4099,7 +4145,7 @@ sap.ui.define([
                 $.ajax({
                     url: that._sBasePath + "/cockpit/getPromptDetails",
                     method: "GET",
-                  
+
                     data: {
                         Category: Category,
                         MsgType: MsgType,
@@ -5186,7 +5232,7 @@ sap.ui.define([
                                     if (oAction === "Next Step") {
                                         MessageBox.information(oBundle.getText("nextMsg"));
                                     } else {
-                                        that.executedOnce == false;
+                                        that.executedOnce = false;
                                         //that.MergeButtonTest1();
                                         that._handlePCTExecution();
                                     }
@@ -6332,7 +6378,10 @@ sap.ui.define([
             let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             let fileN = oEvent.mParameters.files[0].name;
 
-            let stopUpload = this.validateFileName(fileN);
+            let [stopUpload, errMsg] = this.validateFileName(fileN);
+            if (stopUpload) {
+                sap.m.MessageBox.warning(errMsg);
+            }
             if (!stopUpload) {
                 if (popUpSel == "knowlBAdmin") {
                     this.ragHandleUploadPress();
@@ -6349,12 +6398,11 @@ sap.ui.define([
                 }
 
                 this.getView().byId("selDocList").setSelectedKey("");
-            } else {
-                MessageBox.error(oBundle.getText("invalidFileName"));
             }
         },
         validateFileName: function (fileName) {
             let stopUpload = false;
+            let errMsg = "";
             const allowedExtensions = [
                 "pdf",
                 "doc",
@@ -6377,6 +6425,7 @@ sap.ui.define([
                 stopUpload = false;
             } else {
                 stopUpload = true;
+                errMsg = "Multiple File Extensions Detected. Upload is blocked as it may contain malicious content.";
             }
 
             const extension = parts.pop().toLowerCase();
@@ -6387,9 +6436,11 @@ sap.ui.define([
             for (let p of parts) {
                 if (dangerousExtensions.includes(p.toLowerCase())) {
                     stopUpload = true;
+                    errMsg = "Multiple File Extensions Detected. Upload is blocked as it may contain malicious content.";
+
                 }
             }
-            return stopUpload;
+            return [stopUpload, errMsg];
         },
 
         extractPDFContent: function (oEvent) {
@@ -6418,7 +6469,119 @@ sap.ui.define([
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
             var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            let malPat = false;
+            let xssPat = false;
+            const maliciousPatterns = [
+                /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+                /javascript:/gi,
+                /vbscript:/gi,
+                /on\w+\s*=\s*["'][^"']*["']/gi,
+                /eval\s*\(/gi,
+                /document\.write/gi,
+                /document\.cookie/gi,
+                /window\.location/gi,
+                /\.exec\s*\(/gi,
+                /new\s+Function\s*\(/gi,
+                /fromCharCode/gi,
+                /\\x[0-9a-fA-F]{2}/g,
+                /\\u[0-9a-fA-F]{4}/g,
+                /base64_decode/gi,
+                /shell_exec/gi,
+                /system\s*\(/gi,
+                /passthru/gi,
+                /exec\s*\(/gi,
+                /popen\s*\(/gi,
+                /proc_open/gi,
+                /<\?php/gi,
+                /<%[\s\S]*?%>/g,
+                /powershell/gi,
+                /cmd\.exe/gi,
+                /\/bin\/sh/gi,
+                /\/bin\/bash/gi,
+                /wget\s+/gi,
+                /curl\s+.*-o/gi,
+                /nc\s+-e/gi,
+                /rm\s+-rf/gi
+            ];
 
+            var xssPatterns = [
+                // JavaScript execution functions
+                { pattern: /\balert\s*\(/gi, name: "alert()" },
+                { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
+                { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
+                { pattern: /\beval\s*\(/gi, name: "eval()" },
+                { pattern: /\bFunction\s*\(/gi, name: "Function()" },
+                { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
+                { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
+                { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
+
+                // Script tags and protocols
+                { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
+                { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
+                { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
+                { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
+                { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
+
+                // Event handlers (on* attributes)
+                { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
+                { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
+                { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
+                { pattern: /\bonload\s*=/gi, name: "onload handler" },
+                { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
+                { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
+                { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
+                { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
+                { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
+                { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
+                { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
+                { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
+
+                // DOM manipulation
+                { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
+                { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
+                { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
+                { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
+                { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
+                { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
+                { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
+
+                // Window/Location manipulation
+                { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
+                { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
+                { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
+                { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
+
+                // Dangerous HTML elements
+                { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
+                { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
+                { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
+                { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
+                { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
+                { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
+                { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
+                { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
+                { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
+                { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
+                { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
+                { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
+
+                // Encoding bypass attempts
+                { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
+                { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
+                { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
+
+                // Expression and binding attacks
+                { pattern: /expression\s*\(/gi, name: "CSS expression()" },
+                { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
+                { pattern: /-moz-binding/gi, name: "Mozilla binding" },
+
+                // Constructor access
+                { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
+                { pattern: /\b__proto__/gi, name: "__proto__ access" },
+                { pattern: /\bprototype\s*\./gi, name: "prototype access" }
+            ];
+
+            // Check each pattern
 
             //   const oContent = sContent + "\n" + promptMsgData;
             var aMessages = [
@@ -6453,9 +6616,7 @@ sap.ui.define([
                 fFormData.append("file", oFile);
 
                 var objectStoreUrl = this._sBasePath + `/cockpit/upload/Category=` + sSelectedIconTab + `/Project=` + this._ProjectDetail + `/Vector=` + vector;
-                var oHeaders = {
 
-                };
                 // | oFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 if (oFile.type === "application/pdf") {
                     busyDialog.open();
@@ -6536,6 +6697,23 @@ sap.ui.define([
                                     }
 
                                     oModel.setProperty("/BSContent", pdfText);
+                                    for (const pattern of maliciousPatterns) {
+                                        if (pattern.test(pdfText)) {
+                                            malPat = true;
+                                        }
+                                    }
+                                    for (var i = 0; i < xssPatterns.length; i++) {
+                                        if (xssPatterns[i].pattern.test(pdfText)) {
+                                            xssPat = true;
+                                        }
+                                    }
+                                    if (malPat) {
+                                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially malicious content.");
+                                    }
+                                    if (xssPat) {
+                                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
+                                    }
+
                                     that.getFiles();
                                     busyDialog.close();
                                 }.bind(this));
@@ -6550,6 +6728,8 @@ sap.ui.define([
                     };
 
                     fileReader.readAsArrayBuffer(oFile);
+
+
 
                     //vbox code
 
@@ -6614,6 +6794,8 @@ sap.ui.define([
                     that.getFiles();
                 }
             }
+            let fileContent = oModel.getProperty("/BSContent");
+
         },
 
         handleExcelUpload: function (oFile, sSelectedIconTab, oModel, aMessages) {
@@ -6690,9 +6872,118 @@ sap.ui.define([
             var sSelectedIconTab = this.selectedKeyFunct();
             var oFileUploader = this.getView().byId("fileUploader1");
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            let  malPat = false;
+            let  xssPat = false;
+            const maliciousPatterns = [
+                /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+                /javascript:/gi,
+                /vbscript:/gi,
+                /on\w+\s*=\s*["'][^"']*["']/gi,
+                /eval\s*\(/gi,
+                /document\.write/gi,
+                /document\.cookie/gi,
+                /window\.location/gi,
+                /\.exec\s*\(/gi,
+                /new\s+Function\s*\(/gi,
+                /fromCharCode/gi,
+                /\\x[0-9a-fA-F]{2}/g,
+                /\\u[0-9a-fA-F]{4}/g,
+                /base64_decode/gi,
+                /shell_exec/gi,
+                /system\s*\(/gi,
+                /passthru/gi,
+                /exec\s*\(/gi,
+                /popen\s*\(/gi,
+                /proc_open/gi,
+                /<\?php/gi,
+                /<%[\s\S]*?%>/g,
+                /powershell/gi,
+                /cmd\.exe/gi,
+                /\/bin\/sh/gi,
+                /\/bin\/bash/gi,
+                /wget\s+/gi,
+                /curl\s+.*-o/gi,
+                /nc\s+-e/gi,
+                /rm\s+-rf/gi
+            ];
+            var xssPatterns = [
+                // JavaScript execution functions
+                { pattern: /\balert\s*\(/gi, name: "alert()" },
+                { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
+                { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
+                { pattern: /\beval\s*\(/gi, name: "eval()" },
+                { pattern: /\bFunction\s*\(/gi, name: "Function()" },
+                { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
+                { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
+                { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
+
+                // Script tags and protocols
+                { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
+                { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
+                { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
+                { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
+                { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
+
+                // Event handlers (on* attributes)
+                { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
+                { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
+                { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
+                { pattern: /\bonload\s*=/gi, name: "onload handler" },
+                { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
+                { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
+                { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
+                { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
+                { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
+                { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
+                { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
+                { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
+
+                // DOM manipulation
+                { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
+                { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
+                { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
+                { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
+                { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
+                { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
+                { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
+
+                // Window/Location manipulation
+                { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
+                { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
+                { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
+                { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
+
+                // Dangerous HTML elements
+                { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
+                { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
+                { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
+                { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
+                { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
+                { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
+                { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
+                { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
+                { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
+                { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
+                { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
+                { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
+
+                // Encoding bypass attempts
+                { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
+                { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
+                { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
+
+                // Expression and binding attacks
+                { pattern: /expression\s*\(/gi, name: "CSS expression()" },
+                { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
+                { pattern: /-moz-binding/gi, name: "Mozilla binding" },
+
+                // Constructor access
+                { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
+                { pattern: /\b__proto__/gi, name: "__proto__ access" },
+                { pattern: /\bprototype\s*\./gi, name: "prototype access" }
+            ];
 
             var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-            var vector = bRagEnabled ? 1 : 0;
             var aFiles = oFileUploader.oFileUpload.files;
             if (!aFiles || aFiles.length === 0) {
                 sap.m.MessageBox.show(oBundle.getText("fileUpload"));
@@ -6739,6 +7030,23 @@ sap.ui.define([
                             oModel.setProperty("/BSContent", extractedContent);
                         };
                         fr.readAsText(oFile);
+                    }
+                    let fileContent=oModel.getProperty("/BSContent");
+                    for (const pattern of maliciousPatterns) {
+                        if (pattern.test(fileContent)) {
+                            malPat = true;
+                        }
+                    }
+                    for (var i = 0; i < xssPatterns.length; i++) {
+                        if (xssPatterns[i].pattern.test(fileContent)) {
+                            xssPat = true;
+                        }
+                    }
+                    if (malPat) {
+                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially malicious content.");
+                    }
+                    if (xssPat) {
+                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
                     }
                     sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
                 })
@@ -7067,6 +7375,8 @@ sap.ui.define([
             histArr.push(histData);
             this.getOwnerComponent().getModel("historyModel").setProperty("/historyData", histArr);
             this.getOwnerComponent().getModel("historyModel").refresh();
+             this.getView().byId("descTxtAreaPrompt").setEditable(false);
+            this.getView().byId("savePrm").setVisible(false);
             this.getView().byId("multiInputPrompt").setValue("");
             this.getView().byId("descTxtAreaPrompt").setValue("");
             this.getView().byId("cancelPrmBtn").setVisible(false);
@@ -8025,6 +8335,7 @@ sap.ui.define([
 
             if (oPromptData.ProjectId == "default") {
                 MessageBox.information("Cannot Update Default Project");
+                this.getView().byId("descTxtAreaPrompt").setEditable(false);
             } else {
                 if (msgSel == "user") {
                     this.getView().getModel("enSysPromp").setProperty("/temp", "Update Prompt");

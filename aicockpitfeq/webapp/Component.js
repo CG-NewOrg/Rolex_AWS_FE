@@ -191,13 +191,17 @@ sap.ui.define([
 
             // Try FLP user info first (when running inside Work Zone/Launchpad)
             try {
-                if (sap?.ushell?.Container) {
+                 if (sap?.ushell?.Container) {
+               // if (sap?.ushell?.services) {
                     var oUserInfo = sap.ushell.Container.getService && sap.ushell.Container.getService("UserInfo");
                     if (oUserInfo) {
                         sUserId = (oUserInfo.getId && oUserInfo.getId()) || "";
                         sEmail = (oUserInfo.getEmail && oUserInfo.getEmail()) || "";
                         sName = (oUserInfo.getFullName && oUserInfo.getFullName()) || "";
                     }
+                    // sUserId =sap.ushell.services.getId()|| "";
+                    // sEmail =sap.ushell.services.getEmail()|| "";
+                    // sName =sap.ushell.services.getFullName()|| "";
                 }
             } catch (_e) {
                 // ignore - FLP not available

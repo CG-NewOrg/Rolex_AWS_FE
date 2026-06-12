@@ -332,6 +332,9 @@ sap.ui.define([
 
                     var oRagModelChat = new sap.ui.model.json.JSONModel(ragModelDataChat);
                     return oRagModelChat;
+                }else if (modelOf === "aMsgModelChatBot") {
+                    let msgModelChatbot = new sap.ui.model.json.JSONModel({ aMsg: [] });
+                    return msgModelChatbot;
                 }
                 // else if(modelOf === "git"){
                 //     var gitData={
