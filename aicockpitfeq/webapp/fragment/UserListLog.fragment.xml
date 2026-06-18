@@ -237,7 +237,7 @@
                                 <Button
                                     tooltip="Excel Download"
                                     icon="sap-icon://excel-attachment"
-                                    press=".onTableExport"
+                                    press=".onUserLogExcelPress"
                                 />
                             </OverflowToolbar>
                         </headerToolbar>

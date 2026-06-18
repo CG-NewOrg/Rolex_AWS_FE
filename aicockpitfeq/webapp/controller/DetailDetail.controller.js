@@ -27,7 +27,6 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             this.airespText = "";
             this.oRouter.getRoute("DetailDetail").attachPatternMatched(this._onPatternMatch, this);
 
-
         },
 
         _onPatternMatch: function (oEvent) {

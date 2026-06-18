@@ -4048,7 +4048,9 @@ sap.ui.define([
                         try {
                             errMsg = JSON.parse(jqXhr.responseText).error.message;
                         } catch (e) { }
-
+                        if (errMsg.toLowerCase().includes(("cannot modify"))){
+                            that.cancelPrompt();
+                        }
                         MessageBox.error(errMsg);
                     }
                 });
@@ -4356,6 +4358,66 @@ sap.ui.define([
                 });
 
             });
+        },
+
+        onUserLogExcelPress: function (oEvent) {
+            let sFrgName = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+            if (sFrgName === "admin") {
+                this.onExportUserLogExcel(oEvent);
+            } else if (sFrgName === "user") {
+                this.onTableExport(oEvent);
+            }
+        },
+
+        onExportUserLogExcel: function (oEvent) {
+            if (!this._oUserLogDatePopover) {
+                this._oUserLogDatePopover = new sap.m.Popover({
+                    title: "Select Date Range",
+                    placement: sap.m.PlacementType.Bottom,
+                    contentWidth: "300px",
+                    content: [
+                        new sap.m.VBox({
+                            items: [
+                                new sap.m.DateRangeSelection("drsUserLogExportRange", {
+                                    delimiter: " to ",
+                                    displayFormat: "dd/MM/yyyy",
+                                    valueFormat: "yyyy-MM-dd",
+                                    dateValue: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+                                    secondDateValue: new Date(),
+                                    width: "100%"
+                                }).addStyleClass("sapUiSmallMargin"),
+                                new sap.m.Button({
+                                    text: "Export",
+                                    type: "Accept",
+                                    width: "100%",
+                                    press: this._onConfirmUserLogExport.bind(this)
+                                }).addStyleClass("sapUiSmallMargin")
+                            ]
+                        })
+                    ]
+                });
+                this.getView().addDependent(this._oUserLogDatePopover);
+            }
+
+            this._oUserLogDatePopover.openBy(oEvent.getSource());
+        },
+
+        _onConfirmUserLogExport: function () {
+            let oRange = sap.ui.getCore().byId("drsUserLogExportRange");
+            let oFrom = oRange.getDateValue();
+            let oTo = oRange.getSecondDateValue();
+            let fromDate = this._formatYMD(oFrom);
+            let toDate = this._formatYMD(oTo);
+
+            if (!fromDate || !toDate) {
+                MessageBox.show("Please pick a valid date range.");
+                return;
+            }
+
+            let params = new URLSearchParams({ fromDate: fromDate, toDate: toDate });
+            let sUrl = this._sBasePath + "/cockpit/sessionDataExcel?" + params.toString();
+            sap.m.URLHelper.redirect(sUrl, true);
+            this._oUserLogDatePopover?.close();
         },
 
         onTableExport: function (eveTable) {
@@ -4735,7 +4797,7 @@ sap.ui.define([
                 "system_prompt": {
                     "name": this.getView().byId("multiInputSystem").getValue(),
                     "version": "1.0.0",
-                    "scenario": "",
+                    "scenario": "Happy Path",
                     "spec": {
                         "template": [
                             {
@@ -4844,23 +4906,22 @@ sap.ui.define([
                         const parsedResponse = this._parseNdjsonOrJsonText(rawText);
 
                         citationIndex = [];
-                        // var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-                        // if (bRagEnabled) {
-                        parsedResponse[0].citations.forEach((item) => {
-                            if (!item) return;
+                        if (bRagEnabled) {
+                            parsedResponse[0].citations.forEach((item) => {
+                                if (!item) return;
 
-                            const filename = item.filename || "Unknown";
-                            const link = item.download_url;
-                            if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
-                        });
-                        citationIndex.forEach(c => {
-                            const key = `${c.fname}|${c.link}`;
-                            if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
-                        });
-                        // }
+                                const filename = item.filename || "Unknown";
+                                const link = item.download_url;
+                                if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                            });
+                            citationIndex.forEach(c => {
+                                const key = `${c.fname}|${c.link}`;
+                                if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                            });
+                        }
                         tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
                         tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                        tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: citationIndex, tokensGen: tokensUsed });
+                        tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: bRagEnabled ? citationIndex : [], tokensGen: tokensUsed });
                         this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
 
                     } catch (err) {
@@ -5018,23 +5079,22 @@ sap.ui.define([
                                 const parsedResponse = this._parseNdjsonOrJsonText(rawText);
 
                                 citationIndex = [];
-                                // var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-                                // if (bRagEnabled) {
-                                parsedResponse[0].citations.forEach((item) => {
-                                    if (!item) return;
-                                    const filename = item.filename || "Unknown";
-                                    const link = item.download_url;
-                                    if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
-                                });
-                                citationIndex.forEach(c => {
-                                    const key = `${c.fname}|${c.link}`;
-                                    if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
-                                });
-                                // }
+                                if (bRagEnabled) {
+                                    parsedResponse[0].citations.forEach((item) => {
+                                        if (!item) return;
+                                        const filename = item.filename || "Unknown";
+                                        const link = item.download_url;
+                                        if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                                    });
+                                    citationIndex.forEach(c => {
+                                        const key = `${c.fname}|${c.link}`;
+                                        if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                                    });
+                                }
 
                                 tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
                                 tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                                tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: citationIndex, tokensGen: tokensUsed });
+                                tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: bRagEnabled ? citationIndex : [], tokensGen: tokensUsed });
                                 this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
                                 ///////reinit sys msg for req file changes for next user story
                                 aMsgContentSystemDesc = originalSysMsg;
@@ -5057,41 +5117,23 @@ sap.ui.define([
                         } else {
                             excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData.Sheet1;
                         }
+                        for (let x = 0; x < excelfileDetails.length; x++) {
 
-                        var excelfileDetails = [];
+                            fileDataRepeat = "UserStory_ID : " + excelfileDetails[x]["UserStory_ID"] + "\nEpic : " + excelfileDetails[x]["Epic"] + "\nFeatures : " + excelfileDetails[x]["Features"] + "\nUser Stories Description : " + excelfileDetails[x]["User Stories Description"] + "\nAcceptance Criteria : " + excelfileDetails[x]["Acceptance Criteria"] + "\n";
+                            aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFileText, "<TCG_" + typeofTC + ">\n {requirement_file}:" + fileDataRepeat);
+                            aMsgContentSystemDesc = aMsgContentSystemDesc.replace(reqFreeText, "{requirement_text}:" + freeTextData);
+                            aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
 
-                        if (Array.isArray(this.getView().getModel("fileViewModel").oData.xlsJsonData)) {
-                            excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData;
-                        } else {
-                            excelfileDetails = this.getView().getModel("fileViewModel").oData.xlsJsonData.Sheet1;
-                        }
+                            // histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
 
-                        // ✅ Create parallel tasks
-                        var promises = excelfileDetails.map(async (row) => {
+                            // // allMessages.push(histPayload);
 
-                            var localPayload = JSON.parse(JSON.stringify(kbPayload)); // ✅ clone payload
-                            var localSysMsg = originalSysMsg; // ✅ avoid overwrite issue
-
-                            var fileDataRepeat =
-                                "UserStory_ID : " + row["UserStory_ID"] +
-                                "\nEpic : " + row["Epic"] +
-                                "\nFeatures : " + row["Features"] +
-                                "\nUser Stories Description : " + row["User Stories Description"] +
-                                "\nAcceptance Criteria : " + row["Acceptance Criteria"] + "\n";
-
-                            let updatedMsg = localSysMsg
-                                .replace(reqFileText, "<TCG_" + typeofTC + ">\n {requirement_file}:" + fileDataRepeat)
-                                .replace(reqFreeText, "{requirement_text}:" + freeTextData);
-
-                            var aMessages = [{ "role": "system", "content": updatedMsg }];
-
-                            localPayload.UserStory_ID = row["UserStory_ID"];
-                            localPayload.Epic = row["Epic"];
-                            localPayload.Features = row["Features"];
-                            localPayload.UserStoriesDescription = row["User Stories Description"];
-                            localPayload.AcceptanceCriteria = row["Acceptance Criteria"];
-                            localPayload.system_prompt.spec.template = aMessages;
-
+                            kbPayload["UserStory_ID"] = excelfileDetails[x]["UserStory_ID"];
+                            kbPayload["Epic"] = excelfileDetails[x]["Epic"];
+                            kbPayload["Features"] = excelfileDetails[x]["Features"];
+                            kbPayload["UserStoriesDescription"] = excelfileDetails[x]["User Stories Description"];
+                            kbPayload["AcceptanceCriteria"] = excelfileDetails[x]["Acceptance Criteria"];
+                            kbPayload.system_prompt.spec.template = aMessages;
                             try {
                                 const response = await fetch(apiKMUrl, {
                                     method: "POST",
@@ -5104,57 +5146,45 @@ sap.ui.define([
                                         "X-Content-Type-Options": "nosniff",
                                         ...(that.defaultHeaders || {})
                                     },
-                                    body: JSON.stringify(localPayload)
+                                    body: JSON.stringify(kbPayload)
                                 });
 
+                                if (!response.ok) {
+                                    const errText = await response.text().catch(() => "");
+                                    throw new Error(`TCG call failed for ${story.UserStory_ID || "Unknown"}: ${response.status} ${errText}`);
+                                }
                                 const rawText = await response.text();
-                                const parsedResponse = that._parseNdjsonOrJsonText(rawText);
 
-                                let citationIndex = [];
-                                parsedResponse[0].citations.forEach((item) => {
-                                    if (!item) return;
-                                    citationIndex.push({
-                                        link: item.download_url,
-                                        fname: item.filename || "Unknown"
+                                // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
+                                const parsedResponse = this._parseNdjsonOrJsonText(rawText);
+                                citationIndex = [];
+                                if (bRagEnabled && parsedResponse[0].citations) {
+                                    parsedResponse[0].citations.forEach((item) => {
+                                        if (!item) return;
+
+                                        const filename = item.filename || "Unknown";
+                                        const link = item.download_url;
+                                        if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
                                     });
+                                }
+                                citationIndex.forEach(c => {
+                                    const key = `${c.fname}|${c.link}`;
+                                    if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
                                 });
 
-                                return {
-                                    UserStory_ID: row["UserStory_ID"],
-                                    response: parsedResponse[0].response,
-                                    citations: citationIndex,
-                                    tokens: parsedResponse[0].token_usage.total_tokens || 0
-                                };
-
+                                tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                                tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
+                                tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].response, citationTcg: bRagEnabled ? parsedResponse[0].citations : [], tokensGen: tokensUsed });
+                                this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
+                                aMsgContentSystemDesc = originalSysMsg;
                             } catch (err) {
-                                return {
-                                    UserStory_ID: row["UserStory_ID"],
-                                    error: err.message
-                                };
+                                BusyIndicator.hide();
+                                sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
+                            } finally {
+
                             }
-                        });
 
-                        // ✅ EXECUTE PARALLEL
-                        const results = await Promise.all(promises);
-
-                        // ✅ Store results
-                        tcgRespArr = [];
-
-                        results.forEach(res => {
-                            if (!res.error) {
-                                tokensUsed += res.tokens;
-
-                                tcgRespArr.push({
-                                    UserStory_ID: "***************" + res.UserStory_ID + "***************",
-                                    response: res.response,
-                                    citationTcg: res.citations,
-                                    tokensGen: tokensUsed
-                                });
-                            }
-                        });
-
-                        this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
-
+                        }
                     }
                 }
                 const oSideNavigation = this.byId("sideNavigation");
@@ -5179,16 +5209,20 @@ sap.ui.define([
             for (var r = 0; r < tcgRespArr.length; r++) {
 
                 resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
-                for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
-                    cit.push(tcgRespArr[r].citationTcg[c]);
+                if (bRagEnabled) {
+                    for (let c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    }
                 }
             }
 
             this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
             this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
             this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
-            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
-            var oResMsg = {
+            //this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", bRagEnabled ? cit : []);
+
+            let oResMsg = {
                 role: 'assistant',
                 content: resp
             };
@@ -5207,6 +5241,7 @@ sap.ui.define([
                 fileCont
             );
             this.getView().getModel("tcgModel").setProperty("/fText", "");
+            that.sendTokenUsageLog(tokensUsed, promptMsgData); 
             BusyIndicator.hide();
         },
 
@@ -11079,25 +11114,34 @@ sap.ui.define([
             BusyIndicator.show();
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-            var oViewModel = this.getView().getModel("viewModel");
-            var that = this;
-            var modelId = this.getView().byId("selModel").getSelectedKey();
-            var modelName = this.getView().byId("selModel").getValue();
-            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
-            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
-            var allMessages = [];
-            var oModel = this.getView().getModel("appmodel");
-            var fileData = oModel.getProperty("/BSContent");
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-            var tokensUsed = 0;
+            let oViewModel = this.getView().getModel("viewModel");
+            let that = this;
+            // let modelName = this.getView().byId("selModel").getValue();
+            let aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            let promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            // let allMessages = [];
+            let oModel = this.getView().getModel("appmodel");
+            let fileData = oModel.getProperty("/BSContent");
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let tokensUsed = 0;
             this.getView().getModel("tcgModel").setProperty("/allResponses", []);
-            var aiModelName = that.getView().byId("selModel").getValue();
-            var respValue = this.getOwnerComponent()
+            let aiModelName = that.getView().byId("selModel").getValue();
+            if (aiModelName == "anthropic--claude-4.5-opus") {
+                aiModelName = "claude-opus4.5";
+            }
+            else if (aiModelName == "anthropic--claude-4-sonnet") {
+                aiModelName = "claude-4-sonnet";
+            }
+            else if (aiModelName == "anthropic--claude-3-haiku") {
+                aiModelName = "claude-3-haiku";
+            }
+            let respValue = this.getOwnerComponent()
                 .getModel("airesponseDetailModel")
                 .getProperty("/resp");
-            var messages = [];
-            var attachments = [];
-
+            let messages = [];
+            let selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+            let attachments = [];
+            let tcgRespArr = [];
             /*  System message ALWAYS */
             aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{step_2_output}/g, respValue);
             messages.push({
@@ -11133,7 +11177,6 @@ sap.ui.define([
                 MessageBox.error("Please upload a File!");
                 this.getView().byId("selDocList").setValueState("Error");
                 this.getView().byId("selDocList").setValueStateText("Upload/Select File");
-                return;
             }
             // else if (Array.isArray(fileData) == true) {
             //     BusyIndicator.hide();
@@ -11146,14 +11189,14 @@ sap.ui.define([
             else if (fileData !== "") {
                 //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
                 aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
-                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                let aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
                 this.onPctStepOutput(aMessages);
                 if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
-                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
-                allMessages.push(histPayload);
+                oViewModel = this.getView().getModel("viewModel");
+                // let histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel1, this, promptMsgData);
+                // allMessages.push(histPayload);
 
-                //var apiKMUrl = "/kb-integration/PCT_STEP3";
-                var apiKMUrl = this._sBasePath + "/kbintegration/pct";
+                let apiKMUrl = this._sBasePath + "/kbintegration/pct";
                 try {
                     const response = await fetch(apiKMUrl, {
                         method: "POST",
@@ -11177,77 +11220,71 @@ sap.ui.define([
 
                     // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
                     const parsedResponse = this._parseNdjsonOrJsonText(rawText);
-                    var tokenConsumed = {};
-                    var citationIndex = [];
-                    parsedResponse[0].citations.forEach((item) => {
-                        if (!item) return;
-                        const filePath = item.download_url || item.file_path || "";
-                        const filename = item.filename || "Unknown";
-                        const link = item.download_url;
-                        if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
-                    });
+
+                    let citationIndex = [];
+                    if (bRagEnabled && parsedResponse[0].citations) {
+                        parsedResponse[0].citations.forEach((item) => {
+                            if (!item) return;
+                            const filename = item.filename || "Unknown";
+                            const link = item.download_url;
+                            if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                        });
+                    }
                     citationIndex.forEach(c => {
                         const key = `${c.fname}|${c.link}`;
                         if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
                     });
                     tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
-                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step3_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step3_output, citationTcg: bRagEnabled ? citationIndex : [], tokensGen: tokensUsed });
                     this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
 
                 } catch (err) {
                     BusyIndicator.hide();
                     sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
                 } finally {
-                    // BusyIndicator.hide();
                 }
-                const oSideNavigation = this.byId("sideNavigation"),
-                    bExpanded = oSideNavigation.getExpanded();
+                const oSideNavigation = this.byId("sideNavigation");
                 oSideNavigation.setExpanded(false);
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                let aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
                 this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
-                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                let keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
                 this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
-                var tokenData = this.getView().getModel("TokenLimit").oData;
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-                var scenario = this.selectedKeyFunct();
-                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+                let tokenData = this.getView().getModel("TokenLimit").oData;
+                let scenario = this.selectedKeyFunct();
+                let tknallotted = tokenData[scenario][selectedAI].TotalToken;
                 this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
-                var resp = "";
-                var cit = [];
-                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                for (var r = 0; r < tcgRespArr.length; r++) {
+                let resp = "";
+                let cit = [];
+                tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (let r = 0; r < tcgRespArr.length; r++) {
 
                     resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
-                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
-                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    if (bRagEnabled) {
+                        for (let c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                            cit.push(tcgRespArr[r].citationTcg[c]);
+                        }
                     }
-                    // for(var t=0;t<tcgRespArr.length;t++){
-                    // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
-                    // }
-
                 }
                 this.getView().byId("prgIndicator").setPercentValue("100%");
                 this.getView().byId("prgIndicator").setDisplayValue("Completed");
                 this.getView().byId("nextBtn").setVisible(false);
-                // that.onPctStepOutput(reAMessages);
                 MessageBox.success("All Steps Completed!");
 
                 this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
                 this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
                 this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
-                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
-                //this._addToHistoryLogGeneric(resp);
-                var oResMsg = {
+                //this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", bRagEnabled ? cit : []);
+                let oResMsg = {
                     role: 'assistant',
                     content: resp
                 };
-                var totToken = 0;
-                var fileCont = true;
-                var oViewModel = that.getView().getModel("viewModel");
+                let totToken = 0;
+                let fileCont = true;
+                oViewModel = that.getView().getModel("viewModel");
                 Utility.handleTabResponseDynamic(
                     scenario,
                     that,
@@ -11259,32 +11296,43 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-
+                that.sendTokenUsageLog(tokensUsed, promptMsgData); 
                 BusyIndicator.hide();
             }
         },
-        pctkbwithstep2: async function () {
+         pctkbwithstep2: async function () {
             BusyIndicator.show();
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-            var oViewModel = this.getView().getModel("viewModel");
-            var that = this;
-            var modelId = this.getView().byId("selModel").getSelectedKey();
-            var modelName = this.getView().byId("selModel").getValue();
-            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
-            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
-            var allMessages = [];
-            var oModel = this.getView().getModel("appmodel");
-            var fileData = oModel.getProperty("/BSContent");
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-            var tokensUsed = 0;
+            let oViewModel = this.getView().getModel("viewModel");
+            let that = this;
+
+            // let modelName = this.getView().byId("selModel").getValue();
+            let aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            let promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            // let allMessages = [];
+            let oModel = this.getView().getModel("appmodel");
+            let fileData = oModel.getProperty("/BSContent");
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let tokensUsed = 0;
             this.getView().getModel("tcgModel").setProperty("/allResponses", []);
-            var aiModelName = that.getView().byId("selModel").getValue();
-            var respValue = this.getOwnerComponent()
+            let aiModelName = that.getView().byId("selModel").getValue();
+            if (aiModelName == "anthropic--claude-4.5-opus") {
+                aiModelName = "claude-opus4.5";
+            }
+            else if (aiModelName == "anthropic--claude-4-sonnet") {
+                aiModelName = "claude-4-sonnet";
+            }
+            else if (aiModelName == "anthropic--claude-3-haiku") {
+                aiModelName = "claude-3-haiku";
+            }
+            let respValue = this.getOwnerComponent()
                 .getModel("airesponseDetailModel")
                 .getProperty("/resp");
-            var messages = [];
-            var attachments = [];
+            let messages = [];
+            let selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+            let attachments = [];
+            let tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
 
             /*  System message ALWAYS */
             aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{step_1_output}/g, respValue);
@@ -11321,7 +11369,7 @@ sap.ui.define([
                 MessageBox.error("Please upload a File!");
                 this.getView().byId("selDocList").setValueState("Error");
                 this.getView().byId("selDocList").setValueStateText("Upload/Select File");
-                return;
+
             }
             // else if (Array.isArray(fileData) == true) {
             //     BusyIndicator.hide();
@@ -11334,14 +11382,13 @@ sap.ui.define([
             else if (fileData !== "") {
                 //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
                 aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
-                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                let aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
                 this.onPctStepOutput(aMessages);
                 if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
-                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
-                allMessages.push(histPayload);
-                //kbPayload.system_prompt.spec.template = aMessages;
-                //var apiKMUrl = "/kb-integration/PCT_STEP2";
-                var apiKMUrl = this._sBasePath + "/kbintegration/pct";
+                oViewModel = this.getView().getModel("viewModel");
+                // let histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
+                // allMessages.push(histPayload);
+                let apiKMUrl = this._sBasePath + "/kbintegration/pct";
                 try {
                     const response = await fetch(apiKMUrl, {
                         method: "POST",
@@ -11363,50 +11410,46 @@ sap.ui.define([
                     }
                     const rawText = await response.text();
 
-                    // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
                     const parsedResponse = this._parseNdjsonOrJsonText(rawText);
-                    var tokenConsumed = {};
-                    var citationIndex = [];
+
+                    let citationIndex = [];
 
                     tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
-                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step2_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step2_output, citationTcg: bRagEnabled ? citationIndex : [], tokensGen: tokensUsed });
                     this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
 
                 } catch (err) {
                     BusyIndicator.hide();
                     sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
                 } finally {
-                    // BusyIndicator.hide();
                 }
-                const oSideNavigation = this.byId("sideNavigation"),
-                    bExpanded = oSideNavigation.getExpanded();
+                const oSideNavigation = this.byId("sideNavigation");
                 oSideNavigation.setExpanded(false);
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                let aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
                 this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
-                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                let keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
                 this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
-                var tokenData = this.getView().getModel("TokenLimit").oData;
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-                var scenario = this.selectedKeyFunct();
-                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+                let tokenData = this.getView().getModel("TokenLimit").oData;
+
+                let scenario = this.selectedKeyFunct();
+                let tknallotted = tokenData[scenario][selectedAI].TotalToken;
                 this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
-                var resp = "";
-                var cit = [];
-                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                for (var r = 0; r < tcgRespArr.length; r++) {
+                let resp = "";
+                let cit = [];
+                tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (let r = 0; r < tcgRespArr.length; r++) {
 
                     resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
-                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
-                        cit.push(tcgRespArr[r].citationTcg[c]);
-                    }
+                    if (bRagEnabled) {
+                        for (let c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                            cit.push(tcgRespArr[r].citationTcg[c]);
+                        }
                     // for(var t=0;t<tcgRespArr.length;t++){
                     // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
                     // }
-
+                    }
                 }
                 this.getView().byId("pctSysMsgBtn").setVisible(true);
                 this.onPctStepOutput(kbPayload.messages);
@@ -11422,9 +11465,9 @@ sap.ui.define([
                     role: 'assistant',
                     content: resp
                 };
-                var totToken = 0;
-                var fileCont = true;
-                var oViewModel = that.getView().getModel("viewModel");
+                let totToken = 0;
+                let fileCont = true;
+                oViewModel = that.getView().getModel("viewModel");
                 Utility.handleTabResponseDynamic(
                     scenario,
                     that,
@@ -11436,35 +11479,41 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-
+                that.sendTokenUsageLog(tokensUsed, promptMsgData); 
                 BusyIndicator.hide();
             }
         },
 
         PCTKBwithTCG: async function () {
             BusyIndicator.show();
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            let oBundle = this.getView().getModel("i18n").getResourceBundle();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-            var oViewModel = this.getView().getModel("viewModel");
-            var that = this;
-            var modelId = this.getView().byId("selModel").getSelectedKey();
-            var modelName = this.getView().byId("selModel").getValue();
-            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
-            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
-            var allMessages = [];
-            var oModel = this.getView().getModel("appmodel");
-            var fileData = oModel.getProperty("/BSContent");
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-            var tokensUsed = 0;
+            let oViewModel = this.getView().getModel("viewModel");
+            let that = this;
+            // let modelName = this.getView().byId("selModel").getValue();
+            let aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            let promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+            // let allMessages = [];
+            let oModel = this.getView().getModel("appmodel");
+            let fileData = oModel.getProperty("/BSContent");
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let tokensUsed = 0;
             this.getView().getModel("tcgModel").setProperty("/allResponses", []);
-            var aiModelName = that.getView().byId("selModel").getValue();
-
-            var messages = [];
-            var attachments = [];
+            let aiModelName = that.getView().byId("selModel").getValue();
+            if (aiModelName == "anthropic--claude-4.5-opus") {
+                aiModelName = "claude-opus4.5";
+            }
+            else if (aiModelName == "anthropic--claude-4-sonnet") {
+                aiModelName = "claude-4-sonnet";
+            }
+            else if (aiModelName == "anthropic--claude-3-haiku") {
+                aiModelName = "claude-3-haiku";
+            }
+            let tcgRespArr = [];
+            let messages = [];
+            let attachments = [];
 
             /* System message ALWAYS */
-            //aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
-
             aMsgContentSystemDesc = aMsgContentSystemDesc
                 .replace(/\{requirement_file}/g, fileData)
                 .replace(/\{additional_info}/g, promptMsgData || "");
@@ -11491,14 +11540,14 @@ sap.ui.define([
                         },
                         {
                             type: "text",
-                            text: "Analyze the BPMN process diagram above and identify all decision points and paths."
+                            text: promptMsgData || "Testing"
                         }
                     ]
                 });
             }
 
             /* ATTACHMENT case (NOT image) */
-            else if (fileData && fileData.data && fileData.filename) {
+            else if (fileData?.data && fileData?.filename) {
 
                 messages.push({
                     role: "user",
@@ -11514,7 +11563,7 @@ sap.ui.define([
             }
 
             /* Final payload */
-            var kbPayload = {
+            let kbPayload = {
                 "step_number": 1,
                 "model": aiModelName,
                 temperature: Number(oViewModel.getProperty("/comnPopUpModelParamTemp") || 0.7),
@@ -11522,44 +11571,33 @@ sap.ui.define([
                 max_tokens: Number(oViewModel.getProperty("/comnPopUpModelParamMaxLength") || 4000),
                 "session_id": "",
                 messages: messages,
-
-
-
             };
 
             if (attachments.length > 0) {
                 kbPayload.attachments = attachments;
             }
 
-
-
-
             if (fileData === "") {
                 BusyIndicator.hide();
                 MessageBox.error("Please upload a File!");
                 this.getView().byId("selDocList").setValueState("Error");
                 this.getView().byId("selDocList").setValueStateText("Upload/Select File");
-                return;
+
             }
-            // else if (Array.isArray(fileData) == true) {
-            //     BusyIndicator.hide();
-            //     sap.m.MessageBox.warning(oBundle.getText("wrongTemplate"));
-            // }
             else if (fileData.url && bRagEnabled === true) {
                 BusyIndicator.hide();
                 sap.m.MessageBox.warning(oBundle.getText("kbTCGFileSel"));
             }
             else if (fileData !== "") {
-                //// aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{\{\?requirement_file\}\}/g, fileData);
                 aMsgContentSystemDesc = aMsgContentSystemDesc.replace(/\{requirement_file}/g, fileData);
-                var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
+                let aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
                 this.onPctStepOutput(aMessages);
                 if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
-                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
-                allMessages.push(histPayload);
+                oViewModel = this.getView().getModel("viewModel");
+                // let histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel1, this, promptMsgData);
+                // // allMessages.push(histPayload);
 
-                //var apiKMUrl = "/kb-integration/PCT_STEP1";
-                var apiKMUrl = this._sBasePath + "/kbintegration/pct";
+                let apiKMUrl = this._sBasePath + "/kbintegration/pct";
                 try {
                     const response = await fetch(apiKMUrl, {
                         method: "POST",
@@ -11580,51 +11618,46 @@ sap.ui.define([
                         throw new Error(`PCT call failed for : ${response.status} ${errText}`);
                     }
                     const rawText = await response.text();
-
-                    // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
                     const parsedResponse = this._parseNdjsonOrJsonText(rawText);
-                    var tokenConsumed = {};
-                    var citationIndex = [];
+
+                    let citationIndex = [];
 
                     tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
-                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step1_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].step1_output, citationTcg: bRagEnabled ? citationIndex : [], tokensGen: tokensUsed });
                     this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
 
                 } catch (err) {
                     BusyIndicator.hide();
                     sap.m.MessageBox.error(`TCG processing error: ${err.message}`);
                 } finally {
-                    // BusyIndicator.hide();
                 }
-                const oSideNavigation = this.byId("sideNavigation"),
-                    bExpanded = oSideNavigation.getExpanded();
+                const oSideNavigation = this.byId("sideNavigation");
                 oSideNavigation.setExpanded(false);
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-                var aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
+                let aMsgContentSystemDesc1 = this.getView().byId("descTxtArea").getValue();
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc1);
                 this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
-                var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                let keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+                let selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                let tokenData = this.getView().getModel("TokenLimit").oData;
+                let scenario = this.selectedKeyFunct();
+                let tknallotted = tokenData[scenario][selectedAI].TotalToken;
                 this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
-                var tokenData = this.getView().getModel("TokenLimit").oData;
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-                var scenario = this.selectedKeyFunct();
-                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+
+
                 this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
-                var resp = "";
-                var cit = [];
-                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                for (var r = 0; r < tcgRespArr.length; r++) {
+                let resp = "";
+                let cit = [];
+                tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (let r = 0; r < tcgRespArr.length; r++) {
 
                     resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
-                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
-                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    if (bRagEnabled) {
+                        for (let c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                            cit.push(tcgRespArr[r].citationTcg[c]);
+                        }
                     }
-                    // for(var t=0;t<tcgRespArr.length;t++){
-                    // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
-                    // }
-
                 }
                 this.getView().byId("pctSysMsgBtn").setVisible(true);
                 this.onPctStepOutput(kbPayload.messages);
@@ -11635,14 +11668,13 @@ sap.ui.define([
                 this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
                 this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
                 this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
-                //this._addToHistoryLogGeneric(resp);
-                var oResMsg = {
+                let oResMsg = {
                     role: 'assistant',
                     content: resp
                 };
-                var totToken = 0;
-                var fileCont = true;
-                var oViewModel = that.getView().getModel("viewModel");
+                let totToken = 0;
+                let fileCont = true;
+                oViewModel = that.getView().getModel("viewModel");
                 Utility.handleTabResponseDynamic(
                     scenario,
                     that,
@@ -11654,7 +11686,7 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-
+                that.sendTokenUsageLog(tokensUsed, promptMsgData);
                 BusyIndicator.hide();
             }
         },
@@ -11689,7 +11721,7 @@ sap.ui.define([
                 content: aMsgContentSystemDesc
             });
 
-            // IMAGE case
+            // IMAGE case 
             if (
                 Array.isArray(fileData) &&
                 fileData.length > 0 &&
@@ -11712,7 +11744,7 @@ sap.ui.define([
                 });
             }
 
-            //ATTACHMENT case (NOT image)
+            //ATTACHMENT case (NOT image) 
             else if (fileData && fileData.data && fileData.filename) {
 
                 messages.push({
@@ -11763,8 +11795,8 @@ sap.ui.define([
                 var aMessages = [{ "role": "system", "content": aMsgContentSystemDesc }];
 
                 if (Array.isArray(fileData)) { aMessages.push({ "role": "user", "content": fileData }); }
-                var histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
-                allMessages.push(histPayload);
+                oViewModel = this.getView().getModel("viewModel");
+                // let histPayload = Utility.createPayloadBasedOnModelNonStream(modelName, aMessages, oViewModel, this, promptMsgData);
 
                 //var apiKMUrl = "/kb-integration/BPM";
                 var apiKMUrl = this._sBasePath + "/kbintegration/bpm";
@@ -11791,22 +11823,20 @@ sap.ui.define([
 
                     // Parse NDJSON; if not NDJSON, fallback to single JSON or plain text
                     const parsedResponse = this._parseNdjsonOrJsonText(rawText);
-                    var tokenConsumed = {};
-                    var citationIndex = [];
-                    // var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-                    // if (bRagEnabled) {
-                    parsedResponse[0].citations.forEach((item) => {
-                        if (!item) return;
-                        const filePath = item.download_url || item.file_path || "";
-                        const filename = item.filename || "Unknown";
-                        const link = item.download_url;
-                        if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
-                    });
-                    citationIndex.forEach(c => {
-                        const key = `${c.fname}|${c.link}`;
-                        if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
-                    });
-                    // }
+
+                    let citationIndex = [];
+                    if (bRagEnabled) {
+                        parsedResponse[0].citations.forEach((item) => {
+                            if (!item) return;
+                            const filename = item.filename || "Unknown";
+                            const link = item.download_url;
+                            if (link || filename) { citationIndex.push({ link: link, fname: filename }); }
+                        });
+                        citationIndex.forEach(c => {
+                            const key = `${c.fname}|${c.link}`;
+                            if (!citationIndex.some(m => `${m.fname}|${m.link}` === key)) citationIndex.push(c);
+                        });
+                    }
                     tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
                     var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
                     tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].bpm_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
@@ -11827,30 +11857,29 @@ sap.ui.define([
                 this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
                 var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
                 var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+                let scenario = this.selectedKeyFunct();
+                let tokenData = this.getView().getModel("TokenLimit").oData;
+                let tknallotted = tokenData[scenario][selectedAI].TotalToken;
                 this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
-                var tokenData = this.getView().getModel("TokenLimit").oData;
-                var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-                var scenario = this.selectedKeyFunct();
-                var tknallotted = tokenData[scenario][selectedAI].TotalToken;
+
                 this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
-                var resp = "";
-                var cit = [];
-                var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                for (var r = 0; r < tcgRespArr.length; r++) {
-
+                let resp = "";
+                let cit = [];
+                let tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                for (let r = 0; r < tcgRespArr.length; r++) {
                     resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
-                    for (var c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
-                        cit.push(tcgRespArr[r].citationTcg[c]);
+                    if (bRagEnabled) {
+                        for (let c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
+                            cit.push(tcgRespArr[r].citationTcg[c]);
+                        }
+
+
                     }
-
-
                 }
-
-
                 this.getView().getModel("TokenLimit").setProperty("/usedToken", tokensUsed);
                 this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
                 this.getView().getModel("airesponseDetailModel").setProperty("/resp", resp);
-                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", cit);
+                this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/citationArr", bRagEnabled ? cit : []);
                 //this._addToHistoryLogGeneric(resp);
                 var oResMsg = {
                     role: 'assistant',
@@ -11870,7 +11899,7 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-
+            that.sendTokenUsageLog(tokensUsed, promptMsgData); 
                 BusyIndicator.hide();
             }
 

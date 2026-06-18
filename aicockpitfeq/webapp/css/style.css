@@ -292,3 +292,105 @@ position: absolute !important;
 right: 16px;
 z-index: 10 !important; 
 } */
+/* ===== AI Response (Detail Detail) markdown rendering ===== */
+.aiRespMd {
+    color: #1a1a1a;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+.aiRespMd h1,
+.aiRespMd h2,
+.aiRespMd h3,
+.aiRespMd h4,
+.aiRespMd h5,
+.aiRespMd h6 {
+    color: #1F4E79;
+    font-weight: 700;
+    margin: 1em 0 0.5em 0;
+    line-height: 1.25;
+}
+.aiRespMd h1 strong,
+.aiRespMd h2 strong,
+.aiRespMd h3 strong,
+.aiRespMd h4 strong,
+.aiRespMd h5 strong,
+.aiRespMd h6 strong {
+    font-weight: 700;
+}
+.aiRespMd h1 { font-size: 1.5rem; }
+.aiRespMd h2 { font-size: 1.25rem; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.25rem; }
+.aiRespMd h3 { font-size: 1.1rem; }
+.aiRespMd h4 { font-size: 1rem; }
+
+.aiRespMd p {
+    margin: 0.5em 0;
+}
+.aiRespMd ul,
+.aiRespMd ol {
+    margin: 0.5em 0;
+    padding-left: 1.75rem;
+}
+.aiRespMd li {
+    margin: 0.2em 0;
+}
+.aiRespMd a {
+    color: #0064d9;
+    text-decoration: underline;
+}
+.aiRespMd strong { font-weight: 700; }
+.aiRespMd em { font-style: italic; }
+
+.aiRespMd code {
+    font-family: Consolas, "Courier New", monospace;
+    background: #f3f3f3;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+}
+.aiRespMd pre.aiRespPre {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin: 0.75em 0;
+    overflow-x: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: pre;
+}
+.aiRespMd pre.aiRespPre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+    white-space: pre;
+}
+
+.aiRespMd table.aiRespTable {
+    border-collapse: collapse;
+    margin: 0.75em 0;
+    width: 100%;
+    font-size: 0.875rem;
+}
+.aiRespMd table.aiRespTable th,
+.aiRespMd table.aiRespTable td {
+    border: 1px solid #d9d9d9;
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+.aiRespMd table.aiRespTable thead th {
+    background: #f2f2f2;
+    font-weight: 700;
+}
+.aiRespMd table.aiRespTable tbody tr:nth-child(even) {
+    background: #fafafa;
+}
+.aiRespMd hr {
+    border: none;
+    border-top: 1px solid #e0e0e0;
+    margin: 1em 0;
+}

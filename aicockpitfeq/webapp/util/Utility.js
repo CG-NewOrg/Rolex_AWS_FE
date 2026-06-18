@@ -37,10 +37,11 @@ sap.ui.define([
         },
         getApiUrl: function (apiModelName, aiKey, sApiUrl, basePath) {
 
-            if (apiModelName && apiModelName.toLowerCase().includes("sap-abap")) {
+            if ( apiModelName?.toLowerCase().includes("sap-abap")) {
                 return `${basePath}/deployments/${aiKey}/completion`;
-            } else if (apiModelName === "anthropic--claude-3.5-sonnet" || apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
-                return `${basePath}/deployments/${aiKey}/invoke`;
+            // } else if (apiModelName === "anthropic--claude-3.5-sonnet" || apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
+            } else if (apiModelName?.toLowerCase().includes("anthropic")) {
+                return `${basePath}/deployments/${aiKey}/invoke-with-response-stream`;
             } else if (apiModelName === "mistralai--mistral-large-instruct") {
                 return `${basePath}/deployments/${aiKey}/chat/completions`;
             }
@@ -110,12 +111,9 @@ sap.ui.define([
                         aMessages[0].role = "system";
                     }
                     payload = this._createMistralPayload(aMessages, stop, false, controllerContext);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
-
+                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet"|| apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
                     payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-                    //payload = this._createBasicAnthropicPayload(aMessages);
                 } else if (apiModelName === "mistralai--mistral-small-instruct") {
-
                     if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
                         aMessages[0].role = "system";
                     }
@@ -167,10 +165,10 @@ sap.ui.define([
                         aMessages[0].role = "system";
                     }
                     payload = this._createMistralPayloadFromModel(aMessages, stop, false, oViewModel);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
+                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
 
                     payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-                    //    payload = this._createBasicAnthropicPayload(aMessages);
+                  
                 } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
                     payload = this._createGPTModelPayloadFromModel(aMessages, false);
                 }
@@ -265,10 +263,9 @@ sap.ui.define([
                         aMessages[0].role = "system";
                     }
                     payload = this._createMistralPayload(aMessages, stop, true, controllerContext);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
+                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
 
                     payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-                    //payload = this._createBasicAnthropicPayload(aMessages);
                 } else if (apiModelName === "mistralai--mistral-small-instruct") {
 
                     if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
@@ -310,10 +307,9 @@ sap.ui.define([
                         aMessages[0].role = "system";
                     }
                     payload = this._createMistralPayloadFromModel(aMessages, stop, true, oViewModel);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
+                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
 
                     payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-                    //    payload = this._createBasicAnthropicPayload(aMessages);
 
                 } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
                     payload = this._createGPTModelPayloadFromModel(aMessages, true);
@@ -534,7 +530,7 @@ sap.ui.define([
                 anthropic_version: "bedrock-2023-05-31",
                 messages: payloadtext,
                 temperature: 1,
-                max_tokens: 4096
+                max_tokens: 16384
                 // stream: true
             };
         },
@@ -674,24 +670,539 @@ sap.ui.define([
                 //stream: true
             };
         },
-        processAPIResponse: async function (oController, payloadNonStream, response, apiModelName, busyDialog, apiUrl) {
+        // processAPIResponse: async function (oController, payloadNonStream, response, apiModelName, busyDialog, apiUrl) {
+        //     let oUsedToken, oResMsg, sResponse;
+        //     // Capture run context at start to detect tab switches during async processing
+        //     var runContext = oController._activeRun ? { ...oController._activeRun } : null;
+        //     var sSelectedIconTab = oController.selectedKeyFunct();
+        //     // var oTextAreaId = tabToSwitchId[sSelectedIconTab];
+        //     // const oTextArea = oController.getView().byId(oTextAreaId);
+        //     // oTextArea.setValue("");
+        //     // Helper function to allow UI to repaint between chunks
+        //     var ceArr = [];
+        //     // Helper function to parse streaming code blocks progressively
+        //     function parseCodeBlocksStreaming(text) {
+        //         var blocks = [];
+        //         var remaining = text;
+        //         var codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
+        //         var lastIndex = 0;
+        //         var match;
+
+        //         while ((match = codeBlockRegex.exec(text)) !== null) {
+        //             // Add text before code block
+        //             if (match.index > lastIndex) {
+        //                 var textBefore = text.substring(lastIndex, match.index);
+        //                 if (textBefore.trim()) {
+        //                     blocks.push({ textData: textBefore, codeData: "", lang: "" });
+        //                 }
+        //             }
+        //             // Add code block
+        //             var lang = match[1] || "";
+        //             var code = "```" + match[1] + "\n" + match[2] + "```";
+        //             blocks.push({ textData: "", codeData: code, lang: lang });
+        //             lastIndex = match.index + match[0].length;
+        //         }
+
+        //         // Add remaining text after last code block
+        //         if (lastIndex < text.length) {
+        //             var remainingText = text.substring(lastIndex);
+        //             if (remainingText.trim()) {
+        //                 blocks.push({ textData: remainingText, codeData: "", lang: "" });
+        //             }
+        //         }
+
+        //         // If no code blocks found, return the text as is
+        //         if (blocks.length === 0 && text.trim()) {
+        //             blocks.push({ textData: text, codeData: "", lang: "" });
+        //         }
+
+        //         return blocks;
+        //     }
+
+        //     // Helper function to detect incomplete code block at the end
+        //     function hasIncompleteCodeBlock(text) {
+        //         var openCount = (text.match(/```/g) || []).length;
+        //         return openCount % 2 !== 0;
+        //     }
+
+        //     // Helper function to extract current incomplete code block for streaming display
+        //     function getStreamingCodeDisplay(text) {
+        //         var blocks = [];
+        //         var parts = text.split("```");
+
+        //         for (var i = 0; i < parts.length; i++) {
+        //             if (i % 2 === 0) {
+        //                 // Text part (outside code blocks)
+        //                 if (parts[i].trim()) {
+        //                     blocks.push({ textData: parts[i], codeData: "", lang: "" });
+        //                 }
+        //             } else {
+        //                 // Code part (inside code blocks)
+        //                 var codeContent = parts[i];
+        //                 var lang = "";
+        //                 var firstNewline = codeContent.indexOf("\n");
+        //                 if (firstNewline > 0) {
+        //                     lang = codeContent.substring(0, firstNewline).trim();
+        //                 }
+        //                 // Check if this is a complete or incomplete code block
+        //                 var isComplete = (i < parts.length - 1) || (parts.length > i + 1);
+        //                 var codeWithBackticks = "```" + codeContent + (isComplete ? "```" : "");
+        //                 blocks.push({ textData: "", codeData: codeWithBackticks, lang: lang });
+        //             }
+        //         }
+
+        //         return blocks;
+        //     }
+
+        //     function nextFrame() {
+        //         return new Promise(resolve => requestAnimationFrame(resolve));
+        //     }
+
+        //     busyDialog.open();
+        //     var tokenData = oController.getView().getModel("TokenLimit").oData;
+        //     var selectedAI = oController.getView().byId("selModel").getSelectedItem().mProperties.text;
+        //     var scenario = oController.selectedKeyFunct();
+        //     var tknUsed = tokenData[scenario][selectedAI].TotalToken;
+        //     oController.getView().getModel("TokenLimit").setProperty("/token", tknUsed);
+        //     async function fetchTokenUsage() {
+        //         // busyDialog.open();
+        //         try {
+        //             const response = await fetch(apiUrl, {
+        //                 method: "POST",
+        //                 headers: {
+        //                     "Content-Type": "application/json",
+        //                     "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //                     "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //                     "X-Frame-Options": "DENY",
+        //                     "X-XSS-Protection": "0",
+        //                     "X-Content-Type-Options": "nosniff",
+        //                     ...oController.defaultHeaders
+        //                 },
+        //                 body: JSON.stringify(payloadNonStream)
+        //             });
+        //             //   busyDialog.close();
+        //             //      oController.getView().getModel("airesponseDetailModel").setProperty("/downloadVis", true);
+        //             const json = await response.json();
+        //             return json.usage?.total_tokens || null;
+
+        //         } catch (error) {
+        //             busyDialog.close();
+        //             console.error("Token usage fetch failed:", error);
+        //             return null;
+        //         }
+        //     }
+        //     if (apiModelName === "anthropic--claude-3.5-sonnet" ||
+        //         apiModelName === "anthropic--claude-3-haiku" ||
+        //         apiModelName === "anthropic--claude-3-sonnet" ||
+        //         apiModelName === "anthropic--claude-4.5-opus" ||
+        //         apiModelName === "anthropic--claude-4-sonnet") {
+
+        //         const aResponse = await response.json();
+        //         if (!aResponse.content || aResponse.content.length === 0) {
+        //             sResponse = "No response generated by the model.";
+        //             oResMsg = {
+        //                 role: aResponse.role || "assistant",
+        //                 content: sResponse
+        //             };
+        //             oUsedToken = (aResponse.usage?.input_tokens || 0) + (aResponse.usage?.output_tokens || 0);
+        //         } else {
+        //             sResponse = aResponse.content[0].text;
+        //             delete aResponse.content[0].type;
+        //             aResponse.content[0].role = aResponse.role;
+        //             aResponse.content[0].content = sResponse;
+        //             delete aResponse.content[0].text;
+        //             oResMsg = aResponse.content[0];
+        //             oUsedToken = aResponse.usage.input_tokens + aResponse.usage.output_tokens;
+        //         }
+        //         busyDialog.close();
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/resp", oResMsg.content);
+        //         var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+        //         //scenario == "coderem" ||
+        //         if (scenario == "tstocode") {
+        //             var resArr = oResMsg.content.split("```");
+        //             for (var h = 0; h < resArr.length; h++) {
+        //                 if (resArr[h + 1] !== undefined) {
+        //                     var lang = resArr[h + 1].split("\n")[0];
+        //                     codeLanguage = lang.split("```")[1];
+        //                     ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: codeLanguage });
+        //                     h++;
+        //                 } else {
+        //                     ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
+        //                 }
+        //             }
+        //             // beforeText += oResMsg.content.split("```")[0];
+        //             // codeText += "```" + oResMsg.content.split("```")[1];
+        //             // afterText += oResMsg.content.split(codeText)[1];
+        //             // var lang = codeText.split("\n")[0];
+        //             // codeLanguage = lang.split("```")[1];
+        //             oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+        //         }
+        //         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+        //         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
+        //         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+        //         oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+        //         oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+        //     }
+        //     else if (apiModelName === "amazon--nova-pro") {
+        //         const reader = response.body.getReader();
+        //         const decoder = new TextDecoder();
+
+        //         let done = false;
+        //         let accumulatedText = "";
+        //         let result = "";
+        //         let usageData = null;
+        //         const sResponseChunks = [];
+
+        //         function normalizeChunk(rawData) {
+        //             return rawData
+        //                 // Fix keys: 'key': → "key":
+        //                 .replace(/'([^']+)':/g, '"$1":')
+        //                 // Fix values: : 'value' → : "value"
+        //                 .replace(/:\s*'([^']*?)'/gs, (_, val) => {
+        //                     // Escape special chars inside values
+        //                     let safeVal = val
+        //                         .replace(/\\/g, "\\\\")
+        //                         .replace(/"/g, '\\"')
+        //                         .replace(/\n/g, "\\n"); // normalize line breaks
+        //                     return `: "${safeVal}"`;
+        //                 })
+        //                 // Remove trailing commas before } or ]
+        //                 .replace(/,(\s*[}\]])/g, "$1");
+        //         }
+        //         while (!done) {
+        //             const { value, done: streamDone } = await reader.read();
+        //             done = streamDone;
+
+        //             const chunk = decoder.decode(value || new Uint8Array(), { stream: true });
+        //             accumulatedText += chunk;
+
+        //             const lines = accumulatedText.split("\n");
+        //             accumulatedText = lines.pop(); // keep unfinished line
+
+        //             for (const line of lines) {
+        //                 if (!line.trim().startsWith("data: ")) continue;
+
+        //                 const rawData = line.replace("data: ", "").trim();
+
+        //                 if (rawData === "[DONE]") {
+        //                     ceArr.push({ textData: oController.getView().getModel("airesponseDetailModel").oData.resp, codeData: "", lang: "" });
+        //                     oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+
+        //                     done = true;
+        //                     break;
+        //                 }
+
+        //                 try {
+        //                     const safeData = normalizeChunk(rawData);
+        //                     const json = JSON.parse(safeData);
+
+        //                     const deltaText =
+        //                         json.contentBlockDelta?.delta?.text ||
+        //                         json.generation ||
+        //                         json.text ||
+        //                         "";
+
+        //                     if (deltaText) {
+        //                         var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+        //                         var formattedText = deltaText.replaceAll("\\n", "\n");
+        //                         result += formattedText;
+        //                         //scenario == "coderem" ||
+        //                         if (scenario == "tstocode") {
+        //                             beforeText += result.split("```")[0];
+        //                             codeText += "```" + result.split("```")[1];
+        //                             afterText += result.split(codeText)[1];
+        //                             var lang = codeText.split("\n")[0];
+        //                             codeLanguage = lang.split("```")[1];
+        //                             if (afterText !== "undefined" && afterText !== "") {
+        //                                 ceArr.push({ textData: beforeText, codeData: codeText, lang: codeLanguage });
+        //                                 result = "";
+        //                                 oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+        //                             }
+        //                         }
+        //                         busyDialog.close();
+        //                         oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+        //                         oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+        //                         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
+        //                         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
+        //                         oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+        //                         oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
+        //                         await nextFrame();
+        //                         ///check this text area update
+        //                         // if (typeof oTextArea !== "undefined") {
+        //                         //     oTextArea.setValue(result);
+        //                         //     await nextFrame(); // Let UI update
+        //                         // }
+
+        //                         sResponseChunks.push({
+        //                             role: "assistant",
+        //                             content: deltaText
+        //                         });
+        //                     }
+
+        //                     // Capture usage if present
+        //                     if (json.metadata?.usage) usageData = json.metadata.usage;
+
+        //                 } catch (err) {
+        //                     busyDialog.close();
+        //                     console.error("Failed to normalize/parse chunk:", rawData, err);
+        //                 }
+        //             }
+        //         }
+
+        //         sResponse = result;
+        //         oUsedToken = usageData?.totalTokens || 0;
+        //         oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+        //         oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+        //         oResMsg = {
+        //             role: "assistant",
+        //             usedTokens: oUsedToken,
+        //             content: sResponse
+        //         };
+        //     }
+        //     else if (apiModelName === "sap-abap-1") {
+        //         const aResponse = await response.json();
+        //         const orchestration = aResponse.orchestration_result;
+
+        //         const choice = orchestration?.choices?.[0];
+        //         const message = choice?.message;
+
+        //         sResponse = message?.content || "";
+
+        //         oResMsg = {
+        //             role: message?.role || "assistant",
+        //             content: sResponse
+        //         };
+
+        //         oUsedToken = orchestration?.usage?.total_tokens || 0;
+
+        //         var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+        //         //scenario == "coderem" ||
+        //         if (scenario == "tstocode") {
+        //             var resArr = oResMsg.content.split("```");
+        //             for (var h = 0; h < resArr.length; h++) {
+        //                 if (resArr[h + 1] !== undefined) {
+        //                     var lang = resArr[h + 1].split("\n")[0];
+        //                     codeLanguage = lang.split("```")[1];
+        //                     ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: codeLanguage });
+        //                     h++;
+        //                 }
+        //                 else {
+        //                     ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
+        //                 }
+        //             }
+        //             oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+        //         }
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/resp", sResponse);
+        //         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+        //         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
+        //         // oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+
+        //         oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+        //         oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+        //         busyDialog.close();
+        //     }
+        //     else if (response.body && typeof response.body.getReader === 'function') {
+        //         const reader = response.body.getReader();
+        //         const decoder = new TextDecoder();
+        //         let done = false;
+        //         let accumulatedText = '';
+        //         const sResponseChunks = [];
+        //         let result = ''; // Accumulated text for UI
+        //         oUsedToken = await fetchTokenUsage();
+        //         oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+        //         var tokenData = oController.getView().getModel("TokenLimit").oData;
+        //         var selectedAI = oController.getView().byId("selModel").getSelectedItem().mProperties.text;
+        //         var tknUsed = tokenData[scenario][selectedAI].TotalToken;
+        //         oController.getView().getModel("TokenLimit").setProperty("/token", tknUsed);
+        //         oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+        //         while (!done) {
+        //             const { value, done: streamDone } = await reader.read();
+        //             done = streamDone;
+
+        //             const chunk = decoder.decode(value, { stream: true });
+        //             accumulatedText += chunk;
+
+        //             const lines = accumulatedText.split('\n');
+        //             accumulatedText = lines.pop(); // keep unfinished line
+
+        //             for (const line of lines) {
+        //                 if (line.trim().startsWith('data: ')) {
+        //                     const data = line.replace('data: ', '').trim();
+        //                     if (data === '[DONE]') {
+        //                         if (scenario == "tstocode") {
+        //                             var finalResult = oController.getView().getModel("airesponseDetailModel").oData.resp;
+        //                             ceArr = parseCodeBlocksStreaming(finalResult);
+        //                             oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+        //                         }
+        //                         done = true;
+        //                         break;
+        //                     }
+        //                     try {
+
+        //                         const json = JSON.parse(data);
+        //                         const deltaText = json.choices?.[0]?.delta?.content;
+
+
+        //                         if (deltaText) {
+        //                             var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+        //                             result += deltaText;
+        //                             if (scenario == "tstocode") {
+        //                                 var streamingBlocks = getStreamingCodeDisplay(result);
+        //                                 if (streamingBlocks.length > 0) {
+        //                                     var tempCeArr = [];
+        //                                     var parts = result.split("```");
+        //                                     var completedResult = "";
+        //                                     for (var p = 0; p < parts.length; p++) {
+        //                                         if (p % 2 === 0) {
+        //                                             // Text part
+        //                                             if (parts[p].trim() && p < parts.length - 1 && parts.length > 2) {
+        //                                                 // This is text before a code block that's complete
+        //                                                 var nextCodePart = parts[p + 1];
+        //                                                 if (nextCodePart !== undefined && p + 2 < parts.length) {
+        //                                                     var lang = nextCodePart.split("\n")[0] || "";
+        //                                                     tempCeArr.push({
+        //                                                         textData: parts[p],
+        //                                                         codeData: "```" + nextCodePart + "```",
+        //                                                         lang: lang
+        //                                                     });
+        //                                                     p++; // Skip the code part
+        //                                                 }
+        //                                             }
+        //                                         }
+        //                                     }
+
+        //                                     // Check if there's an incomplete code block being streamed
+        //                                     var hasIncomplete = hasIncompleteCodeBlock(result);
+        //                                     if (hasIncomplete) {
+        //                                         // Find the last incomplete code block
+        //                                         var lastBacktickIndex = result.lastIndexOf("```");
+        //                                         var beforeIncomplete = result.substring(0, lastBacktickIndex);
+        //                                         var incompleteCode = result.substring(lastBacktickIndex);
+
+        //                                         // Parse completed part
+        //                                         var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+        //                                         ceArr = completedBlocks.slice();
+
+        //                                         // Add streaming code block
+        //                                         var streamLang = "";
+        //                                         var codeContent = incompleteCode.substring(3); // Remove opening ```
+        //                                         var firstNewline = codeContent.indexOf("\n");
+        //                                         if (firstNewline > 0 && firstNewline < 20) {
+        //                                             streamLang = codeContent.substring(0, firstNewline).trim();
+        //                                         }
+        //                                         ceArr.push({
+        //                                             textData: "",
+        //                                             codeData: incompleteCode,
+        //                                             lang: streamLang
+        //                                         });
+        //                                     } else {
+        //                                         // All blocks are complete, parse normally
+        //                                         ceArr = parseCodeBlocksStreaming(result);
+        //                                     }
+
+        //                                     oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+        //                                 }
+        //                             }
+
+        //                             oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+        //                             oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+        //                             // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
+        //                             //oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
+        //                             oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+        //                             // Guard: stop if user switched tabs
+        //                             if (runContext && oController._activeRun && oController._activeRun.id !== runContext.id) {
+        //                                 try { busyDialog.close(); } catch (e) { }
+        //                                 return { message: { role: "assistant", content: "" }, usedTokens: 0, rawText: "" };
+        //                             }
+        //                             oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
+        //                             busyDialog.close();
+        //                             await nextFrame();
+
+        //                             sResponseChunks.push({
+        //                                 role: 'assistant',
+        //                                 content: deltaText
+        //                             });
+        //                         }
+
+        //                     } catch (err) {
+        //                         busyDialog.close();
+        //                         console.error('Stream parse error:', err);
+        //                     }
+        //                 }
+        //             }
+        //         }
+
+        //         sResponse = result;
+
+        //         oResMsg = {
+        //             role: 'assistant',
+        //             content: sResponse
+        //         };
+        //         busyDialog.close();
+        //     }
+
+        //     else {
+        //         const aResponse = await response.json();
+        //         const choice = aResponse.choices?.[0];
+        //         const message = choice?.message;
+
+        //         sResponse = message?.content || '';
+        //         oResMsg = {
+        //             role: message?.role || 'assistant',
+        //             content: sResponse
+        //         };
+        //         if (scenario == "tstocode") {
+        //             var resArr = oResMsg.content.split("```");
+        //             for (var h = 0; h < resArr.length; h++) {
+        //                 if (resArr[h + 1] !== undefined) {
+        //                     var lang = resArr[h + 1].split("\n")[0];
+        //                     codeLanguage = lang.split("```")[1];
+        //                     ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: codeLanguage });
+        //                     h++;
+        //                 } else {
+        //                     ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
+        //                 }
+        //             }
+        //             oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+        //         }
+        //         oUsedToken = aResponse.usage?.total_tokens || 0;
+        //         busyDialog.close();
+        //         oController.getView().getModel("airesponseDetailModel").setProperty("/resp", sResponse);
+        //         oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+        //         oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+        //     }
+
+        //     busyDialog.close();
+
+        //     return {
+        //         message: oResMsg,
+        //         usedTokens: oUsedToken,
+        //         rawText: sResponse
+        //     };
+        // },
+            ​processAPIResponse: async function (oController, payloadNonStream, response, apiModelName, busyDialog, apiUrl) {
             let oUsedToken, oResMsg, sResponse;
-            // Capture run context at start to detect tab switches during async processing
             var runContext = oController._activeRun ? { ...oController._activeRun } : null;
+            // busyDialog.open();
+            // find the switchId for this tab
             var sSelectedIconTab = oController.selectedKeyFunct();
             // var oTextAreaId = tabToSwitchId[sSelectedIconTab];
             // const oTextArea = oController.getView().byId(oTextAreaId);
             // oTextArea.setValue("");
             // Helper function to allow UI to repaint between chunks
             var ceArr = [];
-            // Helper function to parse streaming code blocks progressively
+              // Helper function to parse streaming code blocks progressively
             function parseCodeBlocksStreaming(text) {
                 var blocks = [];
                 var remaining = text;
                 var codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
                 var lastIndex = 0;
                 var match;
-
+                
                 while ((match = codeBlockRegex.exec(text)) !== null) {
                     // Add text before code block
                     if (match.index > lastIndex) {
@@ -706,7 +1217,7 @@ sap.ui.define([
                     blocks.push({ textData: "", codeData: code, lang: lang });
                     lastIndex = match.index + match[0].length;
                 }
-
+                
                 // Add remaining text after last code block
                 if (lastIndex < text.length) {
                     var remainingText = text.substring(lastIndex);
@@ -714,26 +1225,26 @@ sap.ui.define([
                         blocks.push({ textData: remainingText, codeData: "", lang: "" });
                     }
                 }
-
+                
                 // If no code blocks found, return the text as is
                 if (blocks.length === 0 && text.trim()) {
                     blocks.push({ textData: text, codeData: "", lang: "" });
                 }
-
+                
                 return blocks;
             }
-
+            
             // Helper function to detect incomplete code block at the end
             function hasIncompleteCodeBlock(text) {
                 var openCount = (text.match(/```/g) || []).length;
                 return openCount % 2 !== 0;
             }
-
+            
             // Helper function to extract current incomplete code block for streaming display
             function getStreamingCodeDisplay(text) {
                 var blocks = [];
                 var parts = text.split("```");
-
+                
                 for (var i = 0; i < parts.length; i++) {
                     if (i % 2 === 0) {
                         // Text part (outside code blocks)
@@ -754,7 +1265,7 @@ sap.ui.define([
                         blocks.push({ textData: "", codeData: codeWithBackticks, lang: lang });
                     }
                 }
-
+                
                 return blocks;
             }
 
@@ -775,11 +1286,6 @@ sap.ui.define([
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
-                            "X-Frame-Options": "DENY",
-                            "X-XSS-Protection": "0",
-                            "X-Content-Type-Options": "nosniff",
                             ...oController.defaultHeaders
                         },
                         body: JSON.stringify(payloadNonStream)
@@ -799,55 +1305,127 @@ sap.ui.define([
                 apiModelName === "anthropic--claude-3-haiku" ||
                 apiModelName === "anthropic--claude-3-sonnet" ||
                 apiModelName === "anthropic--claude-4.5-opus" ||
-                apiModelName === "anthropic--claude-4-sonnet") {
+                apiModelName === "anthropic--claude-4-sonnet"  || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
 
-                const aResponse = await response.json();
-                if (!aResponse.content || aResponse.content.length === 0) {
-                    sResponse = "No response generated by the model.";
-                    oResMsg = {
-                        role: aResponse.role || "assistant",
-                        content: sResponse
-                    };
-                    oUsedToken = (aResponse.usage?.input_tokens || 0) + (aResponse.usage?.output_tokens || 0);
-                } else {
-                    sResponse = aResponse.content[0].text;
-                    delete aResponse.content[0].type;
-                    aResponse.content[0].role = aResponse.role;
-                    aResponse.content[0].content = sResponse;
-                    delete aResponse.content[0].text;
-                    oResMsg = aResponse.content[0];
-                    oUsedToken = aResponse.usage.input_tokens + aResponse.usage.output_tokens;
-                }
-                busyDialog.close();
-                oController.getView().getModel("airesponseDetailModel").setProperty("/resp", oResMsg.content);
-                var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
-                //scenario == "coderem" ||
-                if (scenario == "tstocode") {
-                    var resArr = oResMsg.content.split("```");
-                    for (var h = 0; h < resArr.length; h++) {
-                        if (resArr[h + 1] !== undefined) {
-                            var lang = resArr[h + 1].split("\n")[0];
-                            codeLanguage = lang.split("```")[1];
-                            ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: codeLanguage });
-                            h++;
-                        } else {
-                            ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
+                // Streaming handler for Anthropic models via invoke-with-response-stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                let done = false;
+                let accumulatedText = "";
+                let result = "";
+                let inputTokens = 0;
+                let outputTokens = 0;
+                const sResponseChunks = [];
+
+                while (!done) {
+                    const { value, done: streamDone } = await reader.read();
+                    done = streamDone;
+
+                    const chunk = decoder.decode(value || new Uint8Array(), { stream: true });
+                    accumulatedText += chunk;
+
+                    const lines = accumulatedText.split("\n");
+                    accumulatedText = lines.pop(); // keep unfinished line
+
+                    for (const line of lines) {
+                        // Anthropic streaming uses "data: " prefixed JSON lines
+                        if (!line.trim().startsWith("data:")) continue;
+
+                        const rawData = line.replace(/^data:\s*/, "").trim();
+                        if (!rawData || rawData === "[DONE]") {
+                            if (rawData === "[DONE]") {
+                                done = true;
+                            }
+                            continue;
+                        }
+
+                        try {
+                            const json = JSON.parse(rawData);
+                            const eventType = json.type;
+
+                            // Extract input token usage from message_start
+                            if (eventType === "message_start" && json.message?.usage) {
+                                inputTokens = json.message.usage.input_tokens || 0;
+                            }
+
+                            // Extract text delta from content_block_delta
+                            if (eventType === "content_block_delta" && json.delta?.type === "text_delta") {
+                                const deltaText = json.delta.text || "";
+                                if (deltaText) {
+                                    result += deltaText;
+
+                                    var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+                                    if (scenario == "tstocode") {
+                                        var streamingBlocks = getStreamingCodeDisplay(result);
+                                        if (streamingBlocks.length > 0) {
+                                            var hasIncomplete = hasIncompleteCodeBlock(result);
+                                            if (hasIncomplete) {
+                                                var lastBacktickIndex = result.lastIndexOf("```");
+                                                var beforeIncomplete = result.substring(0, lastBacktickIndex);
+                                                var incompleteCode = result.substring(lastBacktickIndex);
+                                                var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+                                                ceArr = completedBlocks.slice();
+                                                var streamLang = "";
+                                                var codeContent = incompleteCode.substring(3);
+                                                var firstNewline = codeContent.indexOf("\n");
+                                                if (firstNewline > 0 && firstNewline < 20) {
+                                                    streamLang = codeContent.substring(0, firstNewline).trim();
+                                                }
+                                                ceArr.push({ textData: "", codeData: incompleteCode, lang: streamLang });
+                                            } else {
+                                                ceArr = parseCodeBlocksStreaming(result);
+                                            }
+                                            oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                        }
+                                    }
+
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
+                                    busyDialog.close();
+                                    await nextFrame();
+
+                                    sResponseChunks.push({
+                                        role: "assistant",
+                                        content: deltaText
+                                    });
+                                }
+                            }
+
+                            // Extract output token usage from message_delta
+                            if (eventType === "message_delta" && json.usage) {
+                                outputTokens = json.usage.output_tokens || 0;
+                            }
+
+                            // End of message
+                            if (eventType === "message_stop") {
+                                if (scenario == "tstocode") {
+                                    ceArr = parseCodeBlocksStreaming(result);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                }
+                                done = true;
+                                break;
+                            }
+
+                        } catch (err) {
+                            busyDialog.close();
+                            console.error("Anthropic stream parse error:", rawData, err);
                         }
                     }
-                    // beforeText += oResMsg.content.split("```")[0];
-                    // codeText += "```" + oResMsg.content.split("```")[1];
-                    // afterText += oResMsg.content.split(codeText)[1];
-                    // var lang = codeText.split("\n")[0];
-                    // codeLanguage = lang.split("```")[1];
-                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                 }
-                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
-                oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
-                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
-                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
-                oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+
+                sResponse = result;
+                oUsedToken = inputTokens + outputTokens;
+                oResMsg = {
+                    role: "assistant",
+                    content: sResponse
+                };
+
                 oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
                 oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+                busyDialog.close();
             }
             else if (apiModelName === "amazon--nova-pro") {
                 const reader = response.body.getReader();
@@ -1051,77 +1629,72 @@ sap.ui.define([
                                 const deltaText = json.choices?.[0]?.delta?.content;
 
 
-                                if (deltaText) {
-                                    var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
-                                    result += deltaText;
-                                    if (scenario == "tstocode") {
-                                        var streamingBlocks = getStreamingCodeDisplay(result);
-                                        if (streamingBlocks.length > 0) {
-                                            var tempCeArr = [];
-                                            var parts = result.split("```");
-                                            var completedResult = "";
-                                            for (var p = 0; p < parts.length; p++) {
-                                                if (p % 2 === 0) {
-                                                    // Text part
-                                                    if (parts[p].trim() && p < parts.length - 1 && parts.length > 2) {
-                                                        // This is text before a code block that's complete
-                                                        var nextCodePart = parts[p + 1];
-                                                        if (nextCodePart !== undefined && p + 2 < parts.length) {
-                                                            var lang = nextCodePart.split("\n")[0] || "";
-                                                            tempCeArr.push({
-                                                                textData: parts[p],
-                                                                codeData: "```" + nextCodePart + "```",
-                                                                lang: lang
-                                                            });
-                                                            p++; // Skip the code part
+                                    if (deltaText) {
+                                        var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+                                        result += deltaText;
+                                        if (scenario == "tstocode") {
+                                            var streamingBlocks = getStreamingCodeDisplay(result);
+                                            if (streamingBlocks.length > 0) {
+                                                var tempCeArr = [];
+                                                var parts = result.split("```");
+                                                var completedResult = "";
+                                                for (var p = 0; p < parts.length; p++) {
+                                                    if (p % 2 === 0) {
+                                                        // Text part
+                                                        if (parts[p].trim() && p < parts.length - 1 && parts.length > 2) {
+                                                            // This is text before a code block that's complete
+                                                            var nextCodePart = parts[p + 1];
+                                                            if (nextCodePart !== undefined && p + 2 < parts.length) {
+                                                                var lang = nextCodePart.split("\n")[0] || "";
+                                                                tempCeArr.push({ 
+                                                                    textData: parts[p], 
+                                                                    codeData: "```" + nextCodePart + "```", 
+                                                                    lang: lang 
+                                                                });
+                                                                p++; // Skip the code part
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-
-                                            // Check if there's an incomplete code block being streamed
-                                            var hasIncomplete = hasIncompleteCodeBlock(result);
-                                            if (hasIncomplete) {
-                                                // Find the last incomplete code block
-                                                var lastBacktickIndex = result.lastIndexOf("```");
-                                                var beforeIncomplete = result.substring(0, lastBacktickIndex);
-                                                var incompleteCode = result.substring(lastBacktickIndex);
-
-                                                // Parse completed part
-                                                var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
-                                                ceArr = completedBlocks.slice();
-
-                                                // Add streaming code block
-                                                var streamLang = "";
-                                                var codeContent = incompleteCode.substring(3); // Remove opening ```
-                                                var firstNewline = codeContent.indexOf("\n");
-                                                if (firstNewline > 0 && firstNewline < 20) {
-                                                    streamLang = codeContent.substring(0, firstNewline).trim();
+                                                
+                                                // Check if there's an incomplete code block being streamed
+                                                var hasIncomplete = hasIncompleteCodeBlock(result);
+                                                if (hasIncomplete) {
+                                                    // Find the last incomplete code block
+                                                    var lastBacktickIndex = result.lastIndexOf("```");
+                                                    var beforeIncomplete = result.substring(0, lastBacktickIndex);
+                                                    var incompleteCode = result.substring(lastBacktickIndex);
+                                                    
+                                                    // Parse completed part
+                                                    var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+                                                    ceArr = completedBlocks.slice();
+                                                    
+                                                    // Add streaming code block
+                                                    var streamLang = "";
+                                                    var codeContent = incompleteCode.substring(3); // Remove opening ```
+                                                    var firstNewline = codeContent.indexOf("\n");
+                                                    if (firstNewline > 0 && firstNewline < 20) {
+                                                        streamLang = codeContent.substring(0, firstNewline).trim();
+                                                    }
+                                                    ceArr.push({ 
+                                                        textData: "", 
+                                                        codeData: incompleteCode, 
+                                                        lang: streamLang 
+                                                    });
+                                                } else {
+                                                    // All blocks are complete, parse normally
+                                                    ceArr = parseCodeBlocksStreaming(result);
                                                 }
-                                                ceArr.push({
-                                                    textData: "",
-                                                    codeData: incompleteCode,
-                                                    lang: streamLang
-                                                });
-                                            } else {
-                                                // All blocks are complete, parse normally
-                                                ceArr = parseCodeBlocksStreaming(result);
+                                                
+                                                oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                                             }
-
-                                            oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                                         }
-                                    }
-
+                                   
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
                                     // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
                                     //oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
-                                    // Guard: stop if user switched tabs
-                                    if (runContext && oController._activeRun && oController._activeRun.id !== runContext.id) {
-                                        try { busyDialog.close(); } catch (e) { }
-                                        return { message: { role: "assistant", content: "" }, usedTokens: 0, rawText: "" };
-                                    }
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
                                     busyDialog.close();
                                     await nextFrame();
