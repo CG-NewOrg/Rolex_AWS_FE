@@ -917,7 +917,506 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                     sap.m.MessageBox.error(message);
                 }
             });
+        },
+           generateWordContent2: function () {
+            const {
+                AlignmentType,
+                HeadingLevel,
+                TextRun,
+                Paragraph,
+                Table,
+                TableRow,
+                TableCell,
+                WidthType,
+                Document,
+                Packer,
+                BorderStyle
+            } = window.docx;
+
+            if (!window.docx) {
+                sap.m.MessageBox.information("Libraries not loaded");
+                return;
+            }
+
+            const content = this.getView().byId("aiRespTxtArea").getValue();
+            if (!content) {
+                sap.m.MessageToast.show("No content to export");
+                return;
+            }
+
+            let src = String(content);
+
+            // ============================================================
+            // 1) Extract fenced code blocks first (same as mdToHTML)
+            // ============================================================
+            const codeBlocks = [];
+            src = src.replace(/```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g, function (m, lang, code) {
+                const token = "\u0000CODEBLOCK" + codeBlocks.length + "\u0000";
+
+                // Check if fenced block is actually a markdown table
+                const trimmed = code.replace(/^\s+|\s+$/g, "");
+                const firstTwo = trimmed.split(/\r?\n/, 2);
+                const sepRe = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/;
+                const langOk = !lang || /^(plaintext|text|md|markdown)$/i.test(lang);
+
+                if (langOk && firstTwo.length === 2 &&
+                    firstTwo[0].indexOf("|") !== -1 && sepRe.test(firstTwo[1])) {
+                    // It's a table inside code fence - store as table
+                    codeBlocks.push({ type: "table", content: trimmed });
+                } else {
+                    // It's a code block
+                    codeBlocks.push({ type: "code", lang: lang || "", content: code.replace(/\n$/, "") });
+                }
+                return token;
+            });
+
+            // ============================================================
+            // 2) Helper functions (matching mdToHTML logic)
+            // ============================================================
+            function isTableSeparator(s) {
+                return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(s);
+            }
+
+            function splitRow(s) {
+                let r = s.trim();
+                if (r.charAt(0) === "|") r = r.slice(1);
+                if (r.charAt(r.length - 1) === "|") r = r.slice(0, -1);
+                return r.split("|").map(function (c) { return c.trim(); });
+            }
+
+            // Parse inline formatting and return TextRun array
+            function parseTextRuns(text) {
+                if (!text) return [new TextRun({ text: "" })];
+
+                const runs = [];
+                let remaining = String(text);
+
+                // Convert links [text](url) to just text
+                remaining = remaining.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+                // Process inline formatting
+                const regex = /(\*\*[\s\S]+?\*\*|__[\s\S]+?__|`[^`]+`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
+                let lastIndex = 0;
+                let match;
+
+                while ((match = regex.exec(remaining)) !== null) {
+                    // Add text before the match
+                    if (match.index > lastIndex) {
+                        runs.push(new TextRun({ text: remaining.slice(lastIndex, match.index) }));
+                    }
+
+                    const token = match[0];
+                    if (token.startsWith("**") && token.endsWith("**")) {
+                        // Bold **text**
+                        runs.push(new TextRun({ text: token.slice(2, -2), bold: true }));
+                    } else if (token.startsWith("__") && token.endsWith("__")) {
+                        // Bold __text__
+                        runs.push(new TextRun({ text: token.slice(2, -2), bold: true }));
+                    } else if (token.startsWith("`") && token.endsWith("`")) {
+                        // Inline code `text`
+                        runs.push(new TextRun({
+                            text: token.slice(1, -1),
+                            font: "Courier New",
+                            shading: { fill: "E8E8E8" }
+                        }));
+                    } else if (token.startsWith("*") && token.endsWith("*")) {
+                        // Italic *text*
+                        runs.push(new TextRun({ text: token.slice(1, -1), italics: true }));
+                    } else if (token.startsWith("_") && token.endsWith("_")) {
+                        // Italic _text_
+                        runs.push(new TextRun({ text: token.slice(1, -1), italics: true }));
+                    }
+
+                    lastIndex = regex.lastIndex;
+                }
+
+                // Add remaining text
+                if (lastIndex < remaining.length) {
+                    runs.push(new TextRun({ text: remaining.slice(lastIndex) }));
+                }
+
+                return runs.length > 0 ? runs : [new TextRun({ text: text })];
+            }
+
+            // Bold label prefix for list items (matching mdToHTML)
+            function boldLabelPrefix(itemText) {
+                if (/^\*\*/.test(itemText)) return parseTextRuns(itemText);
+                const m = itemText.match(/^([A-Za-z][A-Za-z0-9 ()\/&\-]{0,60}):\s+(.+)$/);
+                if (m) {
+                    return [
+                        new TextRun({ text: m[1] + ": ", bold: true }),
+                        ...parseTextRuns(m[2])
+                    ];
+                }
+                return parseTextRuns(itemText);
+            }
+
+            // Create table from rows
+            function createTable(headerRow, bodyRows) {
+                const colCount = headerRow.length;
+                const colWidth = Math.floor(100 / colCount);
+
+                return new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [
+                        new TableRow({
+                            children: headerRow.map(cell => new TableCell({
+                                width: { size: colWidth, type: WidthType.PERCENTAGE },
+                                shading: { fill: "D9E2F3" },
+                                children: [new Paragraph({ children: parseTextRuns(cell) })]
+                            }))
+                        }),
+                        ...bodyRows.map(row => new TableRow({
+                            children: row.map(cell => new TableCell({
+                                width: { size: colWidth, type: WidthType.PERCENTAGE },
+                                children: [new Paragraph({ children: parseTextRuns(cell) })]
+                            }))
+                        }))
+                    ]
+                });
+            }
+
+            // ============================================================
+            // 3) Parse lines (matching mdToHTML block-level logic)
+            // ============================================================
+            const lines = src.split(/\r?\n/);
+            const finalContent = [];
+            let i = 0;
+            let paraBuf = [];
+
+            function flushPara() {
+                if (paraBuf.length) {
+                    finalContent.push(new Paragraph({
+                        spacing: { after: 200 },
+                        children: parseTextRuns(paraBuf.join(" "))
+                    }));
+                    paraBuf = [];
+                }
+            }
+
+            // Add title
+            finalContent.push(new Paragraph({
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 },
+                children: [new TextRun({ text: "AI Response", bold: true, size: 36 })]
+            }));
+
+            while (i < lines.length) {
+                let line = lines[i];
+
+                // Restore code-block placeholder
+                const codeMatch = line.match(/\u0000CODEBLOCK(\d+)\u0000/);
+                if (codeMatch) {
+                    flushPara();
+                    const block = codeBlocks[parseInt(codeMatch[1], 10)];
+                    if (block) {
+                        if (block.type === "table") {
+                            // Parse table from code block
+                            const tableRows = block.content.split(/\r?\n/);
+                            if (tableRows.length >= 2) {
+                                const header = splitRow(tableRows[0]);
+                                const body = tableRows.slice(2)
+                                    .filter(r => r.trim().length > 0)
+                                    .map(splitRow);
+                                if (header.length > 0 && body.length > 0) {
+                                    finalContent.push(createTable(header, body));
+                                }
+                            }
+                        } else {
+                            // Code block - render as monospace paragraphs
+                            const codeLines = block.content.split(/\r?\n/);
+                            codeLines.forEach(codeLine => {
+                                finalContent.push(new Paragraph({
+                                    spacing: { after: 0 },
+                                    shading: { fill: "F5F5F5" },
+                                    children: [new TextRun({
+                                        text: codeLine || " ",
+                                        font: "Courier New",
+                                        size: 20
+                                    })]
+                                }));
+                            });
+                            finalContent.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
+                        }
+                    }
+                    i++;
+                    continue;
+                }
+
+                // Blank line -> paragraph break
+                if (/^\s*$/.test(line)) {
+                    flushPara();
+                    i++;
+                    continue;
+                }
+
+                // ATX Headings # .. ######
+                const mH = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+                if (mH) {
+                    flushPara();
+                    const lvl = mH[1].length;
+                    const headingLevels = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3,
+                    HeadingLevel.HEADING_4, HeadingLevel.HEADING_5, HeadingLevel.HEADING_6];
+                    const sizes = [36, 32, 28, 26, 24, 22];
+                    finalContent.push(new Paragraph({
+                        heading: headingLevels[lvl - 1] || HeadingLevel.HEADING_6,
+                        spacing: { before: 300, after: 150 },
+                        children: [new TextRun({ text: mH[2], bold: true, size: sizes[lvl - 1] || 22 })]
+                    }));
+                    i++;
+                    continue;
+                }
+
+                // SECTION/PART/APPENDIX/CHAPTER/PHASE/STEP heading
+                const mSec = line.match(/^\s*((?:SECTION|PART|APPENDIX|CHAPTER|PHASE|STEP)\s+[\w\d.\-]+(?:\s*[—:\-]\s*.+)?)\s*$/);
+                if (mSec) {
+                    flushPara();
+                    finalContent.push(new Paragraph({
+                        heading: HeadingLevel.HEADING_2,
+                        spacing: { before: 300, after: 150 },
+                        children: [new TextRun({ text: mSec[1].trim(), bold: true, size: 32 })]
+                    }));
+                    i++;
+                    continue;
+                }
+
+                // Multi-level numbered heading (1.1, 1.1.1, ...)
+                const mMultiNum = line.match(/^\s*(\d+(?:\.\d+)+)\.?\s+(\S.*?)\s*$/);
+                if (mMultiNum && !/[.;!?]\s*$/.test(line)) {
+                    flushPara();
+                    const depthDots = (mMultiNum[1].match(/\./g) || []).length;
+                    const hLvl = Math.min(5, 1 + depthDots);
+                    const headingLevels = [HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4,
+                    HeadingLevel.HEADING_5, HeadingLevel.HEADING_6];
+                    const sizes = [32, 28, 26, 24, 22];
+                    finalContent.push(new Paragraph({
+                        heading: headingLevels[hLvl - 1] || HeadingLevel.HEADING_5,
+                        spacing: { before: 300, after: 150 },
+                        children: [new TextRun({
+                            text: mMultiNum[1] + " " + mMultiNum[2],
+                            bold: true,
+                            size: sizes[hLvl - 1] || 24,
+                            color: "1F4E79"
+                        })]
+                    }));
+                    i++;
+                    continue;
+                }
+
+                // Single-level "1. Title" when followed by sub-numbered heading
+                const mTopNum = line.match(/^\s*(\d+)\.\s+([A-Z][^\n]{0,200})$/);
+                if (mTopNum && !/[.;!?]\s*$/.test(line)) {
+                    let lookJ = i + 1;
+                    while (lookJ < lines.length && /^\s*$/.test(lines[lookJ])) lookJ++;
+                    const nextL = (lookJ < lines.length) ? lines[lookJ] : "";
+                    const nextIsSubNum = /^\s*\d+(?:\.\d+)+\.?\s+\S/.test(nextL);
+                    if (nextIsSubNum) {
+                        flushPara();
+                        finalContent.push(new Paragraph({
+                            heading: HeadingLevel.HEADING_2,
+                            spacing: { before: 300, after: 150 },
+                            children: [new TextRun({ text: mTopNum[1] + ". " + mTopNum[2], bold: true, size: 32 })]
+                        }));
+                        i++;
+                        continue;
+                    }
+                }
+
+                // Horizontal rule
+                if (/^\s*([-*_])\s*\1\s*\1[\s\S]*$/.test(line) && line.replace(/[\s*\-_]/g, "") === "") {
+                    flushPara();
+                    finalContent.push(new Paragraph({
+                        spacing: { before: 200, after: 200 },
+                        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "CCCCCC" } },
+                        children: []
+                    }));
+                    i++;
+                    continue;
+                }
+
+                // Pipe table
+                if (line.indexOf("|") !== -1 && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+                    flushPara();
+                    const header = splitRow(line);
+                    i += 2;
+                    const rows = [];
+                    while (i < lines.length && lines[i].indexOf("|") !== -1 && !/^\s*$/.test(lines[i])) {
+                        rows.push(splitRow(lines[i]));
+                        i++;
+                    }
+                    if (header.length > 0 && rows.length > 0) {
+                        finalContent.push(createTable(header, rows));
+                        finalContent.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
+                    }
+                    continue;
+                }
+
+                // Unordered list
+                if (/^\s*[-*\u2022\u2023\u25E6\u2043\u25AA]\s+/.test(line)) {
+                    flushPara();
+                    while (i < lines.length && /^\s*[-*\u2022\u2023\u25E6\u2043\u25AA]\s+/.test(lines[i])) {
+                        const item = lines[i].replace(/^\s*[-*\u2022\u2023\u25E6\u2043\u25AA]\s+/, "");
+                        finalContent.push(new Paragraph({
+                            bullet: { level: 0 },
+                            spacing: { after: 80 },
+                            children: boldLabelPrefix(item)
+                        }));
+                        i++;
+                    }
+                    continue;
+                }
+
+                // Ordered list
+                if (/^\s*\d+[\.\)]\s+/.test(line)) {
+                    flushPara();
+                    let listNum = 1;
+                    while (i < lines.length) {
+                        if (/^\s*$/.test(lines[i]) &&
+                            i + 1 < lines.length && /^\s*\d+[\.\)]\s+/.test(lines[i + 1])) {
+                            i++;
+                            continue;
+                        }
+                        if (!/^\s*\d+[\.\)]\s+/.test(lines[i])) break;
+                        const item = lines[i].replace(/^\s*\d+[\.\)]\s+/, "");
+                        finalContent.push(new Paragraph({
+                            numbering: { reference: "default-numbering", level: 0 },
+                            spacing: { after: 80 },
+                            children: boldLabelPrefix(item)
+                        }));
+                        listNum++;
+                        i++;
+                    }
+                    continue;
+                }
+
+                // "Label1: val1 Label2: val2 Label3: val3" → split into paragraphs
+                const labelMatches = line.match(/[A-Z][A-Za-z][A-Za-z0-9 \/\-]{1,40}:/g);
+                if (labelMatches && labelMatches.length >= 3) {
+                    flushPara();
+                    const splitRe = /\s+(?=[A-Z][A-Za-z][A-Za-z0-9 \/\-]{1,40}:\s)/g;
+                    line.split(splitRe).forEach(function (seg) {
+                        seg = seg.trim();
+                        if (!seg) return;
+                        const idx = seg.indexOf(":");
+                        if (idx > -1) {
+                            finalContent.push(new Paragraph({
+                                spacing: { after: 120 },
+                                children: [
+                                    new TextRun({ text: seg.slice(0, idx + 1), bold: true }),
+                                    new TextRun({ text: seg.slice(idx + 1) })
+                                ]
+                            }));
+                        } else {
+                            finalContent.push(new Paragraph({
+                                spacing: { after: 120 },
+                                children: parseTextRuns(seg)
+                            }));
+                        }
+                    });
+                    i++;
+                    continue;
+                }
+
+                // "Label:" heading followed by list
+                if (paraBuf.length === 0 &&
+                    /^\s*[A-Z][A-Za-z0-9 \/&()\-]{0,99}:\s*$/.test(line) &&
+                    !/[*_`#|]/.test(line)) {
+                    let k0 = i + 1;
+                    while (k0 < lines.length && /^\s*$/.test(lines[k0])) k0++;
+                    const nextLn0 = (k0 < lines.length) ? lines[k0] : "";
+                    const nextIsListLbl = /^\s*[-*\u2022\u2023\u25E6\u2043\u25AA]\s+/.test(nextLn0) ||
+                        /^\s*\d+[\.\)]\s+/.test(nextLn0);
+                    if (nextIsListLbl) {
+                        flushPara();
+                        finalContent.push(new Paragraph({
+                            heading: HeadingLevel.HEADING_3,
+                            spacing: { before: 300, after: 150 },
+                            children: [new TextRun({ text: line.trim(), bold: true, size: 28 })]
+                        }));
+                        i++;
+                        continue;
+                    }
+                }
+
+                // Bare-text section heading followed by list
+                if (paraBuf.length === 0 &&
+                    /^\s*[A-Z][^\n]{0,79}$/.test(line) &&
+                    !/[.,;:!?]\s*$/.test(line) &&
+                    !/[*_`#|]/.test(line) &&
+                    !/^\s*\d+[\.\)]\s+/.test(line) &&
+                    !/^\s*[-*\u2022\u2023\u25E6\u2043\u25AA]\s+/.test(line)) {
+                    let j = i + 1;
+                    while (j < lines.length && /^\s*$/.test(lines[j])) j++;
+                    const nextLine = (j < lines.length) ? lines[j] : "";
+                    const nextStartsList = /^\s*[-*\u2022\u2023\u25E6\u2043\u25AA]\s+/.test(nextLine) ||
+                        /^\s*\d+[\.\)]\s+/.test(nextLine);
+                    const nextIsBareHeading = /^\s*[A-Z][^\n]{0,79}$/.test(nextLine) &&
+                        !/[.,;:!?]\s*$/.test(nextLine) &&
+                        !/[*_`#|]/.test(nextLine) &&
+                        nextLine.trim().length > 0;
+                    const wordCount = line.trim().split(/\s+/).length;
+                    const hasHyphenWord = /[A-Za-z]-[A-Za-z]/.test(line);
+                    if ((nextStartsList || nextIsBareHeading) && (wordCount >= 2 || hasHyphenWord)) {
+                        flushPara();
+                        finalContent.push(new Paragraph({
+                            heading: HeadingLevel.HEADING_3,
+                            spacing: { before: 300, after: 150 },
+                            children: [new TextRun({ text: line.trim(), bold: true, size: 28 })]
+                        }));
+                        i++;
+                        continue;
+                    }
+                }
+
+                // Default: accumulate paragraph text
+                paraBuf.push(line.trim());
+                i++;
+            }
+
+            flushPara();
+
+            // ============================================================
+            // 4) Create and save document
+            // ============================================================
+            const doc = new Document({
+                styles: {
+                    default: {
+                        document: {
+                            run: { font: "Calibri", size: 24 },
+                            paragraph: { spacing: { line: 276 } }
+                        }
+                    }
+                },
+                numbering: {
+                    config: [{
+                        reference: "default-numbering",
+                        levels: [{
+                            level: 0,
+                            format: "decimal",
+                            text: "%1.",
+                            alignment: AlignmentType.LEFT,
+                            style: { paragraph: { indent: { left: 720, hanging: 360 } } }
+                        }]
+                    }]
+                },
+                sections: [{
+                    properties: {},
+                    children: finalContent
+                }]
+            });
+
+            const that = this;
+            Packer.toBlob(doc).then(function (blob) {
+                sap.ui.core.util.File.save(
+                    blob,
+                    "GenAI_Doc_" + that.selectedTab(),
+                    "docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                );
+            });
         }
+
        
     });
 });

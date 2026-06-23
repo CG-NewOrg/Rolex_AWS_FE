@@ -49,6 +49,7 @@ sap.ui.define([
             this.isSystemEdited = false;
             this.savedSettings = false;
             this.stopEdit = false;
+            this.wipModel = false;
             this.addedFromCurrUser = false;
             this.isImage = false;
             this.saveAddEx = false;
@@ -228,56 +229,115 @@ sap.ui.define([
             this._refreshRagStateForKey(key);
         },
 
+        // getFiles: function (selDLTab) {
+        //     var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+        //     if (popUpSel == "" || popUpSel == "knowlBAdmin") {
+        //         BusyIndicator.show();
+
+        //         let oHeader = {
+        //             "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //             "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //             "X-Frame-Options": "DENY",
+        //             "X-XSS-Protection": "0",
+        //             "X-Content-Type-Options": "nosniff",
+        //             ...(this.defaultHeaders || {})
+        //         };
+
+        //         var sSelectedIconTab = ""
+        //         if (selDLTab && selDLTab !== "") {
+        //             sSelectedIconTab = selDLTab;
+        //         } else {
+        //             sSelectedIconTab = this.selectedKeyFunct();
+        //         }
+        //         var ragModel = this.getView().getModel("ragModel");
+        //         // var ragModel = this.getOwnerComponent().getModel("ragModel");
+        //         var bRagEnabled = this.getView().byId("RagSwitch").getSelected()
+        //         if (bRagEnabled) {
+        //             this.KBGetFiles(sSelectedIconTab);  //RAG function call
+        //         } else {
+
+        //             var listObjectsUrl = this._sBasePath + "/cockpit/getFiles?Category=" + sSelectedIconTab + "&Project=" + this._ProjectDetail;
+
+        //             var that = this;
+        //             $.ajax({
+        //                 url: listObjectsUrl,
+        //                 type: "GET",
+        //                 headers: oHeader,
+
+        //                 success: function (data) {
+        //                     var fileNames = [];
+        //                     var ObjectStorageFile = new sap.ui.model.json.JSONModel();
+        //                     var contents = data?.value?.data?.Contents;
+        //                     if (contents) {
+        //                         var filteredFiles = contents.filter(item => item.category === sSelectedIconTab);
+        //                         if (filteredFiles.length > 0) {
+        //                             fileNames = filteredFiles.map(file => ({
+        //                                 Key: file.Key,
+        //                                 Name: file.Key.split('/').pop(),
+        //                                 UpdatedDate: file.LastModified
+        //                             }));
+        //                         }
+        //                     }
+
+        //                     ObjectStorageFile.setData(fileNames);
+        //                     that.getView().setModel(ObjectStorageFile, "ObjectFileList");
+        //                     BusyIndicator.hide();
+        //                 },
+        //                 error: function (xhr, status, error) {
+        //                     // Handle error if needed
+        //                     BusyIndicator.hide();
+        //                 }
+        //             });
+        //         }
+        //     }
+        // },
         getFiles: function (selDLTab) {
-            var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+            let popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff",
+                ...(this.defaultHeaders || {})
+            };
             if (popUpSel == "" || popUpSel == "knowlBAdmin") {
                 BusyIndicator.show();
-
-                let oHeader = {
-                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
-                    "X-Frame-Options": "DENY",
-                    "X-XSS-Protection": "0",
-                    "X-Content-Type-Options": "nosniff",
-                    ...(this.defaultHeaders || {})
-                };
-
-                var sSelectedIconTab = ""
+ 
+                let sSelectedIconTab = ""
                 if (selDLTab && selDLTab !== "") {
                     sSelectedIconTab = selDLTab;
                 } else {
                     sSelectedIconTab = this.selectedKeyFunct();
                 }
-                var ragModel = this.getView().getModel("ragModel");
-                // var ragModel = this.getOwnerComponent().getModel("ragModel");
-                var bRagEnabled = this.getView().byId("RagSwitch").getSelected()
+ 
+                let bRagEnabled = this.getView().byId("RagSwitch").getSelected()
                 if (bRagEnabled) {
                     this.KBGetFiles(sSelectedIconTab);  //RAG function call
                 } else {
-
-                    var listObjectsUrl = this._sBasePath + "/cockpit/getFiles?Category=" + sSelectedIconTab + "&Project=" + this._ProjectDetail;
-
-                    var that = this;
+ 
+                    let listObjectsUrl = this._sBasePath + "/cockpit/getFiles?Category=" + sSelectedIconTab + "&Project=" + this._ProjectDetail;
+ 
+                    let that = this;
                     $.ajax({
                         url: listObjectsUrl,
                         type: "GET",
                         headers: oHeader,
-
                         success: function (data) {
-                            var fileNames = [];
-                            var ObjectStorageFile = new sap.ui.model.json.JSONModel();
-                            var contents = data?.value?.data?.Contents;
+                            let fileNames = [];
+                            let ObjectStorageFile = new sap.ui.model.json.JSONModel();
+                            let contents = data?.value?.data;
                             if (contents) {
-                                var filteredFiles = contents.filter(item => item.category === sSelectedIconTab);
+                                let filteredFiles = contents.filter(item => item.category === sSelectedIconTab);
                                 if (filteredFiles.length > 0) {
                                     fileNames = filteredFiles.map(file => ({
                                         Key: file.Key,
-                                        Name: file.Key.split('/').pop(),
+                                        Name: file.fileName,
                                         UpdatedDate: file.LastModified
                                     }));
                                 }
                             }
-
+ 
                             ObjectStorageFile.setData(fileNames);
                             that.getView().setModel(ObjectStorageFile, "ObjectFileList");
                             BusyIndicator.hide();
@@ -628,7 +688,8 @@ sap.ui.define([
             this.getView().byId("nextBtn").setVisible(false);
             this.getView().byId("pctSysMsgBtn").setVisible(false);
             this.getView().getModel("tcgModel").setProperty("/linkVis", false);
-            var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+            var selectedAI = this.getView().byId("selModel").mProperties.value;
+            ////this.getView().byId("selModel").getSelectedItem().mProperties.text;
 
             this.getView().getModel("TokenLimit").setProperty("/tokenVis", false);
             this.getView().byId("gitAddBtn").setVisible(false);
@@ -2017,75 +2078,83 @@ sap.ui.define([
 
             var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var sSelectedIconTab = this.selectedKeyFunct();
-            if (sSelectedIconTab !== "PCT" && sSelectedIconTab !== "BPM" && sSelectedIconTab !== "TCG" && sSelectedIconTab !== "DocGen") {
-                if (popUpSel == "") {
+            if (this.wipModel == false) {
+                var sSelectedIconTab = this.selectedKeyFunct();
+                if (sSelectedIconTab !== "PCT" && sSelectedIconTab !== "BPM" && sSelectedIconTab !== "TCG" && sSelectedIconTab !== "DocGen") {
+                    if (popUpSel == "") {
 
-                    if (!this.sysKeySelFr) {
+                        if (!this.sysKeySelFr) {
+                            BusyIndicator.show();
+                            this.sysKeySelFr = await this.loadFragment({
+                                name: "aicockpitfeq.fragment.SystemKeySelection"
+                            }).then(async function (oDialog) {
+                                this.oDialog = oDialog;
+                                this.sysKeySelFr = oDialog; // Store the dialog instance
+                                this.sysKeySelFr.setBusyIndicatorDelay(0);
+                                this.sysKeySelFr.setBusy(true);
+                                this.sysKeySelFr.attachBrowserEvent("keydown", function (oEvent) {
+                                    if (oEvent.key === "Escape") {
+                                        oEvent.stopPropagation();
+                                        oEvent.preventDefault();
+                                    }
+                                });
+                                this.getView().addDependent(oDialog);
+                                this.getDataSysMsg();
+                                this.oDialog.open();
+                            }.bind(this)).finally(() => { BusyIndicator.hide() });
+
+                        } else {
+                            this.oDialog.setBusy(true);
+                            this.oDialog.setBusyIndicatorDelay(0);
+                            this.getDataSysMsg();
+                            this.oDialog.open();
+                            BusyIndicator.hide();
+                            //this.sysKeySelFr.setBusy(false);
+                        }
+                    } else {
+                        MessageBox.information(oBundle.getText("selFuncTabspopup"));
+                    }
+                }
+            } else {
+                MessageBox.information(oBundle.getText("sysMsgWIP"));
+            }
+        },
+        openPromptValueHelp: async function () {
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            if (this.wipModel == false) {
+                var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+                if (popUpSel == "") {
+                    if (!this.promptVH) {
                         BusyIndicator.show();
-                        this.sysKeySelFr = await this.loadFragment({
-                            name: "aicockpitfeq.fragment.SystemKeySelection"
-                        }).then(async function (oDialog) {
-                            this.oDialog = oDialog;
-                            this.sysKeySelFr = oDialog; // Store the dialog instance
-                            this.sysKeySelFr.setBusyIndicatorDelay(0);
-                            this.sysKeySelFr.setBusy(true);
-                            this.sysKeySelFr.attachBrowserEvent("keydown", function (oEvent) {
+                        this.promptVH = await this.loadFragment({
+                            name: "aicockpitfeq.fragment.SelectPrompt"
+                        }).then(function (oDialog1) {
+                            this.oDialog1 = oDialog1;
+                            this.promptVH = oDialog1;
+                            this.promptVH.setBusyIndicatorDelay(0);
+                            this.promptVH.setBusy(true);
+                            this.promptVH.attachBrowserEvent("keydown", function (oEvent) {
                                 if (oEvent.key === "Escape") {
                                     oEvent.stopPropagation();
                                     oEvent.preventDefault();
                                 }
                             });
-                            this.getView().addDependent(oDialog);
-                            this.getDataSysMsg();
-                            this.oDialog.open();
+                            this.getView().addDependent(oDialog1);
+                            this.getDataPromptMsg();
+                            oDialog1.open();
                         }.bind(this)).finally(() => { BusyIndicator.hide() });
-
                     } else {
-                        this.oDialog.setBusy(true);
-                        this.oDialog.setBusyIndicatorDelay(0);
-                        this.getDataSysMsg();
-                        this.oDialog.open();
+                        this.oDialog1.setBusy(true);
+                        this.oDialog1.setBusyIndicatorDelay(0);
+                        this.getDataPromptMsg();
+                        this.oDialog1.open();
                         BusyIndicator.hide();
-                        //this.sysKeySelFr.setBusy(false);
                     }
                 } else {
                     MessageBox.information(oBundle.getText("selFuncTabspopup"));
                 }
-            }
-        },
-        openPromptValueHelp: async function () {
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
-            if (popUpSel == "") {
-                if (!this.promptVH) {
-                    BusyIndicator.show();
-                    this.promptVH = await this.loadFragment({
-                        name: "aicockpitfeq.fragment.SelectPrompt"
-                    }).then(function (oDialog1) {
-                        this.oDialog1 = oDialog1;
-                        this.promptVH = oDialog1;
-                        this.promptVH.setBusyIndicatorDelay(0);
-                        this.promptVH.setBusy(true);
-                        this.promptVH.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        this.getView().addDependent(oDialog1);
-                        this.getDataPromptMsg();
-                        oDialog1.open();
-                    }.bind(this)).finally(() => { BusyIndicator.hide() });
-                } else {
-                    this.oDialog1.setBusy(true);
-                    this.oDialog1.setBusyIndicatorDelay(0);
-                    this.getDataPromptMsg();
-                    this.oDialog1.open();
-                    BusyIndicator.hide();
-                }
             } else {
-                MessageBox.information(oBundle.getText("selFuncTabspopup"));
+                MessageBox.information(oBundle.getText("sysMsgWIP"));
             }
         },
         closeSettings: function () {
@@ -2706,7 +2775,7 @@ sap.ui.define([
             //     this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
             // }
             // else
-                 if (noScript == false && sFragmentName !== "promptlibpr") {
+            if (noScript == false && sFragmentName !== "promptlibpr") {
 
                 this.getView().byId("descTxtArea").setEditable(true);
                 this.getView().byId("descTxtArea").setValueState("Error");
@@ -3909,7 +3978,7 @@ sap.ui.define([
             //     this.getView().byId("sysPromptDesc").setValueState("Error");
             //     this.getView().byId("sysPromptDesc").setValueStateText("Malicious data");
             // } else
-                 if (noScript == false && sFragmentName !== "promptlibpr") {
+            if (noScript == false && sFragmentName !== "promptlibpr") {
                 this.getView().byId("descTxtAreaPrompt").setEditable(true);
                 this.getView().byId("descTxtAreaPrompt").setValueState("Error");
                 this.getView().byId("descTxtAreaPrompt").setValueStateText("Malicious data");
@@ -4048,7 +4117,7 @@ sap.ui.define([
                         try {
                             errMsg = JSON.parse(jqXhr.responseText).error.message;
                         } catch (e) { }
-                        if (errMsg.toLowerCase().includes(("cannot modify"))){
+                        if (errMsg.toLowerCase().includes(("cannot modify"))) {
                             that.cancelPrompt();
                         }
                         MessageBox.error(errMsg);
@@ -4747,7 +4816,7 @@ sap.ui.define([
             var fileViewData = this.getView().getModel("fileViewModel").oData;
             var fileExtension = (fileViewData.Name.split(".").pop() || "").toLowerCase();
             var dataObj = { "UserStory_ID": "", "Epic": "", "Features": "", "User Stories Description": "", "Acceptance Criteria": "" };
-
+            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             var useridPattern = /UserStory_ID/g;
 
             var tcc = this.getView().byId("tcCountNum").getValue();
@@ -5241,7 +5310,7 @@ sap.ui.define([
                 fileCont
             );
             this.getView().getModel("tcgModel").setProperty("/fText", "");
-            that.sendTokenUsageLog(tokensUsed, promptMsgData); 
+            that.sendTokenUsageLog(tokensUsed, promptMsgData);
             BusyIndicator.hide();
         },
 
@@ -6408,31 +6477,35 @@ sap.ui.define([
 
         onUploadFile: function (oEvent) {
             let oBundle = this.getView().getModel("i18n").getResourceBundle();
-            let popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
-            this.executedOnce = false;
-            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-            let fileN = oEvent.mParameters.files[0].name;
+            if (this.wipModel == false) {
+                let popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+                this.executedOnce = false;
+                let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+                let fileN = oEvent.mParameters.files[0].name;
 
-            let [stopUpload, errMsg] = this.validateFileName(fileN);
-            if (stopUpload) {
-                sap.m.MessageBox.warning(errMsg);
-            }
-            if (!stopUpload) {
-                if (popUpSel == "knowlBAdmin") {
-                    this.ragHandleUploadPress();
+                let [stopUpload, errMsg] = this.validateFileName(fileN);
+                if (stopUpload) {
+                    sap.m.MessageBox.warning(errMsg);
                 }
-                else if (bRagEnabled) {
-                    this.ragHandleUploadPress();
-                }
-                else if (popUpSel == "") {
-                    this.getView().byId("selDocList").setValueState("None");
-                    this.getView().byId("multiInputPrompt").setValueState("None");
-                    this.extractPDFContent(oEvent);
-                } else {
-                    MessageBox.information(oBundle.getText("selFuncTabs"));
-                }
+                if (!stopUpload) {
+                    if (popUpSel == "knowlBAdmin") {
+                        this.ragHandleUploadPress();
+                    }
+                    else if (bRagEnabled) {
+                        this.ragHandleUploadPress();
+                    }
+                    else if (popUpSel == "") {
+                        this.getView().byId("selDocList").setValueState("None");
+                        this.getView().byId("multiInputPrompt").setValueState("None");
+                        this.extractPDFContent(oEvent);
+                    } else {
+                        MessageBox.information(oBundle.getText("selFuncTabs"));
+                    }
 
-                this.getView().byId("selDocList").setSelectedKey("");
+                    this.getView().byId("selDocList").setSelectedKey("");
+                }
+            } else {
+                MessageBox.information(oBundle.getText("sysMsgWIP"));
             }
         },
         validateFileName: function (fileName) {
@@ -6749,7 +6822,7 @@ sap.ui.define([
                                         sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
                                     }
 
-                                    that.getFiles();
+                                    
                                     busyDialog.close();
                                 }.bind(this));
                             }.bind(this));
@@ -6771,7 +6844,9 @@ sap.ui.define([
                     busyDialog.close();
                 } else if (oFile.type == "image/png" || oFile.type === "image/jpeg" || oFile.type === "image/jpg") {
 
-                    if (deploymentName !== "gpt-4o") {
+                    if (deploymentName !== "gpt-4o" &&
+                        sSelectedIconTab !== "PCT" &&
+                        sSelectedIconTab !== "BPM") {
                         oFileUploader.clear();
                         sap.m.MessageBox.information(oBundle.getText("imageProcessingSupported"))
                     } else {
@@ -6907,8 +6982,8 @@ sap.ui.define([
             var sSelectedIconTab = this.selectedKeyFunct();
             var oFileUploader = this.getView().byId("fileUploader1");
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            let  malPat = false;
-            let  xssPat = false;
+            let malPat = false;
+            let xssPat = false;
             const maliciousPatterns = [
                 /<script\b[^>]*>[\s\S]*?<\/script>/gi,
                 /javascript:/gi,
@@ -7066,7 +7141,7 @@ sap.ui.define([
                         };
                         fr.readAsText(oFile);
                     }
-                    let fileContent=oModel.getProperty("/BSContent");
+                    let fileContent = oModel.getProperty("/BSContent");
                     for (const pattern of maliciousPatterns) {
                         if (pattern.test(fileContent)) {
                             malPat = true;
@@ -7410,7 +7485,7 @@ sap.ui.define([
             histArr.push(histData);
             this.getOwnerComponent().getModel("historyModel").setProperty("/historyData", histArr);
             this.getOwnerComponent().getModel("historyModel").refresh();
-             this.getView().byId("descTxtAreaPrompt").setEditable(false);
+            this.getView().byId("descTxtAreaPrompt").setEditable(false);
             this.getView().byId("savePrm").setVisible(false);
             this.getView().byId("multiInputPrompt").setValue("");
             this.getView().byId("descTxtAreaPrompt").setValue("");
@@ -7611,13 +7686,20 @@ sap.ui.define([
 
         onAIselect: function (eve) {
             var sSelectedIconTab = this.selectedKeyFunct();
-            var TokenModel = this.getOwnerComponent().getModel("TokenLimit");
-            var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
-            var selectedAI = eve.getSource().getSelectedItem().mProperties.text;
-            var totToken = TokenModel.oData[sSelectedIconTab][selectedAI].TotalToken;
-            this.getView().getModel("TokenLimit").setProperty("/token", totToken);
-            this.getView().getModel("TokenLimit").setProperty("/usedToken", 0);
-            MessageBox.information("The selected Model is " + selectedAI);
+            let oBundle = this.getView().getModel("i18n").getResourceBundle();
+            let selectedAI = eve.getSource().getSelectedItem().mProperties.text;
+            if (selectedAI.includes("sap-rpt")) {
+                this.wipModel = true;
+                MessageBox.information(oBundle.getText("sysMsgWIP"));
+                //this.getView().byId("selModel").setSelectedKey("d5c02aa14db581a4");
+            } else {
+                this.wipModel = false;
+                var TokenModel = this.getOwnerComponent().getModel("TokenLimit");
+                var totToken = TokenModel.oData[sSelectedIconTab][selectedAI].TotalToken;
+                this.getView().getModel("TokenLimit").setProperty("/token", totToken);
+                this.getView().getModel("TokenLimit").setProperty("/usedToken", 0);
+                MessageBox.information("The selected Model is " + selectedAI);
+            }
         },
         onSearch: function (url, roleSel) {
 
@@ -9911,7 +9993,8 @@ sap.ui.define([
                         const key = `${c.fname}|${c.link}`;
                         if (!merged.some(m => `${m.fname}|${m.link}` === key)) merged.push(c);
                     });
-                    oDetailModel.setProperty("/citationArr", merged);
+                    let workingCites = merged.filter(ml => { if (ml.link !== "") { return ml } });
+                    oDetailModel.setProperty("/citationArr", workingCites);
                 }
                 const current = oDetailModel.getProperty("/resp") || "";
                 const next = current && finalJoined && !current.endsWith(finalJoined)
@@ -10034,7 +10117,7 @@ sap.ui.define([
                 "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
             };
             $.ajax({
-                url: this._sBasePath + "/kb-integration/UploadToObjectStore",
+                url: that._sBasePath + "/kb-integration/UploadToObjectStore",
                 method: "POST",
                 processData: false,
                 contentType: false,
@@ -10665,7 +10748,7 @@ sap.ui.define([
             };
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: this._sBasePath + "/cockpit/readFileFromGit",
+                    url: that._sBasePath + "/cockpit/readFileFromGit",
                     method: "POST",
                     headers: oHeader,
                     data: JSON.stringify({
@@ -11296,11 +11379,11 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-                that.sendTokenUsageLog(tokensUsed, promptMsgData); 
+                that.sendTokenUsageLog(tokensUsed, promptMsgData);
                 BusyIndicator.hide();
             }
         },
-         pctkbwithstep2: async function () {
+        pctkbwithstep2: async function () {
             BusyIndicator.show();
             var oBundle = this.getView().getModel("i18n").getResourceBundle();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
@@ -11446,9 +11529,9 @@ sap.ui.define([
                         for (let c = 0; c < tcgRespArr[r].citationTcg.length; c++) {
                             cit.push(tcgRespArr[r].citationTcg[c]);
                         }
-                    // for(var t=0;t<tcgRespArr.length;t++){
-                    // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
-                    // }
+                        // for(var t=0;t<tcgRespArr.length;t++){
+                        // // tokensUsed = tokensUsed + tcgRespArr[t].tokensGen;
+                        // }
                     }
                 }
                 this.getView().byId("pctSysMsgBtn").setVisible(true);
@@ -11479,7 +11562,7 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-                that.sendTokenUsageLog(tokensUsed, promptMsgData); 
+                that.sendTokenUsageLog(tokensUsed, promptMsgData);
                 BusyIndicator.hide();
             }
         },
@@ -11696,6 +11779,7 @@ sap.ui.define([
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
             var oViewModel = this.getView().getModel("viewModel");
             var that = this;
+            let tcgRespArr = [];
             var modelId = this.getView().byId("selModel").getSelectedKey();
             var modelName = this.getView().byId("selModel").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
@@ -11838,8 +11922,8 @@ sap.ui.define([
                         });
                     }
                     tokensUsed = tokensUsed + parsedResponse[0].token_usage.total_tokens;
-                    var tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
-                    tcgRespArr.push({ UserStory_ID: "****************" + kbPayload.UserStory_ID + "****************", response: parsedResponse[0].bpm_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
+                    tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                    tcgRespArr.push({ UserStory_ID: "********************************", response: parsedResponse[0].bpm_output, citationTcg: citationIndex || [], tokensGen: tokensUsed });
                     this.getView().getModel("tcgModel").setProperty("/allResponses", tcgRespArr);
 
                 } catch (err) {
@@ -11865,7 +11949,7 @@ sap.ui.define([
                 this.getView().getModel("TokenLimit").setProperty("/token", tknallotted);
                 let resp = "";
                 let cit = [];
-                let tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
+                tcgRespArr = this.getView().getModel("tcgModel").getProperty("/allResponses");
                 for (let r = 0; r < tcgRespArr.length; r++) {
                     resp = resp + tcgRespArr[r].UserStory_ID + "\n" + tcgRespArr[r].response + "\n";
                     if (bRagEnabled) {
@@ -11899,14 +11983,16 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-            that.sendTokenUsageLog(tokensUsed, promptMsgData); 
+                that.sendTokenUsageLog(tokensUsed, promptMsgData);
                 BusyIndicator.hide();
             }
 
         },
         getDataSysMsgDocGen: function () {
-            var that = this;
-            var sUrl = this._sBasePath + "/lm/promptTemplates?scenario=DocGen";
+            let that = this;
+
+            let sUrl = this._sBasePath + "/cockpit/getPromptDetails?Category=DocGen&MsgType=sysMsg&ProjectId=" +
+                encodeURIComponent(this._ProjectDetail);
             let oHeader = {
                 "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
                 "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
@@ -11914,60 +12000,74 @@ sap.ui.define([
                 "X-XSS-Protection": "0",
                 "X-Content-Type-Options": "nosniff"
             };
+            function decodeHtml(html) {
+                let txt = document.createElement("textarea");
+                txt.innerHTML = html;
+                return txt.value;
+            }
+
             $.ajax({
                 url: sUrl,
                 method: "GET",
                 headers: oHeader,
+
                 success: function (data) {
-                    if (data && data.resources && data.resources.length > 0) {
 
-                        var BSData = [];
-
-                        var fetchDetails = data.resources.map(function (resource) {
-                            return $.ajax({
-                                url: that._sBasePath + `/lm/promptTemplates/${resource.id}`,
-                                method: "GET",
-                                headers: { ...oHeader, ...that.defaultHeaders }
-                            }).then(function (response) {
-
-                                if (response?.spec?.template) {
-
-                                    response.spec.template.forEach(function (templateItem) {
-
-                                        if (templateItem.role === "system") {
-
-                                            if (resource.id === that.setDocGenKey) {
-
-                                                BSData.push({
-                                                    PROMPTID: resource.id,
-                                                    PROMPT_TEMPLATE: templateItem.content,
-                                                    NAME: resource.name
-                                                });
-
-                                                that.getView().byId("multiInputSystem")
-                                                    .setValue(resource.name);
-
-                                                that.getView().byId("descTxtArea")
-                                                    .setValue(templateItem.content);
-                                            }
-                                        }
-                                    });
-                                }
-                            });
-                        });
-
-                        Promise.all(fetchDetails).then(function () {
-                            Utility.initializeModel(that.getView(), "BSData", { messages: BSData });
-
-                            var oModel = that.getView().getModel("switchTempModel");
-                            if (!oModel.getProperty("/DocGen")) {
-                                oModel.setProperty("/DocGen", {});
-                            }
-                            oModel.setProperty("/DocGen/roleofTemplate", "system");
-
-                            that.isSystemSaved = true;
-                        });
+                    if (!data || !data.value || data.value.status !== 200 || !data.value.result) {
+                        return;
                     }
+
+                    let BSData = [];
+                    let resultData = data.value.result;
+
+                    let resultsArray = Array.isArray(resultData) ? resultData : [resultData];
+
+                    resultsArray.forEach(function (item) {
+
+                        if (item.Project_Id === that._ProjectDetail ||
+                            item.Project_Id === "default") {
+
+                            let entry = {
+                                PROMPTID: item.PromptId,
+                                UUID: item.ID,
+                                PROMPT_TEMPLATE: item.Prompt_Details,
+                                NAME: item.PromptId
+                            };
+
+                            if (item.PromptId === that.setDocGenKey) {
+
+                                let decodedTemplate = decodeHtml(
+                                    item.Prompt_Details || ""
+                                );
+
+                                that.getView().byId("multiInputSystem")
+                                    .setValue(item.PromptId);
+
+                                that.getView().byId("descTxtArea")
+                                    .setValue(decodedTemplate);
+                            }
+
+                            BSData.push(entry);
+                        }
+                    });
+
+                    Utility.initializeModel(that.getView(), "BSData", {
+                        messages: BSData
+                    });
+
+                    let oModel = that.getView().getModel("switchTempModel");
+
+                    if (!oModel.getProperty("/DocGen")) {
+                        oModel.setProperty("/DocGen", {});
+                    }
+
+                    oModel.setProperty("/DocGen/roleofTemplate", "system");
+
+                    that.isSystemSaved = true;
+                },
+
+                error: function (err) {
+                    console.error("Error fetching system prompts:", err);
                 }
             });
         },

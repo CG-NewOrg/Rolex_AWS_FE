@@ -429,27 +429,27 @@
                                             selectionChange=".onDocTypeChange"
                                         >
                                             <core:Item
-                                                key="9328df9b-d4e1-41d5-8e1e-09f6163abeeb"
+                                                key="Initial_Assessment_Reports"
                                                 text="Initial Assessment Reports"
                                             />
                                             <core:Item
-                                                key="84b0d07c-8ca6-484b-ad47-8b08d5522ea5"
+                                                key="Architecture_Dossier"
                                                 text="Architecture Dossier"
                                             />
                                             <core:Item
-                                                key="65685247-be4c-4f90-aeec-2caee4e5f0c8"
+                                                key="Clean_Core_Runbook"
                                                 text="Clean Core Runbook"
                                             />
                                             <core:Item
-                                                key="7a904d09-f86d-4b9f-ade2-ab65a1c04567"
+                                                key="Development_Guidelines"
                                                 text="Development Guidelines"
                                             />
                                             <core:Item
-                                                key="61a041ff-c07b-4229-af44-e91b317334f2"
+                                                key="Program_Charter"
                                                 text="Program Charter"
                                             />
                                             <core:Item
-                                                key="841b66b1-9639-4306-93f5-dbc08979f91a"
+                                                key="Test_Strategy"
                                                 text="Test Strategy"
                                             />
                                         </ComboBox>

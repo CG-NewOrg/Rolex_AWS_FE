@@ -888,7 +888,7 @@ sap.ui.define([
                     return { fname: fname, link: link };
                 });
             }
-
+            citations=citations.filter(ml => {if(ml.link!==""){return ml}});
             return {
                 aiResponse: aiResponse,
                 Citations: citations

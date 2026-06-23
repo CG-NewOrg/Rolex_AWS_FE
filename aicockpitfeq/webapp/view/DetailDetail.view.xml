@@ -212,7 +212,7 @@
                     <Button
                         tooltip="Download Word Document"
                         icon="sap-icon://document"
-                        press=".generateWordContent"
+                        press=".generateWordContent2"
                         class="sapUiTinyMarginTop"
                         enabled="{airesponseDetailModel>/downloadVis}"
                     />
