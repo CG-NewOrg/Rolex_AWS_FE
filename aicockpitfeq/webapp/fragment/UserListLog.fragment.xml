@@ -207,17 +207,6 @@
                                     <Input id="idPromptDateAdded" />
                                 </fb:control>
                             </fb:FilterGroupItem> -->
-                            <fb:FilterGroupItem
-                                name="Updated At"
-                                label="Updated At"
-                                groupName="Group1"
-                                visibleInFilterBar="false"
-                                hiddenFilter="{= ${switchFragments>/frg/frName} === 'promptlibpr' ? false : true }"
-                            >
-                                <fb:control>
-                                    <Input />
-                                </fb:control>
-                            </fb:FilterGroupItem>
                         </fb:filterGroupItems>
                     </fb:FilterBar>
                     <Table
@@ -238,6 +227,7 @@
                                     tooltip="Excel Download"
                                     icon="sap-icon://excel-attachment"
                                     press=".onUserLogExcelPress"
+                                    visible="{= ${switchFragments>/frg/frName} !== 'admin' || ${vFlagMod>/isAdmin} || ${vFlagMod>/isSuperAdmin} }"
                                 />
                             </OverflowToolbar>
                         </headerToolbar>
@@ -369,7 +359,7 @@
                                 hAlign="Center"
                                 width="4rem"
                             >
-                                <Text text="Delete" visible="{vFlagMod>/isAdmin}" />
+                                <Text text="Delete" visible="{vFlagMod>/isAdmin}"/>
                             </Column>
                             <!-- <Column width="12em">
                                 <Text text="{i18n>uploadedBy}" />
@@ -702,13 +692,7 @@
                                 </OverflowToolbar>
                             </headerToolbar>
                             <columns>
-                                 <Column width="22rem" visible="false">
-                                    <Text text="{i18n>sysKey}" />
-                                </Column>
-                                <Column width="16rem" visible="false">
-                                    <Text text="{i18n>prompts}" />
-                                </Column>
-                                <Column width="30rem">
+                                    <Column width="30rem">
                                     <Text text="{i18n>sysKey}-{i18n>prompts}" />
                                 </Column>
                                 <Column hAlign="Center">
@@ -754,13 +738,7 @@
                                         <!-- <Text
                                             text="{promptsUsedDetail>system_id}-{promptsUsedDetail>prompt}"
                                         /> -->
-                                        <Text
-                                            text="{promptsUsedDetail>system_id}"
-                                        />
-                                        <Text
-                                            text="{promptsUsedDetail>prompt}"
-                                        />
-                                         <ObjectIdentifier
+                                        <ObjectIdentifier
                                         title="{promptsUsedDetail>system_id}"
                                         text="{promptsUsedDetail>prompt}"
                                     />
@@ -788,13 +766,13 @@
         </Panel>
         <footer>
             <Toolbar>
-            <Button
+              <Button
                     id="idUserManagementBtn"
                     text="User Management"
                     icon="sap-icon://person-placeholder"
                     type="Emphasized"
                     press=".onNavigateToUserManagement"
-                    visible="{= ${switchFragments>/frg/frName} === 'admin' }"
+                    visible="{= ${switchFragments>/frg/frName} === 'admin' &amp;&amp; (${vFlagMod>/isAdmin} || ${vFlagMod>/isSuperAdmin}) }"
                     class="sapUiTinyMarginEnd"
                 />
                 <ToolbarSpacer />
@@ -813,15 +791,16 @@
                     press=".onAddPrompt"
                 />
 
-               <Button
-    text="Delete"
-    type="Reject"
-    icon="sap-icon://delete"
-    id="delPr"
-    enabled="{parts: [{path: 'vFlagMod>/isAdmin'}, {path: 'vFlagMod>/isSys'}],formatter:'.formatter.enableSys'}"
-    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' &amp;&amp; ${vFlagMod>/isAdmin} === true }"
-    press=".onDeletePrompt"
-/>
+                <Button
+                    text="Delete"
+                    type="Reject"
+                    icon="sap-icon://delete"
+                    id="delPr"
+                    enabled="{parts: [{path: 'vFlagMod>/isAdmin'}, {path: 'vFlagMod>/isSys'}],formatter:'.formatter.enableSys'}"
+                    visible="{= ${switchFragments>/frg/frName} === 'promptlibpr' }"
+                    press=".onDeletePrompt"
+                />
+
                 <Button
                     text="Update"
                     type="Emphasized"

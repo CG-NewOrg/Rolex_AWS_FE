@@ -22,7 +22,7 @@ sap.ui.define([
     "aicockpitfeq/xlxslibs/jszip",
     "aicockpitfeq/xlxslibs/xlsx",
     "aicockpitfeq/lib/index.umd"
-], (Controller, fioriLibrary, Fragment, formatter, BusyIndicator, models, Utility, Spreadsheet, File, Device, Filter, Sorter, MessageBox, FilterOperator, JSONModel, BusyDialog, MessageToast, PdfUtil) => {
+], (Controller, fioriLibrary, Fragment, formatter, BusyIndicator, models, Utility, Spreadsheet, File, Device, Filter, Sorter, MessageBox, FilterOperator, JSONModel, BusyDialog, MessageToast, PdfUtil, pdfMin, pdfWorkerMin, jszip, xlsx, indexUmd) => {
     "use strict";
     const EdmType = fioriLibrary.EdmType;
     return Controller.extend("aicockpitfeq.controller.View1", {
@@ -89,11 +89,36 @@ sap.ui.define([
             var vFlagMod = this.getOwnerComponent().getModel("flagModel");
             this.getView().setModel(vFlagMod, "vFlagMod");
 
-            this.getView().byId("selModel").setSelectedKey("M1");
+          //  this.getView().byId("selModel").setSelectedKey("M1");
             ///for select list
             ////models
             var scenarioEn = models.createJSONModel(this, "addPrmOpen");
             this.getView().setModel(scenarioEn, "scenarioEn");
+
+            let retroDoc = new sap.ui.model.json.JSONModel({
+                isRetroDocVisible: false,
+                selectedObjectType: "PROG",
+                selectedSapSystem: "DEV",
+                searchPattern: "Z*",
+                sourceMode: -1,
+                uploadCodeEnabled: false,
+                uploadedSourceCode: "",
+                sourceInputType: "selection",
+                retroTemplateToggle: false,
+                searchSuggestions: []
+            });
+            this.getView().setModel(retroDoc, "retroDocModel");
+            // Initialize retroTemplateModel for Template Dialog functionality
+            let retroTemplateModel = new sap.ui.model.json.JSONModel({
+                dialogTitle: "",
+                templateType: "",
+                selectedTemplateKey: "default",
+                uploadFileName: "",
+                uploadEnabled: false,
+                defaultTemplateFile: "Style_Capgemini_Standard.docx",
+                templates: [{ key: "default", text: "Default" }]
+            });
+            this.getView().setModel(retroTemplateModel, "retroTemplateModel");
 
             // start of madhu
             this.oBusyDialog = new sap.m.BusyDialog({
@@ -183,6 +208,11 @@ sap.ui.define([
                     that.getLogoutTime();
                 }
             });
+            var oMcpToolsModel = this.getView().getModel("mcpToolsModel");
+            if (!oMcpToolsModel) {
+                oMcpToolsModel = new JSONModel({ tools: [], filteredTools: [] });
+                this.getView().setModel(oMcpToolsModel, "mcpToolsModel");
+            }
         },
         getLogoutTime: function () {
             var that = this;
@@ -450,12 +480,14 @@ sap.ui.define([
                     var roles = result.UserRoles || {};
                     var hasAdminRole = !!roles.hasAdminRole;
                     var hasViewerRole = !!roles.hasViewerRole;
+                    var hasSuperAdminRole = !!roles.hasSuperAdminRole;
                     let sMessage = data && data.value ? data.value.message : "";
 
                     var oFlagModel = this.getOwnerComponent().getModel("flagModel");
                     if (oFlagModel) {
                         oFlagModel.setProperty("/isAdmin", hasAdminRole);
                         oFlagModel.setProperty("/isViewer", hasViewerRole);
+                        oFlagModel.setProperty("/isSuperAdmin", hasSuperAdminRole);
 
                         if (oFlagModel.getProperty("/isSys") === undefined) {
                             oFlagModel.setProperty("/isSys", false);
@@ -615,6 +647,7 @@ sap.ui.define([
                         oViewModel.setProperty("/gptModels", updatedGptModels);
                         that.allAIModels = updatedGptModels;
                         that.getView().byId("selModel").setSelectedKey("d5c02aa14db581a4");
+                        that.getView().byId("selModelRetro").setSelectedKey(updatedGptModels[0].key);
                         var apiUrl = this._sBasePath + "/deployments/" + updatedGptModels[0].key + "/chat/completions?api-version=" + that.sApiUrl;
 
                         that.sUrl = {
@@ -702,6 +735,11 @@ sap.ui.define([
             this.getView().byId("openAiEdit").setVisible(false);
             this.getView().byId("openTCGTemp").setVisible(false);
             this.getView().byId("RagSwitch").setEnabled(true);
+            // ============================================================
+            // Hide Retro Documentation section by default for all tabs
+            // Only retroDocKey will set this to true
+            // ============================================================
+            this.getView().getModel("retroDocModel").setProperty("/isRetroDocVisible", false);
             this.getView().getModel("viewModel").setProperty("/isDocGen", false);
             if (eveKey.getParameters().item.getProperty("key")) {
                 this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
@@ -869,7 +907,61 @@ sap.ui.define([
                     this.getView().byId("addExBtn").setEnabled(false);
                     this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
+                }else if (eveKey.getParameters().item.getProperty("key") == "retroDocKey") {
+                this.getView().byId("selModelRetro").setSelectedKey("d5c02aa14db581a4");
+                this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
+                this.getView().getModel("switchFragments").refresh();
+
+                // Show Retro Documentation section by setting visibility flag to true
+                this.getView().getModel("retroDocModel").setProperty("/isRetroDocVisible", true);
+
+                // Update timestamp for process log
+                this.getView().getModel("retroDocModel").setProperty("/logTimestamp", this._getCurrentTimestamp());
+
+                // Set the selected key in navigation list
+                this.getView().byId("navigationList").setSelectedKey("retroDocKey");
+
+                // Disable AI model selector as Retro Doc has its own
+                //this.getView().byId("selModel").setEnabled(false);
+
+                // ============================================================
+                // Set visibility for Retro Documentation panels
+                // These panels are only visible when retroDocKey is selected
+                // ============================================================
+                // Initialize or get the default model for panel visibility
+                var oDefaultModel = this.getView().getModel();
+                if (!oDefaultModel) {
+                    oDefaultModel = new sap.ui.model.json.JSONModel({});
+                    this.getView().setModel(oDefaultModel);
                 }
+
+                // Set visibility for Agent Pipeline, Process Log, and Download panels
+                // Pipeline should be shown only after Generate Documents is pressed
+                oDefaultModel.setProperty("/agentPipelineVisible", false);
+                oDefaultModel.setProperty("/logPanelVisible", true);
+                oDefaultModel.setProperty("/downloadPanelVisible", false);
+
+                // Initialize agent pipeline steps data
+                oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
+                oDefaultModel.setProperty("/agentPipelineComplete", false);
+                oDefaultModel.setProperty("/agentSteps", [
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" }
+                ]);
+                oDefaultModel.setProperty("/agentConnectors", [
+                    { completed: false },
+                    { completed: false },
+                    { completed: false }
+                ]);
+
+                // Initialize log entries array
+                oDefaultModel.setProperty("/logEntries", []);
+
+                // Initialize download items array
+                oDefaultModel.setProperty("/downloadItems", []);
+            }
                 else {
 
                 }
@@ -1727,6 +1819,115 @@ sap.ui.define([
 
             }
         },
+        onViewAllFeedback: async function () {
+            var that = this;
+            BusyIndicator.show();
+            try {
+                let sUrl = this._sBasePath + "/cockpit/getAllFeedback";
+                $.ajax({
+                    url: sUrl,
+                    type: "GET",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    success: async function (data) {
+                        BusyIndicator.hide();
+                        let response;
+                        if (typeof data === "string") {
+                            response = JSON.parse(data);
+                        } else if (data && data.value && typeof data.value === "string") {
+                            response = JSON.parse(data.value);
+                        } else if (data && data.value && typeof data.value === "object") {
+                            response = data.value;
+                        } else {
+                            response = data;
+                        }
+                        let feedbackList = response.result || [];
+                        let feedbackCount = response.count || feedbackList.length;
+                        feedbackList = feedbackList.map(function (item) {
+                            if (item.CreatedAt) {
+                                try {
+                                    let date = new Date(item.CreatedAt);
+                                    item.CreatedAt = date.toLocaleDateString() + " " + date.toLocaleTimeString();
+                                } catch (e) {
+
+                                }
+                            }
+                            return item;
+                        });
+
+                        var oFeedbackModel = new sap.ui.model.json.JSONModel({
+                            feedbackList: feedbackList,
+                            feedbackCount: feedbackCount
+                        });
+                        that.getView().setModel(oFeedbackModel, "allFeedbackModel");
+
+                        if (!that._viewAllFeedbackDialog || that._viewAllFeedbackDialog.bIsDestroyed) {
+                            that._viewAllFeedbackDialog = await that.loadFragment({
+                                name: "aicockpitfeq.fragment.ViewAllFeedback"
+                            });
+                            that.getView().addDependent(that._viewAllFeedbackDialog);
+                        }
+                        that._viewAllFeedbackDialog.open();
+                    },
+                    error: function (err) {
+                        BusyIndicator.hide();
+                        var errMsg = "Failed to fetch feedback data.";
+                        if (err && err.responseJSON && err.responseJSON.error) {
+                            errMsg = err.responseJSON.error.message || errMsg;
+                        } else if (err && err.statusText) {
+                            errMsg = err.statusText;
+                        }
+                        sap.m.MessageBox.error(errMsg);
+                    }
+                });
+            } catch (err) {
+                BusyIndicator.hide();
+                sap.m.MessageBox.error("Error: " + err.message);
+            }
+        },
+
+        onRefreshAllFeedback: function () {
+            this.onViewAllFeedback();
+        },
+
+        onCloseViewAllFeedback: function () {
+            if (this._viewAllFeedbackDialog) {
+                this._viewAllFeedbackDialog.close();
+            }
+        },
+
+        onSearchAllFeedback: function (oEvent) {
+            var sQuery = oEvent.getParameter("newValue") || "";
+            var oTable = sap.ui.getCore().byId("allFeedbackTable") || this.byId("allFeedbackTable");
+            if (!oTable) {
+                var aContent = this._viewAllFeedbackDialog ? this._viewAllFeedbackDialog.getContent() : [];
+                if (aContent.length > 0) {
+                    oTable = aContent[0];
+                }
+            }
+            if (oTable) {
+                var oBinding = oTable.getBinding("items");
+                if (oBinding) {
+                    if (sQuery) {
+                        var aFilters = [
+                            new sap.ui.model.Filter("IssueTitle", sap.ui.model.FilterOperator.Contains, sQuery),
+                            new sap.ui.model.Filter("IssueDetail", sap.ui.model.FilterOperator.Contains, sQuery),
+                            new sap.ui.model.Filter("IssueType", sap.ui.model.FilterOperator.Contains, sQuery),
+                            new sap.ui.model.Filter("Priority", sap.ui.model.FilterOperator.Contains, sQuery),
+                            new sap.ui.model.Filter("CreatedBy", sap.ui.model.FilterOperator.Contains, sQuery)
+                        ];
+                        var oFilter = new sap.ui.model.Filter({
+                            filters: aFilters,
+                            and: false
+                        });
+                        oBinding.filter(oFilter);
+                    } else {
+                        oBinding.filter([]);
+                    }
+                }
+            }
+        },
         onFeedbackSubmit: function () {
 
             var oModel = this.getView().getModel("appmodel"),
@@ -2295,6 +2496,7 @@ sap.ui.define([
             this.getView().byId("infoSys").setVisible(false);
             this.getView().byId("addSysPrefix").setVisible(false);
             this.getView().byId("RagSwitch").setSelected(false);
+            this.getView().byId("mcpToggle").setSelected(false);
             this.onRagToggle();
             this.getView().byId("descTxtArea").setValue("");
             this.getView().byId("multiInputPrompt").setValue("");
@@ -5449,6 +5651,18 @@ sap.ui.define([
         },
         MergeButtonTest1: function () {
             var that = this;
+            var sSelectedIconTab = this.selectedKeyFunct();
+ 
+            // MCP routing: if MCP toggle is ON, scenario is code-related, and content is ABAP-related, route to ABAP MCP server
+            var bUseMCP = this.getView().getModel("viewModel").getProperty("/useMCP");
+            if (bUseMCP && (sSelectedIconTab === "tstocode" || sSelectedIconTab === "coderem" || sSelectedIconTab === "codesum")) {
+                if (this.isAbapRelatedContent()) {
+                    this.callAbapMCPCodeGen();
+                    return;
+                } else {
+                    MessageToast.show("Content not ABAP-related – using default AI models");
+                }
+            }
 
             //RAG changes Aishwarya
             var ragModel = this.getView().getModel("ragModel");
@@ -7293,6 +7507,9 @@ sap.ui.define([
                 case "bpmKey":
                     scenario = "BPM";
                     break;
+                case "retroDocKey":
+                    scenario = "RetroDoc";
+                    break;
             }
             return scenario;
         },
@@ -7384,7 +7601,9 @@ sap.ui.define([
             //var histPayload = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
             var payloadNonStream = histPayload;
 
-            this.apiCall(apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData);
+            // this.apiCall(apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData);
+            await this.apiCall(apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData);
+            
         },
         apiCall: async function (apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData) {
             let oToken, usedToken;
@@ -9360,6 +9579,14 @@ sap.ui.define([
                     if (oView.byId("templateToggle")) {
                         oView.byId("templateToggle").setState(false);
                     }
+                    // Reset MCP state for first-time visit to this tab (avoid leakage from previous tab)
+                var oVM = this.getView().getModel("viewModel");
+                if (oVM) {
+                    oVM.setProperty("/useMCP", false);
+                    oVM.setProperty("/selectedMCPTool", "");
+                    oVM.setProperty("/selectedAbapObject", {});
+                }
+                return;
                     return;
                 }
 
@@ -9576,6 +9803,12 @@ sap.ui.define([
 
                 if (oView.byId("templateToggle")) {
                     oView.byId("templateToggle").setState(!!oState.templateToggleState);
+                }
+                // Restore MCP state per tab
+                if (oViewModel) {
+                    oViewModel.setProperty("/useMCP", !!oState.mcpEnabled);
+                    oViewModel.setProperty("/selectedMCPTool", oState.mcpSelectedTool || "");
+                    oViewModel.setProperty("/selectedAbapObject", oState.mcpSelectedAbapObject || {});
                 }
             }
         },
@@ -12072,29 +12305,7119 @@ sap.ui.define([
             });
         },
 
-        onNavigateToUserManagement: function () {
-            if (sap.ushell && sap.ushell.Container) {
-                sap.ushell.Container.getServiceAsync("CrossApplicationNavigation")
-                    .then(function (oCrossAppNavigator) {
-                        oCrossAppNavigator.toExternal({
-                            target: {
-                                semanticObject: "Zumsemobj",
-                                action: "display"
+        onNavigateToUserManagement: async function () {
+            // Initialize user management model if not exists
+            if (!this.getView().getModel("userMgmtModel")) {
+                let oUserMgmtModel = new JSONModel({
+                    users: [],
+                    formData: {
+                        userName: "",
+                        email: "",
+                        projects: []
+                    },
+                    availableProjects: [],
+                    selectedIndex: -1,
+                    selectedUserId: null,
+                    selectedUserEmail: null,
+                    isEditMode: false,
+                    isAddMode: false,
+                    isCreateProjectMode: false,
+                    newProjectName: "",
+                    formEditable: false
+                });
+                this.getView().setModel(oUserMgmtModel, "userMgmtModel");
+            }
+
+            // Load users and open dialog
+            this._loadUserMgmtUsers();
+            this._openUserManagementDialog();
+        },
+
+        _openUserManagementDialog: async function () {
+            if (!this._userManagementDialog) {
+                this._userManagementDialog = await this.loadFragment({
+                    name: "aicockpitfeq.fragment.UserManagement"
+                });
+                this.getView().addDependent(this._userManagementDialog);
+            }
+            // Reset search field and table filters every time the dialog opens
+            var oSearchField = this.byId("idUserMgmtSearchField");
+            if (oSearchField) {
+                oSearchField.setValue("");
+            }
+            var oTable = this.byId("idUserMgmtTable");
+            if (oTable) {
+                var oBinding = oTable.getBinding("items");
+                if (oBinding) {
+                    oBinding.filter([]);
+                }
+                oTable.removeSelections(true);
+            }
+            this._userManagementDialog.open();
+        },
+
+        onUserManagementDialogClose: function () {
+            if (this._userManagementDialog) {
+                this._userManagementDialog.close();
+            }
+        },
+
+        _loadUserMgmtUsers: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let sApiUrl = this._sBasePath + "/cockpit/getAllUsers()";
+
+            BusyIndicator.show();
+
+            fetch(sApiUrl, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                }
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch users: " + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    let aUsers = data.value || data || [];
+                    let aMappedUsers = aUsers.map(function (user) {
+                        return {
+                            id: user.ID || user.id || user.Id,
+                            userName: user.Username || user.username || user.userName || "",
+                            email: user.EmailID || user.emailId || user.email || "",
+                            project: user.Project_Details || user.projectDetails || user.project || ""
+                        };
+                    });
+                    oModel.setProperty("/users", aMappedUsers);
+                    this._updateUserMgmtProjectsFromUsers(aMappedUsers);
+                    MessageToast.show("Users loaded successfully (" + aMappedUsers.length + " users)");
+                }.bind(this))
+                .catch(function (error) {
+                    console.error("Error loading users:", error);
+                    MessageToast.show("Failed to load users from server");
+                    oModel.setProperty("/users", []);
+                })
+                .finally(function () {
+                    BusyIndicator.hide();
+                });
+        },
+
+        _updateUserMgmtProjectsFromUsers: function (aUsers) {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let aProjectItems = [];
+
+            let oUniqueProjects = {};
+            aUsers.forEach(function (user) {
+                let sProjectField = user.project;
+                if (sProjectField && sProjectField.trim() !== "") {
+                    let aProjects = sProjectField.split(",");
+                    aProjects.forEach(function (sProject) {
+                        let sTrimmedProject = sProject.trim();
+                        if (sTrimmedProject !== "" && !oUniqueProjects[sTrimmedProject]) {
+                            oUniqueProjects[sTrimmedProject] = true;
+                        }
+                    });
+                }
+            });
+
+            let aProjectNames = Object.keys(oUniqueProjects).sort();
+            aProjectNames.forEach(function (sProjectName) {
+                aProjectItems.push({
+                    key: sProjectName,
+                    text: sProjectName
+                });
+            });
+
+            oModel.setProperty("/availableProjects", aProjectItems);
+        },
+
+        onUserMgmtRefresh: function () {
+            this._loadUserMgmtUsers();
+        },
+
+        onUserMgmtUploadExcel: function (oEvent) {
+            let oFile = oEvent.getParameter("files") && oEvent.getParameter("files")[0];
+            if (!oFile) {
+                MessageBox.error("Please select an Excel file (.xlsx or .xls) to upload.");
+                return;
+            }
+
+            let sFileName = oFile.name.toLowerCase();
+            if (!sFileName.endsWith(".xlsx") && !sFileName.endsWith(".xls")) {
+                MessageBox.error("Only .xlsx or .xls files are supported for user upload.");
+                return;
+            }
+
+            let that = this;
+            BusyIndicator.show();
+
+            let oReader = new FileReader();
+            oReader.onload = function (e) {
+                // e.target.result is "data:<mime>;base64,<data>" — extract only the base64 part
+                let sResult = e.target.result;
+                let sBase64 = sResult.indexOf(",") !== -1 ? sResult.split(",")[1] : sResult;
+
+                let sUrl = that._sBasePath + "/cockpit/uploadUsersExcel";
+                $.ajax({
+                    url: sUrl,
+                    method: "POST",
+                    contentType: "application/json",
+                    headers: that.defaultHeaders,
+                    data: JSON.stringify({ fileBase64: sBase64 }),
+                    success: function (data) {
+                        BusyIndicator.hide();
+                        let sMsg = (data && data.value) ? data.value : "Users uploaded successfully.";
+                        MessageBox.success(sMsg, {
+                            onClose: function () {
+                                that._loadUserMgmtUsers();
                             }
                         });
-                    })
-                    .catch(function (oError) {
-                        console.error("Cross-app navigation failed:", oError);
-                        sap.m.MessageBox.error("Navigation failed. Please try again.");
-                    });
-            } else {
-                sap.m.MessageBox.error(
-                    "Cross-app navigation is not available. Please access this application through the SAP Fiori Launchpad.",
-                    {
-                        title: "Navigation Not Available"
+                    },
+                    error: function (xhr) {
+                        BusyIndicator.hide();
+                        let sErrMsg = "Failed to upload users. Please try again.";
+                        try {
+                            let oErr = JSON.parse(xhr.responseText);
+                            sErrMsg = (oErr && oErr.error && oErr.error.message) ? oErr.error.message : sErrMsg;
+                        } catch (ex) { /* ignore parse errors */ }
+                        MessageBox.error(sErrMsg);
                     }
+                });
+            };
+            oReader.onerror = function () {
+                BusyIndicator.hide();
+                MessageBox.error("Failed to read the selected file.");
+            };
+            oReader.readAsDataURL(oFile);
+        },
+
+        onUserMgmtSearch: function (oEvent) {
+            let sQuery = oEvent.getParameter("query");
+            this._applyUserMgmtSearchFilter(sQuery);
+        },
+
+        onUserMgmtLiveSearch: function (oEvent) {
+            let sQuery = oEvent.getParameter("newValue");
+            this._applyUserMgmtSearchFilter(sQuery);
+        },
+
+        _applyUserMgmtSearchFilter: function (sQuery) {
+            let oTable = sap.ui.core.Fragment.byId(this.getView().getId(), "idUserMgmtTable");
+            if (!oTable) return;
+
+            let oBinding = oTable.getBinding("items");
+            let aFilters = [];
+
+            if (sQuery && sQuery.length > 0) {
+                aFilters = [
+                    new Filter({
+                        filters: [
+                            new Filter("userName", FilterOperator.Contains, sQuery),
+                            new Filter("email", FilterOperator.Contains, sQuery),
+                            new Filter("project", FilterOperator.Contains, sQuery)
+                        ],
+                        and: false
+                    })
+                ];
+            }
+
+            oBinding.filter(aFilters);
+        },
+
+        onUserMgmtTableSelectionChange: function (oEvent) {
+            let oSelectedItem = oEvent.getParameter("listItem");
+            let oModel = this.getView().getModel("userMgmtModel");
+
+            if (oSelectedItem) {
+                let oContext = oSelectedItem.getBindingContext("userMgmtModel");
+                let oSelectedData = oContext.getObject();
+                let sPath = oContext.getPath();
+                let iIndex = parseInt(sPath.split("/").pop(), 10);
+
+                oModel.setProperty("/selectedIndex", iIndex);
+                oModel.setProperty("/selectedUserId", oSelectedData.id || oSelectedData.ID);
+                oModel.setProperty("/selectedUserEmail", oSelectedData.email);
+            } else {
+                oModel.setProperty("/selectedIndex", -1);
+                oModel.setProperty("/selectedUserId", null);
+                oModel.setProperty("/selectedUserEmail", null);
+            }
+        },
+
+        onUserMgmtRowPress: function (oEvent) {
+            let oItem = oEvent.getSource();
+            let oContext = oItem.getBindingContext("userMgmtModel");
+
+            if (!oContext) {
+                MessageToast.show("No data found for this row");
+                return;
+            }
+
+            let oSelectedData = oContext.getObject();
+            let sPath = oContext.getPath();
+            let iIndex = parseInt(sPath.split("/").pop(), 10);
+            let oModel = this.getView().getModel("userMgmtModel");
+
+            oModel.setProperty("/selectedIndex", iIndex);
+            oModel.setProperty("/selectedUserId", oSelectedData.id || oSelectedData.ID);
+            oModel.setProperty("/selectedUserEmail", oSelectedData.email);
+
+            let sProjectStr = oSelectedData.project || "";
+            oModel.setProperty("/formData", {
+                userName: oSelectedData.userName || "",
+                email: oSelectedData.email || "",
+                projects: this._splitUserMgmtProjects(sProjectStr)
+            });
+
+            oModel.setProperty("/formEditable", false);
+            oModel.setProperty("/isEditMode", false);
+            oModel.setProperty("/isAddMode", false);
+            oModel.setProperty("/isCreateProjectMode", false);
+
+            this._openUserEditDialog();
+        },
+
+        onUserMgmtDetailsPress: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let oTable = sap.ui.core.Fragment.byId(this.getView().getId(), "idUserMgmtTable");
+            let oSelectedItem = oTable ? oTable.getSelectedItem() : null;
+
+            if (oSelectedItem) {
+                let oContext = oSelectedItem.getBindingContext("userMgmtModel");
+                if (oContext) {
+                    let oSelectedData = oContext.getObject();
+                    let sPath = oContext.getPath();
+                    let iIndex = parseInt(sPath.split("/").pop(), 10);
+
+                    oModel.setProperty("/selectedIndex", iIndex);
+                    oModel.setProperty("/selectedUserId", oSelectedData.id || oSelectedData.ID);
+                    oModel.setProperty("/selectedUserEmail", oSelectedData.email);
+
+                    let sProjectStr = oSelectedData.project || "";
+                    oModel.setProperty("/formData", {
+                        userName: oSelectedData.userName || "",
+                        email: oSelectedData.email || "",
+                        projects: this._splitUserMgmtProjects(sProjectStr)
+                    });
+
+                    oModel.setProperty("/formEditable", false);
+                    oModel.setProperty("/isEditMode", false);
+                    oModel.setProperty("/isAddMode", false);
+                    oModel.setProperty("/isCreateProjectMode", false);
+                } else {
+                    this._clearUserMgmtForm();
+                }
+            } else {
+                this._clearUserMgmtForm();
+            }
+
+            this._openUserEditDialog();
+        },
+
+        _openUserEditDialog: async function () {
+            if (!this._userEditDialog) {
+                this._userEditDialog = await this.loadFragment({
+                    name: "aicockpitfeq.fragment.UserDialog"
+                });
+                this.getView().addDependent(this._userEditDialog);
+            }
+            this._userEditDialog.open();
+        },
+
+        _closeUserEditDialog: function () {
+            if (this._userEditDialog) {
+                this._userEditDialog.close();
+            }
+        },
+
+        _clearUserMgmtForm: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            oModel.setProperty("/formData", {
+                userName: "",
+                email: "",
+                projects: []
+            });
+            oModel.setProperty("/newProjectName", "");
+            oModel.setProperty("/selectedIndex", -1);
+            oModel.setProperty("/selectedUserId", null);
+            oModel.setProperty("/selectedUserEmail", null);
+            oModel.setProperty("/isEditMode", false);
+            oModel.setProperty("/isAddMode", false);
+            oModel.setProperty("/isCreateProjectMode", false);
+            oModel.setProperty("/formEditable", false);
+
+            let oTable = sap.ui.core.Fragment.byId(this.getView().getId(), "idUserMgmtTable");
+            if (oTable) {
+                oTable.removeSelections(true);
+            }
+        },
+
+        _validateUserMgmtForm: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let oFormData = oModel.getProperty("/formData");
+            let bValid = true;
+            let aEmptyFields = [];
+
+            if (!oFormData.userName || oFormData.userName.trim() === "") {
+                aEmptyFields.push("User Name");
+                bValid = false;
+            }
+
+            if (!oFormData.email || oFormData.email.trim() === "") {
+                aEmptyFields.push("Email");
+                bValid = false;
+            } else {
+                let emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(oFormData.email)) {
+                    MessageToast.show("Please enter a valid email address");
+                    return false;
+                }
+            }
+
+            let aProjects = oFormData.projects || [];
+            if (!Array.isArray(aProjects) || aProjects.length === 0) {
+                aEmptyFields.push("Project");
+                bValid = false;
+            }
+
+            if (!bValid) {
+                MessageToast.show("Please fill in required fields: " + aEmptyFields.join(", "));
+            }
+
+            return bValid;
+        },
+        _splitUserMgmtProjects: function (sProjects) {
+            if (!sProjects || typeof sProjects !== "string") {
+                return [];
+            }
+            return sProjects.split(",").map(function (p) {
+                return p.trim();
+            }).filter(function (p) {
+                return p !== "";
+            });
+        },
+        _getUserMgmtProjectsString: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let aProjects = oModel.getProperty("/formData/projects") || [];
+            return aProjects.map(function (p) { return (p || "").trim(); })
+                .filter(function (p) { return p !== ""; })
+                .join(", ");
+        },
+
+        onUserMgmtConfirmCreateProject: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let sNewProject = (oModel.getProperty("/newProjectName") || "").trim();
+
+            if (sNewProject === "") {
+                MessageToast.show("Please enter a project name");
+                return;
+            }
+
+            if (/\s/.test(sNewProject)) {
+                MessageToast.show("Project name must not contain spaces.");
+                return;
+            }
+
+            let aAvailable = oModel.getProperty("/availableProjects") || [];
+            let bExists = aAvailable.some(function (p) {
+                return p.key === sNewProject;
+            });
+
+            if (!bExists) {
+                aAvailable.push({ key: sNewProject, text: sNewProject });
+                oModel.setProperty("/availableProjects", aAvailable);
+            }
+
+            let aSelected = (oModel.getProperty("/formData/projects") || []).slice();
+            if (aSelected.indexOf(sNewProject) < 0) {
+                aSelected.push(sNewProject);
+                oModel.setProperty("/formData/projects", aSelected);
+            }
+
+            oModel.setProperty("/isCreateProjectMode", false);
+            oModel.setProperty("/newProjectName", "");
+            MessageToast.show("Project '" + sNewProject + "' added");
+        },
+
+        onUserMgmtShowCreateProject: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            oModel.setProperty("/isCreateProjectMode", true);
+            oModel.setProperty("/newProjectName", "");
+            MessageToast.show("Enter your new project name and confirm");
+        },
+
+
+        onUserMgmtCancelCreateProject: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            oModel.setProperty("/isCreateProjectMode", false);
+            oModel.setProperty("/newProjectName", "");
+        },
+
+        onUserMgmtDialogAddPress: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+
+            oModel.setProperty("/formData", {
+                userName: "",
+                email: "",
+                projects: []
+            });
+
+            oModel.setProperty("/newProjectName", "");
+            oModel.setProperty("/isCreateProjectMode", false);
+
+            oModel.setProperty("/selectedIndex", -1);
+            oModel.setProperty("/selectedUserId", null);
+            oModel.setProperty("/selectedUserEmail", null);
+            oModel.setProperty("/formEditable", true);
+            oModel.setProperty("/isAddMode", true);
+            oModel.setProperty("/isEditMode", false);
+
+            let oTable = sap.ui.core.Fragment.byId(this.getView().getId(), "idUserMgmtTable");
+            if (oTable) {
+                oTable.removeSelections(true);
+            }
+
+            MessageToast.show("Enter new user details and click Submit.");
+        },
+
+        onUserMgmtDialogDeletePress: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let iSelectedIndex = oModel.getProperty("/selectedIndex");
+
+            if (iSelectedIndex < 0) {
+                MessageToast.show("Please select a user to delete");
+                return;
+            }
+
+            let aUsers = oModel.getProperty("/users");
+            let oSelectedUser = aUsers[iSelectedIndex];
+
+            if (!oSelectedUser) {
+                MessageBox.error("User not found");
+                return;
+            }
+
+            MessageBox.confirm("Are you sure you want to delete user '" + oSelectedUser.userName + "'?", {
+                title: "Confirm Deletion",
+                onClose: function (oAction) {
+                    if (oAction === MessageBox.Action.OK) {
+                        this._deleteUserMgmtAPI(oSelectedUser.email);
+                        this._closeUserEditDialog();
+                    }
+                }.bind(this)
+            });
+        },
+
+        onUserMgmtDialogUpdatePress: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let iSelectedIndex = oModel.getProperty("/selectedIndex");
+
+            if (iSelectedIndex < 0) {
+                MessageToast.show("Please select a user to update");
+                return;
+            }
+
+            oModel.setProperty("/formEditable", true);
+            oModel.setProperty("/isEditMode", true);
+            oModel.setProperty("/isAddMode", false);
+
+            MessageToast.show("Edit mode enabled. Modify the data and click Submit to save.");
+        },
+
+        onUserMgmtDialogSubmitPress: function () {
+            if (!this._validateUserMgmtForm()) {
+                return;
+            }
+
+            let oModel = this.getView().getModel("userMgmtModel");
+            let bIsEditMode = oModel.getProperty("/isEditMode");
+            let bIsAddMode = oModel.getProperty("/isAddMode");
+
+            if (bIsEditMode) {
+                let sSelectedUserId = oModel.getProperty("/selectedUserId");
+                let sSelectedUserEmail = oModel.getProperty("/selectedUserEmail");
+                this._updateUserMgmtAPI(sSelectedUserId, sSelectedUserEmail);
+            } else if (bIsAddMode) {
+                // Check if a user with the same email already exists
+                let oFormData = oModel.getProperty("/formData");
+                let sEnteredEmail = (oFormData.email || "").trim().toLowerCase();
+                let aUsers = oModel.getProperty("/users") || [];
+                let oExistingUser = aUsers.find(function (u) {
+                    return (u.email || "").trim().toLowerCase() === sEnteredEmail;
+                });
+
+                if (oExistingUser) {
+                    // User already exists — merge projects and update instead of adding
+                    let aExistingProjects = this._splitUserMgmtProjects(oExistingUser.project || "");
+                    let aNewProjects = oFormData.projects || [];
+                    // Union: existing projects + any newly selected ones (no duplicates)
+                    let aMergedProjects = aExistingProjects.slice();
+                    aNewProjects.forEach(function (sProj) {
+                        if (sProj && aMergedProjects.indexOf(sProj) < 0) {
+                            aMergedProjects.push(sProj);
+                        }
+                    });
+                    // Update form with merged projects so _updateUserMgmtAPI picks them up
+                    oModel.setProperty("/formData/projects", aMergedProjects);
+                    // Also keep userName consistent with the existing record
+                    oModel.setProperty("/formData/userName", oExistingUser.userName || oFormData.userName);
+                    MessageToast.show("User already exists. Projects will be updated.");
+                    this._updateUserMgmtAPI(oExistingUser.id, oExistingUser.email);
+                } else {
+                    this._addUserMgmtAPI();
+                }
+            } else {
+                MessageToast.show("Please click Add or Update first");
+                return;
+            }
+
+            this._closeUserEditDialog();
+        },
+
+        onUserMgmtDialogCancelPress: function () {
+            this._closeUserEditDialog();
+            this._clearUserMgmtForm();
+        },
+
+        _addUserMgmtAPI: function () {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let oFormData = oModel.getProperty("/formData");
+            let sProjectsJoined = this._getUserMgmtProjectsString();
+
+            let oPayload = {
+                payload: {
+                    username: oFormData.userName.trim(),
+                    emailId: oFormData.email.trim(),
+                    projectDetails: sProjectsJoined
+                }
+            };
+
+            let sApiUrl = this._sBasePath + "/cockpit/addUser";
+            BusyIndicator.show();
+
+            fetch(sApiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify(oPayload)
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Failed to add user: " + response.status);
+                    }
+                    return response.json().catch(function () { return {}; });
+                })
+                .then(function () {
+                    MessageToast.show("User added successfully");
+                    this._clearUserMgmtForm();
+                    this._loadUserMgmtUsers();
+                }.bind(this))
+                .catch(function (error) {
+                    console.error("Error adding user:", error);
+                    MessageBox.error("Failed to add user. Please try again.");
+                })
+                .finally(function () {
+                    BusyIndicator.hide();
+                });
+        },
+
+        _updateUserMgmtAPI: function (sUserId, sUserEmail) {
+            let oModel = this.getView().getModel("userMgmtModel");
+            let oFormData = oModel.getProperty("/formData");
+            let sProjectsJoined = this._getUserMgmtProjectsString();
+
+            let oPayload = {
+                payload: {
+                    username: oFormData.userName.trim(),
+                    projectDetails: sProjectsJoined
+                }
+            };
+
+            if (sUserId) {
+                oPayload.payload.id = parseInt(sUserId, 10);
+            }
+
+            if (sUserEmail) {
+                oPayload.payload.emailId = sUserEmail;
+            }
+
+            if (oFormData.email.trim() !== sUserEmail) {
+                oPayload.payload.newEmailId = oFormData.email.trim();
+            }
+
+            let sApiUrl = this._sBasePath + "/cockpit/updateUser";
+            BusyIndicator.show();
+
+            fetch(sApiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify(oPayload)
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Failed to update user: " + response.status);
+                    }
+                    return response.json().catch(function () { return {}; });
+                })
+                .then(function () {
+                    MessageToast.show("User updated successfully");
+                    this._clearUserMgmtForm();
+                    this._loadUserMgmtUsers();
+                }.bind(this))
+                .catch(function (error) {
+                    console.error("Error updating user:", error);
+                    MessageBox.error("Failed to update user. Please try again.");
+                })
+                .finally(function () {
+                    BusyIndicator.hide();
+                });
+        },
+
+        _deleteUserMgmtAPI: function (sUserEmail) {
+            let sApiUrl = this._sBasePath + "/cockpit/deleteUser";
+            BusyIndicator.show();
+
+            let oPayload = {
+                emailId: sUserEmail
+            };
+
+            fetch(sApiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify(oPayload)
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Failed to delete user: " + response.status);
+                    }
+                    return response.json().catch(function () { return {}; });
+                })
+                .then(function () {
+                    MessageToast.show("User deleted successfully");
+                    this._clearUserMgmtForm();
+                    this._loadUserMgmtUsers();
+                }.bind(this))
+                .catch(function (error) {
+                    console.error("Error deleting user:", error);
+                    MessageBox.error("Failed to delete user. Please try again.");
+                })
+                .finally(function () {
+                    BusyIndicator.hide();
+                });
+        },
+
+        // ============================================================
+        // RETRO DOCUMENTATION FUNCTIONS - START
+        // Added for Retro Documentation feature
+        // ============================================================
+        onRetroDocumentModeChange: function (oEvent) {
+            var oButton = oEvent.getSource();
+            var sMode = oButton.data("mode");
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+
+            if (sMode === "update") {
+                var bHasFS = oRetroDocModel.getProperty("/hasExistingFS");
+                var bHasTS = oRetroDocModel.getProperty("/hasExistingTS");
+
+                if (!bHasFS && !bHasTS) {
+                    sap.m.MessageToast.show("No existing FS or TS document found for update.");
+                    return;
+                }
+
+                                // Show TR release reminder only if TR exists
+                var aSelectedObjects = oRetroDocModel.getProperty("/selectedObjects");
+                if (aSelectedObjects && aSelectedObjects.length > 0) {
+                    this._retroFetchTransportsFromAPI(aSelectedObjects[0].objectName).then(function (oData) {
+                        if (oData && oData.currentTR) {
+                            MessageToast.show("Please release the Transport Request (TR) before proceeding with the update.");
+                        }
+                    });
+                }
+
+            }
+
+            // Important: create mode should always be allowed
+            oRetroDocModel.setProperty("/documentMode", sMode);
+
+            if (sMode === "create") {
+                oRetroDocModel.setProperty("/createFS", true);
+                oRetroDocModel.setProperty("/createTS", true);
+            }
+
+            if (sMode === "update") {
+                oRetroDocModel.setProperty("/updateFS", oRetroDocModel.getProperty("/hasExistingFS"));
+                oRetroDocModel.setProperty("/updateTS", oRetroDocModel.getProperty("/hasExistingTS"));
+            }
+
+            oRetroDocModel.refresh(true);
+        },
+
+        onRetroTemplateToggle: function (oEvent) {
+            var bState = oEvent.getParameter("state");
+            this.getView().getModel("retroDocModel").setProperty("/retroTemplateToggle", bState);
+        },
+
+        onRetroSearchPatternSelect: function (oEvent) {
+            var oSelectedItem = oEvent.getParameter("selectedItem");
+            if (oSelectedItem) {
+                var oRetroDocModel = this.getView().getModel("retroDocModel");
+                oRetroDocModel.setProperty("/searchPattern", oSelectedItem.getText());
+                oRetroDocModel.setProperty("/documentModeEnabled", true);
+                oRetroDocModel.setProperty("/buttonsEnabled", true);
+            }
+        },
+
+        onRetroSourceModeChange: function (oEvent) {
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            oRetroDocModel.setProperty("/sourceMode", oEvent.getSource().getSelectedIndex());
+            var oFileUploader = this.byId("retroCodeUploader");
+            if (oFileUploader) {
+                oFileUploader.clear();
+            }
+            oRetroDocModel.setProperty("/uploadCodeEnabled", false);
+            oRetroDocModel.setProperty("/uploadedCodeFileName", "");
+            oRetroDocModel.setProperty("/uploadedSourceCode", "");
+            oRetroDocModel.setProperty("/sourceInputType", "selection");
+        },
+
+        onRetroCodeFileChange: function (oEvent) {
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var sFileName = oEvent.getParameter("newValue") || "";
+            oRetroDocModel.setProperty("/uploadCodeEnabled", !!sFileName);
+            oRetroDocModel.setProperty("/uploadedCodeFileName", sFileName);
+            if (sFileName) {
+                MessageBox.information("File selected successfully. Please click on 'Upload and Generate' button to proceed with document generation.");
+            }
+        },
+
+        onRetroUploadCodePress: function () {
+            var oFileUploader = this.byId("retroCodeUploader");
+            if (!oFileUploader.getValue()) {
+                MessageToast.show("Please select a file first.");
+                return;
+            }
+            var oFile = oFileUploader.oFileUpload.files[0];
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                oRetroDocModel.setProperty("/uploadedSourceCode", e.target.result);
+                oRetroDocModel.setProperty("/documentModeEnabled", true);
+                oRetroDocModel.setProperty("/buttonsEnabled", true);
+                oRetroDocModel.setProperty("/sourceInputType", "upload");
+                MessageToast.show("Code loaded. Select document mode and click Generate.");
+            };
+            reader.readAsText(oFile);
+        },
+
+        onRetroObjectTypeChange: function (oEvent) {
+            var oTable = this.byId("retroSearchResultsTable");
+            if (oTable && oTable.getBinding("items")) {
+                var sKey = oEvent.getParameter("selectedItem") ? oEvent.getParameter("selectedItem").getKey() : "";
+                // Use StartsWith instead of EQ because object types have subtypes (e.g. CLAS/OC, PROG/P)
+                oTable.getBinding("items").filter(sKey ? [new Filter("objectType", FilterOperator.StartsWith, sKey)] : []);
+            }
+        },
+
+        /**
+         * Helper function to get current timestamp in HH:MM:SS AM/PM format
+         * Added for Retro Documentation feature - Process Log timestamp
+         * @returns {string} Formatted timestamp string
+         */
+        _getCurrentTimestamp: function () {
+            var now = new Date();
+            var hours = now.getHours();
+            var minutes = now.getMinutes();
+            var seconds = now.getSeconds();
+            var ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            seconds = seconds < 10 ? '0' + seconds : seconds;
+            return hours + ':' + minutes + ':' + seconds + ' ' + ampm;
+        },
+        /**
+        * Append an entry to the Process Log panel
+        * @param {string} title
+        * @param {string} content
+        * @param {"success"|"error"|"processing"|"info"} [type="info"]
+        * @param {boolean} [hasViewButton=false]
+        */
+        _appendProcessLog: function (title, content, type, hasViewButton) {
+            var oView = this.getView();
+            var oDefaultModel = oView.getModel();
+            if (!oDefaultModel) {
+                oDefaultModel = new sap.ui.model.json.JSONModel({});
+                oView.setModel(oDefaultModel);
+            }
+            var aLog = oDefaultModel.getProperty("/logEntries") || [];
+            aLog.push({
+                title: title || "",
+                content: content || "",
+                type: type || "info",
+                time: this._getCurrentTimestamp(),
+                hasViewButton: !!hasViewButton
+            });
+            oDefaultModel.setProperty("/logEntries", aLog);
+            oDefaultModel.setProperty("/logPanelVisible", true);
+            this._autoScrollProcessLog();
+        },
+
+        /**
+         * Auto-scroll the Process Log list to the last item if the checkbox is selected
+         */
+        _autoScrollProcessLog: function () {
+            var oCheck = this.byId("autoScrollCheckbox");
+            var bAuto = !oCheck || oCheck.getSelected(); // default to true if not found
+            if (!bAuto) {
+                return;
+            }
+            var that = this;
+            setTimeout(function () {
+                var oList = that.byId("processLogList");
+                if (oList) {
+                    var oDom = oList.getDomRef();
+                    if (oDom) {
+                        oDom.scrollTop = oDom.scrollHeight;
+                    }
+                }
+            }, 0);
+        },
+        /**
+        * Handler for Technical Specification Template button press
+        * Opens the template dialog configured for Technical Specification
+        * Added for Retro Documentation feature
+        */
+        onRetroTechSpecPress: function () {
+            var oView = this.getView();
+            var oBundle = oView.getModel("i18n").getResourceBundle();
+
+            // Configure the template model for Technical Specification
+            var oRetroTemplateModel = oView.getModel("retroTemplateModel");
+            oRetroTemplateModel.setProperty("/dialogTitle", oBundle.getText("retroTechSpec"));
+            oRetroTemplateModel.setProperty("/templateType", "technical");
+            oRetroTemplateModel.setProperty("/selectedTemplateKey", "default");
+            oRetroTemplateModel.setProperty("/uploadFileName", "");
+            oRetroTemplateModel.setProperty("/uploadEnabled", false);
+            oRetroTemplateModel.setProperty("/defaultTemplateFile", "Style_Capgemini_Standard.docx");
+
+            // Open the template dialog
+            this._openRetroTemplateDialog();
+        },
+
+        /**
+         * Handler for Functional Specification Template button press
+         * Opens the template dialog configured for Functional Specification
+         * Added for Retro Documentation feature
+         */
+        onRetroFuncSpecPress: function () {
+            var oView = this.getView();
+            var oBundle = oView.getModel("i18n").getResourceBundle();
+
+            // Configure the template model for Functional Specification
+            var oRetroTemplateModel = oView.getModel("retroTemplateModel");
+            oRetroTemplateModel.setProperty("/dialogTitle", oBundle.getText("retroFuncSpec"));
+            oRetroTemplateModel.setProperty("/templateType", "functional");
+            oRetroTemplateModel.setProperty("/selectedTemplateKey", "default");
+            oRetroTemplateModel.setProperty("/uploadFileName", "");
+            oRetroTemplateModel.setProperty("/uploadEnabled", false);
+            oRetroTemplateModel.setProperty("/defaultTemplateFile", "Style_Capgemini_Standard.docx");
+
+            // Open the template dialog
+            this._openRetroTemplateDialog();
+        },
+
+        /**
+         * Opens the Retro Template Dialog fragment
+         * Added for Retro Documentation feature
+         */
+        _openRetroTemplateDialog: async function () {
+            var oView = this.getView();
+
+            if (!this._retroTemplateDialog) {
+                this._retroTemplateDialog = await Fragment.load({
+                    id: oView.getId(),
+                    name: "aicockpitfeq.fragment.RetroTemplateDialog",
+                    controller: this
+                });
+                oView.addDependent(this._retroTemplateDialog);
+            }
+
+            this._retroTemplateDialog.open();
+        },
+
+        /**
+         * Handler for closing the Retro Template Dialog
+         * Added for Retro Documentation feature
+         */
+        onRetroTemplateDialogClose: function () {
+            if (this._retroTemplateDialog) {
+                this._retroTemplateDialog.close();
+            }
+        },
+
+        /**
+        * Handler for template selection change in the dialog
+        * Added for Retro Documentation feature
+        * @param {sap.ui.base.Event} oEvent - The selection change event
+        */
+        onRetroTemplateSelectChange: function (oEvent) {
+            var sSelectedKey = oEvent.getParameter("selectedItem").getKey();
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            oRetroTemplateModel.setProperty("/selectedTemplateKey", sSelectedKey);
+        },
+
+        /**
+         * Handler for View Template button press
+         * Shows info dialog that DOCX files cannot be previewed in browser
+         * Added for Retro Documentation feature
+         */
+        onRetroViewTemplate: function () {
+            // Show information dialog that DOCX files cannot be previewed directly
+            sap.m.MessageBox.information(
+                "DOCX files cannot be previewed directly in the browser. Please use the Download option to view the template in Microsoft Word or a compatible application.",
+                {
+                    title: "View Template",
+                    actions: [sap.m.MessageBox.Action.OK]
+                }
+            );
+        },
+        /**
+         * Handler for Download Template button press
+         * Downloads the selected template file
+         * Added for Retro Documentation feature
+         */
+        onRetroDownloadTemplate: function () {
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var sSelectedKey = oRetroTemplateModel.getProperty("/selectedTemplateKey");
+
+            if (sSelectedKey === "uploaded" && oRetroTemplateModel.getProperty("/hasUploadedTemplate")) {
+                // Download user-uploaded template from stored base64 data
+                var sUploadedData = oRetroTemplateModel.getProperty("/uploadedTemplateData");
+                var sUploadedFileName = oRetroTemplateModel.getProperty("/uploadedTemplateFile");
+
+                if (sUploadedData && sUploadedFileName) {
+                    // Convert base64 to blob and download
+                    var byteCharacters = atob(sUploadedData);
+                    var byteNumbers = new Array(byteCharacters.length);
+                    for (var i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    var byteArray = new Uint8Array(byteNumbers);
+                    var oBlob = new Blob([byteArray], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+
+                    var sBlobUrl = URL.createObjectURL(oBlob);
+                    var oLink = document.createElement("a");
+                    oLink.href = sBlobUrl;
+                    oLink.download = sUploadedFileName;
+                    document.body.appendChild(oLink);
+                    oLink.click();
+                    document.body.removeChild(oLink);
+                    URL.revokeObjectURL(sBlobUrl);
+                } else {
+                    sap.m.MessageToast.show("Uploaded template data not available. Please re-upload.");
+                }
+            } else {
+                // Download default template from application resources
+                var sDefaultFile = oRetroTemplateModel.getProperty("/defaultTemplateFile");
+                //var sUrl = sap.ui.require.toUrl("aidevcp/ns/projectgenai/templates/" + sDefaultFile);
+                var sUrl = sap.ui.require.toUrl("aicockpitfeq/templates/" + sDefaultFile);
+
+
+                // Create a temporary link element to trigger download
+                var oLink = document.createElement("a");
+                oLink.href = sUrl;
+                oLink.download = sDefaultFile;
+                document.body.appendChild(oLink);
+                oLink.click();
+                document.body.removeChild(oLink);
+            }
+        },
+
+        /**
+         * Handler for file change in the Retro Template FileUploader
+         * Enables/disables upload button based on file selection
+         * Added for Retro Documentation feature
+         * @param {sap.ui.base.Event} oEvent - The file change event
+         */
+        onRetroTemplateFileChange: function (oEvent) {
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var sFileName = oEvent.getParameter("newValue") || "";
+
+            if (sFileName) {
+                oRetroTemplateModel.setProperty("/uploadFileName", sFileName);
+                oRetroTemplateModel.setProperty("/uploadEnabled", true);
+            } else {
+                oRetroTemplateModel.setProperty("/uploadFileName", "");
+                oRetroTemplateModel.setProperty("/uploadEnabled", false);
+            }
+        },
+
+        /**
+         * Handler for Upload Template button press
+         * Uploads the selected template file
+         * Added for Retro Documentation feature
+         */
+        onRetroUploadTemplate: function () {
+            var oView = this.getView();
+            var oFileUploader = oView.byId("retroTemplateUploader");
+            var oRetroTemplateModel = oView.getModel("retroTemplateModel");
+            var sFileName = oRetroTemplateModel.getProperty("/uploadFileName");
+
+            if (!sFileName) {
+                sap.m.MessageToast.show("Please select a file to upload.");
+                return;
+            }
+
+            // Get the file from the FileUploader
+            var oFile = oFileUploader.oFileUpload.files[0];
+            if (!oFile) {
+                sap.m.MessageToast.show("No file selected.");
+                return;
+            }
+
+            // Show busy indicator
+            sap.ui.core.BusyIndicator.show();
+
+            var that = this;
+            var sTemplateType = oRetroTemplateModel.getProperty("/templateType");
+            var sCategory = "RetroDoc" + (sTemplateType === "technical" ? "TechSpec" : "FuncSpec") + "Template";
+
+            // Read file as base64 for later download
+            var oReader = new FileReader();
+            oReader.onload = function (e) {
+                var sBase64 = e.target.result.split(",")[1]; // Remove data URL prefix
+
+                // Upload the file to object store
+                that._uploadFileNew(oFile, sCategory, that._ProjectDetail)
+                    .then(function (res) {
+                        sap.ui.core.BusyIndicator.hide();
+                        sap.m.MessageToast.show("Template uploaded successfully.");
+
+                        // Store uploaded template data for later download
+                        oRetroTemplateModel.setProperty("/uploadedTemplateFile", sFileName);
+                        oRetroTemplateModel.setProperty("/uploadedTemplateData", sBase64);
+                        oRetroTemplateModel.setProperty("/hasUploadedTemplate", true);
+
+                        // Add uploaded template to the templates list if not already present
+                        var aTemplates = oRetroTemplateModel.getProperty("/templates") || [];
+                        var bExists = aTemplates.some(function (t) { return t.key === "uploaded"; });
+                        if (!bExists) {
+                            aTemplates.push({ key: "uploaded", text: sFileName + " (Uploaded)" });
+                            oRetroTemplateModel.setProperty("/templates", aTemplates);
+                        } else {
+                            // Update the existing uploaded template text
+                            for (var i = 0; i < aTemplates.length; i++) {
+                                if (aTemplates[i].key === "uploaded") {
+                                    aTemplates[i].text = sFileName + " (Uploaded)";
+                                    break;
+                                }
+                            }
+                            oRetroTemplateModel.setProperty("/templates", aTemplates);
+                        }
+
+                        // Auto-select the uploaded template
+                        oRetroTemplateModel.setProperty("/selectedTemplateKey", "uploaded");
+
+                        // Reset upload fields
+                        oRetroTemplateModel.setProperty("/uploadFileName", "");
+                        oRetroTemplateModel.setProperty("/uploadEnabled", false);
+
+                        // Clear the file uploader
+                        oFileUploader.clear();
+                    })
+                    .catch(function (err) {
+                        sap.ui.core.BusyIndicator.hide();
+                        sap.m.MessageBox.error("Failed to upload template: " + (err.responseText || err.message || "Unknown error"));
+                    });
+            };
+            oReader.onerror = function () {
+                sap.ui.core.BusyIndicator.hide();
+                sap.m.MessageBox.error("Failed to read the file.");
+            };
+            oReader.readAsDataURL(oFile);
+        },
+
+        /**
+         * Handler for Pipeline Step link press
+         * Navigates to the selected pipeline step
+         * Added for Retro Documentation feature
+         * @param {sap.ui.base.Event} oEvent - The press event
+         */
+        onRetroPipelineStepPress: function (oEvent) {
+            var oSource = oEvent.getSource();
+            var sStep = oSource.data("step");
+            var iStep = parseInt(sStep, 10);
+
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            oRetroDocModel.setProperty("/currentStep", iStep);
+
+            // Update the step indicator text
+            sap.m.MessageToast.show("Navigating to Step " + iStep);
+        },
+
+        /**
+        * Handler for Search button press in Object Selection
+        * Searches for ABAP objects based on the criteria
+        * Added for Retro Documentation feature
+        */
+        onRetroSearchPress: function () {
+            var oView = this.getView();
+            var oRetroDocModel = oView.getModel("retroDocModel");
+            var that = this;
+
+            // Log start of search
+            var sObjectType = oRetroDocModel.getProperty("/selectedObjectType");
+            var sSapSystem = oRetroDocModel.getProperty("/selectedSapSystem");
+            var sSearchPattern = oRetroDocModel.getProperty("/searchPattern");
+            this._appendProcessLog(
+                "Searching Objects",
+                "Object Type: " + (sObjectType || "") + ", System: " + (sSapSystem || "") + ", Pattern: " + (sSearchPattern || ""),
+                "processing"
+            );
+
+            // Reset buttons and document mode until a selection is made
+            oRetroDocModel.setProperty("/buttonsEnabled", false);
+            oRetroDocModel.setProperty("/documentModeEnabled", false);
+
+            // Clear stale state from previous search/generation
+            oRetroDocModel.setProperty("/selectedObjects", []);
+            //this._retroUploadedDocCache = {};
+
+            // ============================================================
+            // COMPREHENSIVE STATE RESET - Clear all residual data from
+            // previous object selection to prevent "Invalid ABAP source"
+            // errors when re-selecting objects
+            // ============================================================
+            oRetroDocModel.setProperty("/documentMode", "create");
+            oRetroDocModel.setProperty("/hasExistingFS", false);
+            oRetroDocModel.setProperty("/hasExistingTS", false);
+            oRetroDocModel.setProperty("/existingFSFileName", "");
+            oRetroDocModel.setProperty("/existingTSFileName", "");
+            oRetroDocModel.setProperty("/existingFSFileKey", "");
+            oRetroDocModel.setProperty("/existingTSFileKey", "");
+            oRetroDocModel.setProperty("/existingFSDownloadUrl", "");
+            oRetroDocModel.setProperty("/existingTSDownloadUrl", "");
+            oRetroDocModel.setProperty("/existingFSViewUrl", "");
+            oRetroDocModel.setProperty("/existingTSViewUrl", "");
+            oRetroDocModel.setProperty("/updateFS", false);
+            oRetroDocModel.setProperty("/updateTS", false);
+            oRetroDocModel.setProperty("/createFS", true);
+            oRetroDocModel.setProperty("/createTS", true);
+
+            // Clear Agent Pipeline, Process Log, and Documents Ready sections
+            var oDefaultModel = this.getView().getModel();
+            if (oDefaultModel) {
+                // Hide and reset Agent Pipeline
+                oDefaultModel.setProperty("/agentPipelineVisible", false);
+                oDefaultModel.setProperty("/agentPipelineStatus", "");
+                oDefaultModel.setProperty("/agentPipelineComplete", false);
+                oDefaultModel.setProperty("/agentSteps", [
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" }
+                ]);
+                oDefaultModel.setProperty("/agentConnectors", [
+                    { completed: false },
+                    { completed: false },
+                    { completed: false }
+                ]);
+
+                // Clear Process Log
+                oDefaultModel.setProperty("/logEntries", []);
+
+                // Clear Documents Ready section
+                oDefaultModel.setProperty("/downloadItems", []);
+                oDefaultModel.setProperty("/downloadPanelVisible", false);
+            }
+
+            // Ensure results table is visible for a new search and clear any stale binding filter
+            var oResultsTable = this.byId("retroSearchResultsTable");
+            if (oResultsTable) {
+                oResultsTable.setVisible(true);
+                // Clear any type filter left from onRetroObjectTypeChange so fresh results are always shown
+                if (oResultsTable.getBinding("items")) {
+                    oResultsTable.getBinding("items").filter([]);
+                }
+            }
+
+            var sObjectType = oRetroDocModel.getProperty("/selectedObjectType");
+            var sSapSystem = oRetroDocModel.getProperty("/selectedSapSystem");
+            var sSearchPattern = oRetroDocModel.getProperty("/searchPattern");
+
+            if (!sSearchPattern) {
+                sap.m.MessageToast.show("Please enter a search pattern.");
+                return;
+            }
+
+            // Validate object type selection
+            var aValidTypes = ["PROG", "CLAS", "FUNC", "INTF"];
+            if (!sObjectType || aValidTypes.indexOf(sObjectType) === -1) {
+                sap.m.MessageToast.show("Please select a valid object type.");
+                return;
+            }
+
+            // Set searching flag and show busy indicator
+            oRetroDocModel.setProperty("/isSearching", true);
+            sap.ui.core.BusyIndicator.show();
+
+            // Prepare the MCP API payload for SAPSearch
+            // Type mapping based on object type selection:
+            // - PROG: Program
+            // - CLAS: Class
+            // - FUNC: Function Module
+            // - INTF: Interface
+            var oPayload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "SAPSearch",
+                    "arguments": {
+                        "query": sSearchPattern,
+                        "type": sObjectType,
+                        "limit": 100,
+                        "offset": 0
+                    }
+                }
+            };
+
+            // Call the arc1-mcp destination endpoint
+            $.ajax({
+                url: this._sBasePath + "/abap-mcp/mcp",
+                type: "POST",
+                contentType: "application/json",
+                headers: {
+                    "Accept": "application/json,text/event-stream",
+                    "Content-Type": "application/json"
+                },
+                data: JSON.stringify(oPayload),
+                success: function (data, textStatus, jqXHR) {
+                    sap.ui.core.BusyIndicator.hide();
+                    oRetroDocModel.setProperty("/isSearching", false);
+
+                    try {
+                        var aSearchResults = [];
+                        var responseData = data;
+
+                        // Check if response is a string (SSE format) or already parsed JSON
+                        if (typeof data === 'string') {
+                            // Handle Server-Sent Events (SSE) response format
+                            var lines = data.split('\n');
+                            var jsonData = '';
+
+                            // Parse SSE format - look for data: lines
+                            for (var i = 0; i < lines.length; i++) {
+                                var line = lines[i].trim();
+                                if (line.startsWith('data: ')) {
+                                    jsonData = line.substring(6); // Remove 'data: ' prefix
+                                    break;
+                                }
+                            }
+
+                            if (jsonData) {
+                                responseData = JSON.parse(jsonData);
+                            }
+                        }
+
+                        // Parse the response - the response contains result.content array
+                        if (responseData && responseData.result && responseData.result.content && responseData.result.content.length > 0) {
+                            // The text field contains a JSON string with the search results
+                            var sTextContent = responseData.result.content[0].text;
+
+                            // Parse the text content which is a JSON array string
+                            var aParsedResults = JSON.parse(sTextContent);
+
+                            // Filter results to only include objects matching the selected type
+                            var aFilteredResults = aParsedResults.filter(function (oItem) {
+                                var sItemType = (oItem.objectType || "").toUpperCase();
+                                return sItemType.indexOf(sObjectType.toUpperCase()) === 0;
+                            });
+
+                            // Map the results to the format expected by the table
+                            aSearchResults = aFilteredResults.map(function (oItem) {
+                                return {
+                                    objectName: oItem.objectName || "",
+                                    objectType: oItem.objectType || "PROG/P",
+                                    description: oItem.description || "",
+                                    package: oItem.packageName || "",
+                                    uri: oItem.uri || ""
+                                };
+                            });
+                        }
+
+                        // Update the model with search results
+                        oRetroDocModel.setProperty("/searchResults", aSearchResults);
+                        oRetroDocModel.setProperty("/searchResultsCount", aSearchResults.length);
+                        oRetroDocModel.setProperty("/searchResultsVisible", aSearchResults.length > 0);
+                        // Populate search suggestions for the ComboBox dropdown
+                        var aSearchSuggestions = aSearchResults.map(function(item) {
+                            return { key: item.objectName, text: item.objectName };
+                        });
+                        oRetroDocModel.setProperty("/searchSuggestions", aSearchSuggestions);
+                        // Ensure Process Log panel is visible
+                        var oDefaultModel = that.getView().getModel();
+                        if (!oDefaultModel) {
+                            oDefaultModel = new sap.ui.model.json.JSONModel({});
+                            that.getView().setModel(oDefaultModel);
+                        }
+                        oDefaultModel.setProperty("/logPanelVisible", true);
+                        // Log results with timestamp
+                        that._appendProcessLog(
+                            "Searching Objects",
+                            "Found " + aSearchResults.length + " objects",
+                            "success"
+                        );
+
+                        if (aSearchResults.length === 0) {
+                            sap.m.MessageToast.show("No objects found matching the search pattern.");
+                        } else {
+                            sap.m.MessageToast.show(aSearchResults.length + " objects found.");
+                        }
+
+                    } catch (e) {
+                        console.error("Error parsing MCP response:", e);
+                        console.error("Raw response data:", data);
+                        sap.m.MessageBox.error("Error parsing search results: " + e.message);
+                        oRetroDocModel.setProperty("/searchResults", []);
+                        oRetroDocModel.setProperty("/searchResultsCount", 0);
+                        oRetroDocModel.setProperty("/searchResultsVisible", false);
+                        // Ensure Process Log panel is visible and log error
+                        var oDefaultModel = that.getView().getModel();
+                        if (!oDefaultModel) {
+                            oDefaultModel = new sap.ui.model.json.JSONModel({});
+                            that.getView().setModel(oDefaultModel);
+                        }
+                        oDefaultModel.setProperty("/logPanelVisible", true);
+                        that._appendProcessLog(
+                            "Searching Objects",
+                            "Error parsing search results: " + e.message,
+                            "error"
+                        );
+                    }
+                },
+                error: function (jqXhr, textStatus, errorMessage) {
+                    sap.ui.core.BusyIndicator.hide();
+                    oRetroDocModel.setProperty("/isSearching", false);
+                    oRetroDocModel.setProperty("/searchResults", []);
+                    oRetroDocModel.setProperty("/searchResultsCount", 0);
+                    oRetroDocModel.setProperty("/searchResultsVisible", false);
+
+                    var sErrorMsg = "Error searching for objects.";
+                    try {
+                        if (jqXhr.responseText) {
+                            var oError = JSON.parse(jqXhr.responseText);
+                            sErrorMsg = oError.error?.message || oError.message || sErrorMsg;
+                        }
+                    } catch (e) {
+                        sErrorMsg = errorMessage || textStatus || sErrorMsg;
+                    }
+
+                    console.error("MCP Search Error:", sErrorMsg);
+                    sap.m.MessageBox.error(sErrorMsg);
+                    // Ensure Process Log panel is visible and log error
+                    var oDefaultModel = that.getView().getModel();
+                    if (!oDefaultModel) {
+                        oDefaultModel = new sap.ui.model.json.JSONModel({});
+                        that.getView().setModel(oDefaultModel);
+                    }
+                    oDefaultModel.setProperty("/logPanelVisible", true);
+                    that._appendProcessLog(
+                        "Searching Objects",
+                        "Error: " + sErrorMsg,
+                        "error"
+                    );
+                }
+            });
+        },
+
+        /**
+       * Handler for search result table selection change
+       * When user selects an item, fill the search pattern with the object name
+       * Added for Retro Documentation feature - MCP Integration
+       */
+        onRetroSearchResultSelectionChange: function (oEvent) {
+            var oTable = oEvent.getSource();
+            var aSelectedItems = oTable.getSelectedItems();
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+
+            var aSelectedObjects = aSelectedItems.map(function (oItem) {
+                var oContext = oItem.getBindingContext("retroDocModel");
+                return {
+                    objectName: oContext.getProperty("objectName"),
+                    objectType: oContext.getProperty("objectType"),
+                    description: oContext.getProperty("description"),
+                    package: oContext.getProperty("package"),
+                    uri: oContext.getProperty("uri")
+                };
+            });
+
+            oRetroDocModel.setProperty("/selectedObjects", aSelectedObjects);
+
+            var bEnable = aSelectedObjects.length > 0;
+            oRetroDocModel.setProperty("/buttonsEnabled", bEnable);
+
+            if (bEnable) {
+                oRetroDocModel.setProperty("/documentModeEnabled", true);
+                oRetroDocModel.setProperty("/searchResultsVisible", false);
+
+                var oResultsTable = this.byId("retroSearchResultsTable");
+                if (oResultsTable) {
+                    oResultsTable.setVisible(false);
+                }
+            }
+
+            // If single selection, update the search pattern and check existing FS/TS documents
+            if (aSelectedObjects.length === 1) {
+                var oSelectedObject = aSelectedObjects[0];
+
+                oRetroDocModel.setProperty("/searchPattern", oSelectedObject.objectName);
+                sap.m.MessageToast.show("Selected: " + oSelectedObject.objectName);
+
+                // Clear old FS/TS values first to avoid showing previous object's documents
+                oRetroDocModel.setProperty("/hasExistingFS", false);
+                oRetroDocModel.setProperty("/hasExistingTS", false);
+                oRetroDocModel.setProperty("/existingFSFileName", "");
+                oRetroDocModel.setProperty("/existingTSFileName", "");
+                oRetroDocModel.setProperty("/existingFSFileKey", "");
+                oRetroDocModel.setProperty("/existingTSFileKey", "");
+                oRetroDocModel.setProperty("/existingFSDownloadUrl", "");
+                oRetroDocModel.setProperty("/existingTSDownloadUrl", "");
+                oRetroDocModel.setProperty("/existingFSViewUrl", "");
+                oRetroDocModel.setProperty("/existingTSViewUrl", "");
+                oRetroDocModel.setProperty("/updateFS", false);
+                oRetroDocModel.setProperty("/updateTS", false);
+                oRetroDocModel.setProperty("/createFS", true);
+                oRetroDocModel.setProperty("/createTS", true);
+                oRetroDocModel.setProperty("/documentMode", "create");
+
+                this._checkExistingRetroDocuments(
+                    oSelectedObject.objectName,
+                    oSelectedObject.objectType
+                ).then(function (oExisting) {
+
+                    oRetroDocModel.setProperty("/hasExistingFS", oExisting.hasFS);
+                    oRetroDocModel.setProperty("/hasExistingTS", oExisting.hasTS);
+
+                    oRetroDocModel.setProperty("/existingFSFileName", oExisting.fsFileName || "");
+                    oRetroDocModel.setProperty("/existingTSFileName", oExisting.tsFileName || "");
+
+                    oRetroDocModel.setProperty("/existingFSFileKey", oExisting.fsKey || "");
+                    oRetroDocModel.setProperty("/existingTSFileKey", oExisting.tsKey || "");
+
+                    oRetroDocModel.setProperty("/existingFSDownloadUrl", oExisting.fsDownloadUrl || "");
+                    oRetroDocModel.setProperty("/existingTSDownloadUrl", oExisting.tsDownloadUrl || "");
+
+                    oRetroDocModel.setProperty("/existingFSViewUrl", oExisting.fsViewUrl || "");
+                    oRetroDocModel.setProperty("/existingTSViewUrl", oExisting.tsViewUrl || "");
+
+                    oRetroDocModel.setProperty("/updateFS", oExisting.hasFS);
+                    oRetroDocModel.setProperty("/updateTS", oExisting.hasTS);
+
+                    oRetroDocModel.setProperty(
+                        "/documentMode",
+                        "create"
+                    );
+
+                    oRetroDocModel.refresh(true);
+                }.bind(this));
+
+            } else if (aSelectedObjects.length > 1) {
+                sap.m.MessageToast.show(aSelectedObjects.length + " objects selected for document generation.");
+            }
+        },
+        /**
+         * Handler for Clear Search button press
+         * Clears the search pattern input
+         * Added for Retro Documentation feature
+         */
+        onRetroClearSearchPress: function () {
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            // Clear the search pattern
+            // oRetroDocModel.setProperty("/searchPattern", "");
+            oRetroDocModel.setProperty("/searchPattern", "Z*");
+            // Hide the results and reset related state
+            oRetroDocModel.setProperty("/searchResultsVisible", false);
+            oRetroDocModel.setProperty("/searchResults", []);
+            oRetroDocModel.setProperty("/searchResultsCount", 0);
+            oRetroDocModel.setProperty("/selectedObjects", []);
+            oRetroDocModel.setProperty("/isSearching", false);
+            // Disable buttons and document mode until a new selection
+            oRetroDocModel.setProperty("/buttonsEnabled", false);
+            oRetroDocModel.setProperty("/documentModeEnabled", false);
+
+            // Clear Agent Pipeline and Process Log
+            var oDefaultModel = this.getView().getModel();
+            if (oDefaultModel) {
+                // Hide and reset Agent Pipeline
+                oDefaultModel.setProperty("/agentPipelineVisible", false);
+                oDefaultModel.setProperty("/agentPipelineStatus", "");
+                oDefaultModel.setProperty("/agentPipelineComplete", false);
+                oDefaultModel.setProperty("/agentSteps", [
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" }
+                ]);
+                oDefaultModel.setProperty("/agentConnectors", [
+                    { completed: false },
+                    { completed: false },
+                    { completed: false }
+                ]);
+
+                // Clear Process Log
+                oDefaultModel.setProperty("/logEntries", []);
+
+                // Clear Documents Ready section
+                oDefaultModel.setProperty("/downloadItems", []);
+                oDefaultModel.setProperty("/downloadPanelVisible", false);
+            }
+        },
+        /**
+        * Handler for Reset button press
+        * Resets all form fields to default values
+        * Added for Retro Documentation feature
+        */
+        onRetroResetPress: function () {
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+
+            // Disable reset button after reset (will be re-enabled after next pipeline completion)
+            oRetroDocModel.setProperty("/resetEnabled", false);
+
+            // Reset to default values
+            oRetroDocModel.setProperty("/selectedObjectType", "PROG");
+            oRetroDocModel.setProperty("/selectedSapSystem", "DEV");
+            oRetroDocModel.setProperty("/searchPattern", "Z*");
+            oRetroDocModel.setProperty("/sourceMode", -1);
+            oRetroDocModel.setProperty("/searchSuggestions", []);
+            oRetroDocModel.setProperty("/currentStep", 1);
+            oRetroDocModel.setProperty("/logTimestamp", this._getCurrentTimestamp());
+
+            // Also hide and clear search results and disable buttons/document mode
+            oRetroDocModel.setProperty("/searchResultsVisible", false);
+            oRetroDocModel.setProperty("/searchResults", []);
+            oRetroDocModel.setProperty("/searchResultsCount", 0);
+            oRetroDocModel.setProperty("/selectedObjects", []);
+            oRetroDocModel.setProperty("/isSearching", false);
+            oRetroDocModel.setProperty("/buttonsEnabled", false);
+            oRetroDocModel.setProperty("/documentModeEnabled", false);
+            oRetroDocModel.setProperty("/documentMode", "create");
+            oRetroDocModel.setProperty("/hasExistingFS", false);
+            oRetroDocModel.setProperty("/hasExistingTS", false);
+            oRetroDocModel.setProperty("/createFS", true);
+            oRetroDocModel.setProperty("/createTS", true);
+
+            // Clear Agent Pipeline, Process Log, and Documents Ready sections
+            var oDefaultModel = this.getView().getModel();
+            if (oDefaultModel) {
+                // Hide and reset Agent Pipeline
+                oDefaultModel.setProperty("/agentPipelineVisible", false);
+                oDefaultModel.setProperty("/agentPipelineStatus", "");
+                oDefaultModel.setProperty("/agentPipelineComplete", false);
+                oDefaultModel.setProperty("/agentSteps", [
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" }
+                ]);
+                oDefaultModel.setProperty("/agentConnectors", [
+                    { completed: false },
+                    { completed: false },
+                    { completed: false }
+                ]);
+
+                // Clear Process Log
+                oDefaultModel.setProperty("/logEntries", []);
+                oDefaultModel.setProperty("/logPanelVisible", true);
+
+                // Clear Documents Ready section
+                oDefaultModel.setProperty("/downloadItems", []);
+                oDefaultModel.setProperty("/downloadPanelVisible", false);
+            }
+
+            sap.m.MessageToast.show("Form reset to default values.");
+        },
+
+        // ============================================================
+        // Delta Update threshold (in lines). When the source code has
+        // changed by at least this many lines (added + removed + modified),
+        // the existing FS/TS will be regenerated as a delta update IN PLACE
+        // (same Object Store key, same view/download URL). Below this
+        // threshold the documents are considered up-to-date and no update
+        // is performed.
+        // ============================================================
+        RETRO_DELTA_LINE_THRESHOLD: 80,
+
+        // generating docs on click of generate docs this was happening.
+        onRetroGenerateDocsPress: function () {
+            var oRetro = this.getView().getModel("retroDocModel");
+
+            if (!oRetro || !oRetro.getProperty("/buttonsEnabled")) {
+                return;
+            }
+            // Disable Generate Documents button to prevent multiple clicks
+            oRetro.setProperty("/buttonsEnabled", false);
+
+            var aSelected = oRetro.getProperty("/selectedObjects") || [];
+            var oSel = aSelected[0] || {};
+
+            var sObjectName = oSel.objectName || oRetro.getProperty("/selectedObject") || "";
+            var sObjectType = oSel.objectType || oRetro.getProperty("/selectedObjectType") || "PROG";
+            var sDocMode = oRetro.getProperty("/documentMode") || "create";
+            var bCreateFS = !!oRetro.getProperty("/createFS");
+            var bCreateTS = !!oRetro.getProperty("/createTS");
+
+            // In update mode, the checkboxes used are updateFS/updateTS
+            if (sDocMode === "update") {
+                bCreateFS = !!oRetro.getProperty("/updateFS");
+                bCreateTS = !!oRetro.getProperty("/updateTS");
+            }
+            // In upload code mode, use uploaded file name as object name
+            var sSourceInputType = oRetro.getProperty("/sourceInputType") || "selection";
+            if (sSourceInputType === "upload") {
+                var sUploadedCode = oRetro.getProperty("/uploadedSourceCode") || "";
+                if (!sUploadedCode) {
+                    sap.m.MessageToast.show("No source code loaded. Please upload a file first.");
+                    return;
+                }
+                // Derive object name from uploaded file or use a default
+                var sUploadedFileName = oRetro.getProperty("/uploadedCodeFileName") || "UPLOADED_PROGRAM";
+                sObjectName = sUploadedFileName.replace(/\.(txt|abap)$/i, "").toUpperCase();
+            } else if (!sObjectName) {
+                sap.m.MessageToast.show("Please select an object first");
+                return;
+            }
+
+            if (!bCreateFS && !bCreateTS) {
+                sap.m.MessageToast.show("Please select FS or TS to generate");
+                return;
+            }
+
+            // ============================================================
+            // Update Existing mode → run delta pipeline (in-place update)
+            // ============================================================
+            if (sDocMode === "update") {
+                return this._retroRunDeltaUpdatePipeline(sObjectName, sObjectType, bCreateFS, bCreateTS);
+            }
+
+            var oDefaultModel = this.getView().getModel();
+
+            if (!oDefaultModel) {
+                oDefaultModel = new sap.ui.model.json.JSONModel({});
+                this.getView().setModel(oDefaultModel);
+            }
+
+            oDefaultModel.setProperty("/agentPipelineVisible", true);
+            oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
+            oDefaultModel.setProperty("/agentPipelineComplete", false);
+            oDefaultModel.setProperty("/logPanelVisible", true);
+
+            var aSteps = [
+                { status: "processing" },
+                { status: "pending" },
+                { status: "pending" },
+                { status: "pending" }
+            ];
+
+            oDefaultModel.setProperty("/agentSteps", aSteps);
+            oDefaultModel.setProperty("/agentConnectors", [
+                { completed: false },
+                { completed: false },
+                { completed: false }
+            ]);
+
+            var updateConnector = function (i) {
+                var aConnectors = oDefaultModel.getProperty("/agentConnectors") || [
+                    { completed: false },
+                    { completed: false },
+                    { completed: false }
+                ];
+
+                if (aConnectors[i]) {
+                    aConnectors[i].completed = true;
+                    oDefaultModel.setProperty("/agentConnectors", aConnectors);
+                }
+            };
+
+            var setStep = function (i, sStatus) {
+                if (aSteps[i]) {
+                    aSteps[i].status = sStatus;
+                    oDefaultModel.setProperty("/agentSteps", aSteps);
+                }
+            };
+
+            var that = this;
+
+            this._setRetroLogStep(
+                "retro-pipeline-start",
+                "Pipeline",
+                sDocMode === "create"
+                    ? "Generating: " + (bCreateFS ? "FS " : "") + (bCreateTS ? "TS" : "")
+                    : "Update Existing mode selected",
+                "information"
+            );
+
+            var bModelHasFS = !!oRetro.getProperty("/hasExistingFS");
+            var bModelHasTS = !!oRetro.getProperty("/hasExistingTS");
+
+            var pCheck = Promise.resolve({
+                exists: bModelHasFS || bModelHasTS,
+                hasFS: bModelHasFS,
+                hasTS: bModelHasTS
+            });
+
+            pCheck
+                .then(function (res) {
+                    if (sDocMode === "create") {
+                        var bConflict = (bCreateFS && res.hasFS) || (bCreateTS && res.hasTS);
+
+                        if (bConflict) {
+                            var sMsg = "Documents already exist for the selected program.";
+                            if (res.hasFS) {
+                                sMsg += " Functional Specification already exists.";
+                            }
+                            if (res.hasTS) {
+                                sMsg += " Technical Specification already exists.";
+                            }
+                            sMsg += " Please use 'Update Existing' to modify the Functional and/or Technical Specification.";
+
+                            MessageBox.warning(sMsg, {
+                                title: "Documents Already Exist",
+                                actions: [MessageBox.Action.OK],
+                                onClose: function () {
+                                    // Re-enable Generate Documents button so user can switch mode
+                                    oRetro.setProperty("/buttonsEnabled", true);
+                                }
+                            });
+
+                            that._setRetroLogStep(
+                                "retro-validation",
+                                "Validation Failed",
+                                sMsg,
+                                "error"
+                            );
+
+                            oDefaultModel.setProperty("/agentPipelineStatus", "Aborted");
+                            setStep(0, "completed");
+
+                            return Promise.reject(new Error(sMsg));
+                        }
+
+                        that._setRetroLogStep(
+                            "retro-validation",
+                            "Validation",
+                            "No existing documents for selected types. Proceeding.",
+                            "success"
+                        );
+                    } else {
+                        that._setRetroLogStep(
+                            "retro-validation",
+                            "Update Mode",
+                            "Proceeding to fetch source and regenerate selected documents.",
+                            "information"
+                        );
+                    }
+
+                    setStep(0, "completed");
+                    updateConnector(0);
+
+                    setStep(1, "processing");
+
+                    that._setRetroLogStep(
+                        "retro-fetch-source",
+                        "Fetching Source Code",
+                        "Reading ABAP source via arc1-mcp for " +
+                        sObjectName +
+                        " (" +
+                        sObjectType +
+                        ")",
+                        "processing"
+                    );
+
+                    // If upload mode, use uploaded code directly; otherwise fetch from MCP
+                    if (sSourceInputType === "upload") {
+                        var sUploadedSrc = oRetro.getProperty("/uploadedSourceCode") || "";
+                        that._setRetroLogStep("retro-fetch-source", "Source Code", "Using uploaded source code (" + sUploadedSrc.length + " characters)", "success");
+                        return Promise.resolve(sUploadedSrc);
+                    }
+                    return that._retroFetchSourceCodeByMCP(sObjectName, sObjectType);
+                })
+                .then(function (sCode) {
+                    sCode = that._cleanMcpSourceCode(sCode);
+
+                    if (!sCode) {
+                        throw new Error("No source code found from MCP");
+                    }
+                    if (!that._isValidAbapSource(sCode)) {
+                        console.error("RETRO: Source code failed validation. Length: " + sCode.length + ", First 200 chars: " + sCode.substring(0, 200));
+                        // If the source is long enough, it is likely valid code
+                        // even if keywords were not detected (e.g., lowercase, comments-heavy)
+                        if (sCode.length < 50) {
+                            throw new Error("Invalid ABAP source returned from MCP");
+                        }
+                        console.warn("RETRO: Proceeding despite validation failure due to sufficient source length (" + sCode.length + " chars)");
+                    }
+
+                    that._setRetroLogStep(
+                        "retro-fetch-source",
+                        "Source",
+                        "Retrieved " + sCode.length + " characters from MCP",
+                        "success"
+                    );
+
+                    setStep(1, "completed");
+                    updateConnector(1);
+
+                    setStep(2, "processing");
+
+                    var tsContent = "";
+                    var fsContent = "";
+                    var sCurrentTR = "";
+
+                    // Fetch transport request for Version History (non-blocking - fallback to TRXXXXXX)
+                    return that._retroFetchTransportsFromAPI(sObjectName)
+                        .then(function (oTransportData) {
+                            sCurrentTR = (oTransportData && oTransportData.currentTR) || "";
+                            if (sCurrentTR) {
+                                that._setRetroLogStep(
+                                    "retro-transport-info",
+                                    "Transport",
+                                    "Current Transport Request: " + sCurrentTR,
+                                    "success"
+                                );
+                            }
+                        })
+                        .catch(function () {
+                            // Non-blocking - continue without TR
+                            console.log("RETRO: Could not fetch transport request, using placeholder.");
+                        })
+                        .then(function () {
+                            if (bCreateTS) {
+                                that._setRetroLogStep(
+                                    "retro-ts-generation",
+                                    "Tech Spec",
+                                    "Generating Technical Specification via AI Core...",
+                                    "processing"
+                                );
+
+                                return that._retroGenerateTechSpecLocally(sCode, {
+                                    name: sObjectName,
+                                    type: sObjectType
+                                }, sCurrentTR).then(function (sTS) {
+                                    tsContent = sTS || "";
+
+                                    that._setRetroLogStep(
+                                        "retro-ts-generation",
+                                        "Tech Spec",
+                                        "Technical Specification generated successfully.",
+                                        "success",
+                                        true,
+                                        {
+                                            docKind: "TS",
+                                            documentTitle: "Technical Specification",
+                                            filename: sObjectName + "_TS.docx",
+                                            generatedContent: tsContent
+                                        }
+                                    );
+                                });
+                            }
+                        })
+                        .then(function () {
+                            if (bCreateFS) {
+                                that._setRetroLogStep(
+                                    "retro-fs-generation",
+                                    "Func Spec",
+                                    "Generating Functional Specification via AI Core...",
+                                    "processing"
+                                );
+
+                                return that._retroGenerateFuncSpecLocally(
+                                    sCode,
+                                    {
+                                        name: sObjectName,
+                                        type: sObjectType
+                                    },
+                                    tsContent,
+                                    sCurrentTR
+                                ).then(function (sFS) {
+                                    fsContent = sFS || "";
+
+                                    that._setRetroLogStep(
+                                        "retro-fs-generation",
+                                        "Func Spec",
+                                        "Functional Specification generated successfully.",
+                                        "success",
+                                        true,
+                                        {
+                                            docKind: "FS",
+                                            documentTitle: "Functional Specification",
+                                            filename: sObjectName + "_FS.docx",
+                                            generatedContent: fsContent
+                                        }
+                                    );
+                                });
+                            }
+                        })
+                        .then(function () {
+                            var sDocsGenerated = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
+                            that._setRetroLogStep(
+                                "retro-doc-generation",
+                                "Docs",
+                                sDocsGenerated + " generation completed.",
+                                "success"
+                            );
+
+                            setStep(2, "completed");
+                            updateConnector(2);
+
+                            setStep(3, "processing");
+
+                            that._setRetroLogStep(
+                                "retro-upload",
+                                "Uploading",
+                                "Creating Word documents and uploading to Object Store under Retro prefix...",
+                                "processing"
+                            );
+
+                            return that._retroUploadDocuments(
+                                sObjectName,
+                                sObjectType,
+                                tsContent,
+                                fsContent
+                            );
+                        });
+                })
+                .then(function (aResults) {
+                    var aItems = [];
+
+                    (aResults || []).forEach(function (r) {
+                        if (r && r.filename) {
+                            aItems.push({
+                                name: r.type || "Document",
+                                filename: r.filename,
+                                objectName: sObjectName,
+                                objectType: sObjectType,
+                                category: r.category || "Retro",
+                                objectPath: r.objectPath || "",
+                                docKind: r.docKind,
+                                generatedContent: r.generatedContent || "",
+                                fileObject: r.fileObject,
+                                downloadMeta: r
+                            });
+                        }
+                    });
+
+                    oDefaultModel.setProperty("/downloadItems", aItems);
+                    oDefaultModel.setProperty("/downloadPanelVisible", aItems.length > 0);
+
+                    var sDocsUploaded = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
+                    that._setRetroLogStep(
+                        "retro-upload",
+                        "Object Store",
+                        "Generated " + sDocsUploaded + " Word document(s) saved to Object Store under Retro prefix.",
+                        "success"
+                    );
+
+                    setStep(3, "completed");
+
+                    oDefaultModel.setProperty("/agentPipelineComplete", true);
+                    oDefaultModel.setProperty("/agentPipelineStatus", "Completed");
+                    that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+                    var sDocsCompleted = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
+                    that._setRetroLogStep(
+                        "retro-completed",
+                        "Completed",
+                        "Pipeline finished. Generated " + sDocsCompleted + " Word document(s) are stored under Retro prefix in Object Store.",
+                        "success"
+                    );
+
+                    sap.m.MessageToast.show("Generated documents uploaded successfully.");
+                })
+                .catch(function (err) {
+                    var sErrorMsg = err && err.message ? err.message : "Pipeline failed";
+
+                    // If the rejection was due to "Documents Already Exist" conflict,
+                    // the warning dialog was already shown - skip the error dialog and log
+                    if (sErrorMsg && sErrorMsg.indexOf("Documents already exist") !== -1) {
+                        return;
+                    }
+
+                    that._setRetroLogStep(
+                        "retro-error",
+                        "Error",
+                        sErrorMsg,
+                        "error"
+                    );
+
+                    oDefaultModel.setProperty("/agentPipelineStatus", "Failed");
+                    oDefaultModel.setProperty("/agentPipelineComplete", false);
+                    // Enable reset button so user can reset after failure
+                    that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+                    sap.m.MessageBox.error(sErrorMsg);
+                });
+        },
+
+        // fetching source code:
+        _retroFetchSourceCodeByMCP: function (sObjectName, sObjectType) {
+            // Map UI type to SAPRead type
+            var sNormalizedType = String(sObjectType || "PROG").split("/")[0];
+
+            var typeMap = {
+                PROG: "PROG",
+                CLAS: "CLAS",
+                INTF: "INTF",
+                FUNC: "FUNC"
+            };
+
+            var mcpType = typeMap[sNormalizedType] || "PROG";
+            var that = this;
+            var _sseTimeoutId = null;
+
+            // ------------------------------------------------------------
+            // Helper: Send a SAPRead SYSTEM connectivity probe.
+            // The MCP/ADT layer may return HTTP 304 (Not Modified) when the
+            // same object is requested again, which causes a "Response
+            // constructor: Invalid response status code 304" error.
+            // Running a lightweight SYSTEM probe warms the connection and
+            // clears the cached state so the next real read succeeds.
+            // ------------------------------------------------------------
+            var _sendSystemProbe = function () {
+                var probePayload = {
+                    jsonrpc: "2.0",
+                    id: 1,
+                    method: "tools/call",
+                    params: {
+                        name: "SAPRead",
+                        arguments: { type: "SYSTEM" }
+                    }
+                };
+                return fetch(that._sBasePath + "/abap-mcp/mcp", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json,text/event-stream",
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache"
+                    },
+                    body: JSON.stringify(probePayload)
+                }).then(function (res) {
+                    // We don't care about the probe result, just consume it
+                    return res.text();
+                }).catch(function () {
+                    // Probe failures are non-fatal
+                    return "";
+                });
+            };
+
+            // ------------------------------------------------------------
+            // Helper: Perform the actual SAPRead fetch for the object
+            // ------------------------------------------------------------
+            var _doFetch = function () {
+                var payload = {
+                    jsonrpc: "2.0",
+                    id: 2,
+                    method: "tools/call",
+                    params: {
+                        name: "SAPRead",
+                        arguments: { type: mcpType, name: sObjectName }
+                    }
+                };
+
+                var controller = (typeof AbortController !== "undefined") ? new AbortController() : null;
+                var signal = controller ? controller.signal : undefined;
+                _sseTimeoutId = null;
+                if (controller) {
+                    _sseTimeoutId = setTimeout(function () {
+                        try { controller.abort(); } catch (e) { }
+                    }, 45000);
+                }
+
+                return fetch(that._sBasePath + "/abap-mcp/mcp", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json,text/event-stream",
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache"
+                    },
+                    body: JSON.stringify(payload),
+                    signal: signal
+                });
+            };
+
+            // ------------------------------------------------------------
+            // Main flow: Send a connectivity probe first, then fetch source.
+            // This avoids the 304 error when the same object is re-selected.
+            // ------------------------------------------------------------
+            return _sendSystemProbe()
+                .then(function () {
+                    return _doFetch();
+                })
+                .then(function (res) {
+                    if (!res.ok) {
+                        return res.text().then(function (t) {
+                            throw new Error("MCP HTTP " + res.status + " " + t);
+                        });
+                    }
+                    // Check Content-Type to determine how to parse the response
+                    var contentType = res.headers.get("Content-Type") || "";
+                    var isSSEContentType = contentType.indexOf("text/event-stream") !== -1;
+
+                    // Always read as text first to detect SSE format from content
+                    // This handles cases where Content-Type header doesn't indicate SSE
+                    // but the response body is in SSE format (starts with "event:" or "data:")
+                    return res.text().then(function (responseText) {
+                        if (_sseTimeoutId) { clearTimeout(_sseTimeoutId); }
+
+                        // Detect SSE format from content: check if it starts with "event:" or "data:"
+                        var trimmedText = (responseText || "").trim();
+                        var isSSEContent = trimmedText.indexOf("event:") === 0 ||
+                            trimmedText.indexOf("data:") === 0 ||
+                            trimmedText.indexOf("id:") === 0;
+
+                        if (isSSEContentType || isSSEContent) {
+                            // Handle SSE (Server-Sent Events) format
+                            return { _isSSE: true, _rawText: responseText };
+                        }
+
+                        // Try to parse as JSON
+                        try {
+                            return JSON.parse(responseText);
+                        } catch (e) {
+                            // If JSON parsing fails, check if it might be SSE format we didn't detect
+                            // Look for "data:" lines anywhere in the response
+                            if (responseText.indexOf("\ndata:") !== -1 || responseText.indexOf("data:") === 0) {
+                                return { _isSSE: true, _rawText: responseText };
+                            }
+                            // Re-throw the original error with more context
+                            throw new Error("Failed to parse MCP response as JSON: " + e.message + ". Response starts with: " + responseText.substring(0, 100));
+                        }
+                    });
+                })
+                .then(function (data) {
+                    if (typeof _sseTimeoutId !== "undefined" && _sseTimeoutId) { clearTimeout(_sseTimeoutId); }
+                    // If SSE response, parse the event stream to extract JSON data
+                    if (data && data._isSSE) {
+                        var sseText = data._rawText || "";
+                        var jsonData = null;
+
+                        // Parse SSE format: look for "data:" lines containing JSON
+                        var lines = sseText.split("\n");
+                        var collectedData = [];
+
+                        for (var i = 0; i < lines.length; i++) {
+                            var line = lines[i].trim();
+                            // SSE data lines start with "data:"
+                            if (line.indexOf("data:") === 0) {
+                                var dataContent = line.substring(5).trim();
+                                if (dataContent && dataContent !== "[DONE]") {
+                                    try {
+                                        var parsed = JSON.parse(dataContent);
+                                        collectedData.push(parsed);
+                                    } catch (e) {
+                                        // Not valid JSON, might be partial or text content
+                                        collectedData.push({ _rawContent: dataContent });
+                                    }
+                                }
+                            }
+                        }
+
+                        // Find the result from collected data
+                        // MCP JSON-RPC responses typically have a "result" field
+                        for (var j = 0; j < collectedData.length; j++) {
+                            var item = collectedData[j];
+                            if (item && item.result) {
+                                jsonData = item;
+                                break;
+                            }
+                            // Also check for content array (MCP tool response format)
+                            if (item && item.result === undefined && item.content) {
+                                jsonData = item;
+                                break;
+                            }
+                        }
+
+                        // If no structured result found, try to use the last valid JSON
+                        if (!jsonData && collectedData.length > 0) {
+                            jsonData = collectedData[collectedData.length - 1];
+                        }
+
+                        // If still no data, create a wrapper with raw content
+                        if (!jsonData) {
+                            // Try to extract any text content from the SSE stream
+                            var textContent = "";
+                            for (var k = 0; k < collectedData.length; k++) {
+                                if (collectedData[k] && collectedData[k]._rawContent) {
+                                    textContent += collectedData[k]._rawContent;
+                                }
+                            }
+                            jsonData = { content: textContent || sseText };
+                        }
+
+                        data = jsonData;
+                    }
+
+                    // Try common fields for extracting source code
+                    var result = data && (data.result || data.value || data.data);
+
+                    // Check for MCP error response (isError flag)
+                    // This handles cases where the server returns a 304-related error
+                    // or other ADT errors in the response body
+                    if (result && result.isError === true) {
+                        var sErrorText = "";
+                        if (result.content && Array.isArray(result.content)) {
+                            for (var ei = 0; ei < result.content.length; ei++) {
+                                if (result.content[ei] && result.content[ei].text) {
+                                    sErrorText += result.content[ei].text;
+                                }
+                            }
+                        }
+                        throw new Error(sErrorText || "MCP returned an error response");
+                    }
+
+                    // Handle MCP tool response format with content array
+                    if (result && result.content && Array.isArray(result.content)) {
+                        // MCP responses often have content as array of {type, text} objects
+                        var textParts = [];
+                        for (var m = 0; m < result.content.length; m++) {
+                            var contentItem = result.content[m];
+                            if (contentItem && contentItem.text) {
+                                textParts.push(contentItem.text);
+                            } else if (typeof contentItem === "string") {
+                                textParts.push(contentItem);
+                            } else if (contentItem && contentItem.resource && contentItem.resource.text) {
+                                textParts.push(contentItem.resource.text);
+                            }
+                        }
+                        if (textParts.length > 0) {
+                            return textParts.join("\n");
+                        }
+                    }
+
+                    // var code = (result && (result.source || result.code || result.content || result.text)) ||
+                    //     data.source || data.code || data.content || data.text || "";
+                    var code = (result && (result.source || result.code ||
+                        (typeof result.content === "string" ? result.content : "") || result.text)) ||
+                        data.source || data.code ||
+                        (typeof data.content === "string" ? data.content : "") || data.text || "";
+
+                    if (!code) {
+                        // Some MCPs return nested results, try harder
+                        try {
+                            code = JSON.stringify(result || data);
+                        } catch (e) {
+                            code = "";
+                        }
+                    }
+                    return code;
+                });
+        },
+
+        // ============================================================
+        // API-based Diff Fetch - Calls /api/program/diff endpoint
+        // Returns: {summary, addedCode, removedCode, modifiedCode, changes, currentSource, releasedSource}
+        // ============================================================
+        _retroFetchDiffFromAPI: function (sObjectName) {
+            var that = this;
+            var sUrl = this._sBasePath + "/abap-mcp/api/program/diff?program=" + encodeURIComponent(sObjectName);
+
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: sUrl,
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    success: function (data) {
+                        // API returns: {program, summary, addedCode, removedCode, modifiedCode, changes, currentSource, releasedSource, hasDifferences}
+                        resolve(data);
+                    },
+                    error: function (xhr, status, error) {
+                        var errMsg = "Failed to fetch diff from API";
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            errMsg = errData.error || errData.message || errMsg;
+                        } catch (e) { }
+                        reject(new Error(errMsg + ": " + (error || status)));
+                    }
+                });
+            });
+        },
+
+        // ============================================================
+        // API-based Transport Fetch - Calls /api/program/transports endpoint
+        // Returns: {program, currentTR, releasedTR}
+        // ============================================================
+        _retroFetchTransportsFromAPI: function (sObjectName) {
+            var that = this;
+            var sUrl = this._sBasePath + "/abap-mcp/api/program/transports?program=" + encodeURIComponent(sObjectName);
+
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: sUrl,
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    success: function (data) {
+                        // API returns: {program, currentTR, releasedTR}
+                        resolve(data);
+                    },
+                    error: function (xhr, status, error) {
+                        var errMsg = "Failed to fetch transports from API";
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            errMsg = errData.error || errData.message || errMsg;
+                        } catch (e) { }
+                        // Don't reject - transports are optional, just return empty
+                        resolve({ program: sObjectName, currentTR: null, releasedTR: null });
+                    }
+                });
+            });
+        },
+
+        // ============================================================
+        // API-based Source Code Fetch - Calls /api/program/source endpoint
+        // Returns: {program, versionType, lineNo, sourceCode}
+        // ============================================================
+        _retroFetchSourceFromAPI: function (sObjectName, sVersionType) {
+            var that = this;
+            var sUrl = this._sBasePath + "/abap-mcp/api/program/source?program=" + encodeURIComponent(sObjectName) +
+                "&versionType=" + encodeURIComponent(sVersionType || "CURRENT");
+
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: sUrl,
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    success: function (data) {
+                        // API returns: {program, versionType, lineNo, sourceCode}
+                        resolve(data);
+                    },
+                    error: function (xhr, status, error) {
+                        var errMsg = "Failed to fetch source from API";
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            errMsg = errData.error || errData.message || errMsg;
+                        } catch (e) { }
+                        reject(new Error(errMsg + ": " + (error || status)));
+                    }
+                });
+            });
+        },
+
+        // ============================================================
+        // DELTA UPDATE PIPELINE (Update Existing mode) - ENHANCED WITH API
+        // ------------------------------------------------------------
+        // Flow:
+        //  1. Fetch existing FS / TS content from Object Store
+        //  2. Call diff API to get changes (addedCode, modifiedCode, removedCode)
+        //  3. Call transports API to get transport request numbers
+        //  4. If no changes -> log "No source code changes" and exit
+        //  5. If changes exist -> send changed code to AI to update FS/TS
+        //  6. Update documents in-place in Object Store
+        //  7. Update UI pipeline + logs
+        // ============================================================
+        _retroRunDeltaUpdatePipeline: function (sObjectName, sObjectType, bUpdateFS, bUpdateTS) {
+            var that = this;
+            var oRetro = this.getView().getModel("retroDocModel");
+            var oDefaultModel = this.getView().getModel();
+            if (!oDefaultModel) {
+                oDefaultModel = new sap.ui.model.json.JSONModel({});
+                this.getView().setModel(oDefaultModel);
+            }
+
+            // Show pipeline panel & log panel
+            oDefaultModel.setProperty("/agentPipelineVisible", true);
+            oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
+            oDefaultModel.setProperty("/agentPipelineComplete", false);
+            oDefaultModel.setProperty("/logPanelVisible", true);
+
+            var aSteps = [
+                { status: "processing" }, // existing docs fetch
+                { status: "pending" },    // source fetch
+                { status: "pending" },    // delta regenerate
+                { status: "pending" }     // upload (in-place)
+            ];
+            oDefaultModel.setProperty("/agentSteps", aSteps);
+            oDefaultModel.setProperty("/agentConnectors", [
+                { completed: false },
+                { completed: false },
+                { completed: false }
+            ]);
+
+            var setStep = function (i, sStatus) {
+                if (aSteps[i]) {
+                    aSteps[i].status = sStatus;
+                    oDefaultModel.setProperty("/agentSteps", aSteps);
+                }
+            };
+            var updateConnector = function (i) {
+                var aC = oDefaultModel.getProperty("/agentConnectors") || [];
+                if (aC[i]) {
+                    aC[i].completed = true;
+                    oDefaultModel.setProperty("/agentConnectors", aC);
+                }
+            };
+
+            var sFsKey = oRetro.getProperty("/existingFSFileKey");
+            var sTsKey = oRetro.getProperty("/existingTSFileKey");
+            var sFsFileName = oRetro.getProperty("/existingFSFileName");
+            var sTsFileName = oRetro.getProperty("/existingTSFileName");
+            var bHasFS = !!oRetro.getProperty("/hasExistingFS");
+            var bHasTS = !!oRetro.getProperty("/hasExistingTS");
+
+            if (!bUpdateFS && !bUpdateTS) {
+                sap.m.MessageToast.show("Please select FS or TS to update");
+                return;
+            }
+            var bDoFS = !!(bUpdateFS && bHasFS && sFsKey);
+            var bDoTS = !!(bUpdateTS && bHasTS && sTsKey);
+
+            if (!bDoFS && !bDoTS) {
+                that._setRetroLogStep(
+                    "retro-delta-noexisting",
+                    "Update Mode",
+                    "No existing FS or TS document found to update.",
+                    "error"
+                );
+                oDefaultModel.setProperty("/agentPipelineStatus", "Aborted");
+                return;
+            }
+
+            this._setRetroLogStep(
+                "retro-delta-start",
+                "Update Existing Mode",
+                "Checking for source code changes for " + sObjectName + " ...",
+                "information"
+            );
+
+            var sExistingFsContent = "";
+            var sExistingTsContent = "";
+            var sCurrentSource = "";
+
+            // --- Step 1: Fetch existing FS / TS content from Object Store ---
+            var pFetchExistingDocs = Promise.resolve()
+                .then(function () {
+                    var aFetches = [];
+                    if (bDoFS) {
+                        that._setRetroLogStep(
+                            "retro-fetch-existing-fs",
+                            "Fetching Existing FS",
+                            "Loading existing Functional Specification from Object Store...",
+                            "processing"
+                        );
+                        aFetches.push(
+                            that._retroFetchExistingDocContent(sFsKey).then(function (sFs) {
+                                sExistingFsContent = sFs || "";
+                                that._setRetroLogStep(
+                                    "retro-fetch-existing-fs",
+                                    "Fetching Existing FS",
+                                    "Existing FS content loaded (" + sExistingFsContent.length + " characters)",
+                                    "success"
+                                );
+                            }).catch(function (err) {
+                                that._setRetroLogStep(
+                                    "retro-fetch-existing-fs",
+                                    "Fetching Existing FS",
+                                    "Failed to load existing FS: " + (err && err.message ? err.message : err),
+                                    "error"
+                                );
+                                throw err;
+                            })
+                        );
+                    }
+                    if (bDoTS) {
+                        that._setRetroLogStep(
+                            "retro-fetch-existing-ts",
+                            "Fetching Existing TS",
+                            "Loading existing Technical Specification from Object Store...",
+                            "processing"
+                        );
+                        aFetches.push(
+                            that._retroFetchExistingDocContent(sTsKey).then(function (sTs) {
+                                sExistingTsContent = sTs || "";
+                                that._setRetroLogStep(
+                                    "retro-fetch-existing-ts",
+                                    "Fetching Existing TS",
+                                    "Existing TS content loaded (" + sExistingTsContent.length + " characters)",
+                                    "success"
+                                );
+                            }).catch(function (err) {
+                                that._setRetroLogStep(
+                                    "retro-fetch-existing-ts",
+                                    "Fetching Existing TS",
+                                    "Failed to load existing TS: " + (err && err.message ? err.message : err),
+                                    "error"
+                                );
+                                throw err;
+                            })
+                        );
+                    }
+                    return Promise.all(aFetches);
+                });
+
+            pFetchExistingDocs
+                // --- Step 2: Fetch diff + transports from API ---
+                .then(function () {
+                    setStep(0, "completed");
+                    updateConnector(0);
+                    setStep(1, "processing");
+
+                    that._setRetroLogStep(
+                        "retro-fetch-diff",
+                        "Fetching Source Diff",
+                        "Calling diff API to compare CURRENT vs RELEASED source for " + sObjectName + "...",
+                        "processing"
+                    );
+
+                    // Fetch diff and transports in parallel
+                    return Promise.all([
+                        that._retroFetchDiffFromAPI(sObjectName),
+                        that._retroFetchTransportsFromAPI(sObjectName)
+                    ]);
+                })
+                .then(function (aResults) {
+                    var oDiffData = aResults[0] || {};
+                    var oTransportData = aResults[1] || {};
+
+                    // Store current source from diff API
+                    sCurrentSource = oDiffData.currentSource || "";
+
+                    var sSummaryText = "Total Changes: " + (oDiffData.summary ? oDiffData.summary.totalChanges : 0) +
+                        " (Added: " + (oDiffData.summary ? oDiffData.summary.added : 0) +
+                        ", Removed: " + (oDiffData.summary ? oDiffData.summary.removed : 0) +
+                        ", Modified: " + (oDiffData.summary ? oDiffData.summary.modified : 0) + ")";
+
+                    var sTransportInfo = "Current TR: " + (oTransportData.currentTR || "N/A") +
+                        ", Released TR: " + (oTransportData.releasedTR || "N/A");
+
+                    that._setRetroLogStep(
+                        "retro-fetch-diff",
+                        "Source Diff Retrieved",
+                        sSummaryText + " | " + sTransportInfo,
+                        "success"
+                    );
+
+                    setStep(1, "completed");
+                    updateConnector(1);
+
+                    // ============================================================
+                    // Guard: If no ReleasedTR exists, there is no baseline version
+                    // to compare against. Skip FS/TS generation entirely.
+                    // ============================================================
+                    if (!oTransportData.releasedTR) {
+                        that._setRetroLogStep(
+                            "retro-no-released-tr",
+                            "No Released Transport",
+                            "No Released Transport Request found for " + sObjectName + ". There is no baseline version to compare against. Skipping FS and TS generation.",
+                            "error"
+                        );
+                        setStep(2, "completed");
+                        updateConnector(2);
+                        setStep(3, "completed");
+
+                        oDefaultModel.setProperty("/agentPipelineComplete", true);
+                        oDefaultModel.setProperty("/agentPipelineStatus", "Completed (No Released TR)");
+                        that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+                        that._setRetroLogStep(
+                            "retro-completed",
+                            "Pipeline Complete - No Released TR",
+                            "No Released Transport Request exists for this program. Cannot perform delta comparison. Please ensure the program has at least one released transport before using Update mode.",
+                            "success"
+                        );
+                        sap.m.MessageToast.show("No Released TR found. Cannot compare versions.");
+                        return Promise.reject({ _noChanges: true });
+                    }
+
+                    // Check if there are any differences
+                    // Handle cases: hasDifferences=false, summary.totalChanges=0,
+                    // or addedCode="No lines added" with no modifications/removals
+                    var bNoDifferences = (oDiffData.hasDifferences === false || oDiffData.hasDifferences === "false" || !oDiffData.hasDifferences);
+                    var bNoTotalChanges = (oDiffData.summary && oDiffData.summary.totalChanges === 0);
+                    var bNoAddedCode = (oDiffData.summary && oDiffData.summary.added === 0) ||
+                        (oDiffData.addedCode === "No lines added");
+                    var bNoModifiedCode = (oDiffData.summary && oDiffData.summary.modified === 0) ||
+                        (oDiffData.modifiedCode === "No lines modified");
+                    var bNoRemovedCode = (oDiffData.summary && oDiffData.summary.removed === 0) ||
+                        (oDiffData.removedCode === "No lines removed");
+
+                    if (bNoDifferences || bNoTotalChanges || (bNoAddedCode && bNoModifiedCode && bNoRemovedCode)) {
+                        that._setRetroLogStep(
+                            "retro-source-diff",
+                            "Source Comparison",
+                            "No change in the code. No lines added, modified, or removed between CURRENT and RELEASED versions.",
+                            "success"
+                        );
+                        setStep(2, "completed");
+                        updateConnector(2);
+                        setStep(3, "completed");
+
+                        oDefaultModel.setProperty("/agentPipelineComplete", true);
+                        oDefaultModel.setProperty("/agentPipelineStatus", "Completed (No Changes)");
+                        that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+                        that._setRetroLogStep(
+                            "retro-completed",
+                            "Pipeline Complete - No Changes",
+                            "No change in the code. Skipping FS and TS generation. Existing documents are kept as-is.",
+                            "success"
+                        );
+                        sap.m.MessageToast.show("No change in the code. FS and TS generation skipped.");
+                        return Promise.reject({ _noChanges: true });
+                    }
+
+                    that._setRetroLogStep(
+                        "retro-source-diff",
+                        "Source Comparison",
+                        sSummaryText + " - proceeding with delta update for TR: " + (oTransportData.currentTR || "N/A"),
+                        "success"
+                    );
+
+                    setStep(2, "processing");
+
+                    // Build the oDiff object compatible with existing delta prompts
+                    // but now enriched with API data (addedCode, modifiedCode, removedCode)
+                    var oDiff = {
+                        added: oDiffData.summary ? oDiffData.summary.added : 0,
+                        removed: oDiffData.summary ? oDiffData.summary.removed : 0,
+                        modified: oDiffData.summary ? oDiffData.summary.modified : 0,
+                        changedLines: oDiffData.summary ? oDiffData.summary.totalChanges : 0,
+                        // Include the actual changed code from API
+                        addedCode: oDiffData.addedCode || "No lines added",
+                        modifiedCode: oDiffData.modifiedCode || "No lines modified",
+                        removedCode: oDiffData.removedCode || "No lines removed",
+                        // Build a unified diff summary for the prompt
+                        unifiedDiff: "=== ADDED CODE ===\n" + (oDiffData.addedCode || "None") +
+                            "\n\n=== MODIFIED CODE ===\n" + (oDiffData.modifiedCode || "None") +
+                            "\n\n=== REMOVED CODE ===\n" + (oDiffData.removedCode || "None"),
+                        // Transport request info
+                        currentTR: oTransportData.currentTR || "",
+                        releasedTR: oTransportData.releasedTR || ""
+                    };
+
+                    // Build context object with transport request info for AI prompts
+                    var oCtx = {
+                        objectType: sObjectType,
+                        transportRequest: oTransportData.currentTR || "TRXXXXXX",
+                        releasedTR: oTransportData.releasedTR || "",
+                        changeSummary: sSummaryText + " for TR " + (oTransportData.currentTR || "N/A")
+                    };
+
+                    var pDeltaTs = bDoTS
+                        ? (function () {
+                            that._setRetroLogStep(
+                                "retro-delta-ts",
+                                "Delta Update - Tech Spec",
+                                "Updating Technical Specification with code changes from TR " + (oTransportData.currentTR || "N/A") + "...",
+                                "processing"
+                            );
+                            return that._retroGenerateTechSpecDelta(
+                                sCurrentSource,
+                                { name: sObjectName, type: sObjectType },
+                                sExistingTsContent,
+                                oDiff,
+                                oCtx
+                            ).then(function (sNewTs) {
+                                that._setRetroLogStep(
+                                    "retro-delta-ts",
+                                    "Delta Update - Tech Spec",
+                                    "Technical Specification updated with delta changes (TR: " + (oTransportData.currentTR || "N/A") + ")",
+                                    "success",
+                                    true,
+                                    {
+                                        docKind: "TS",
+                                        documentTitle: "Technical Specification",
+                                        filename: sTsFileName || (sObjectName + "_TS.docx"),
+                                        generatedContent: sNewTs
+                                    }
+                                );
+                                return sNewTs;
+                            });
+                        })()
+                        : Promise.resolve("");
+
+                    var sNewTsContent = "";
+                    var sNewFsContent = "";
+
+                    return pDeltaTs.then(function (sTs) {
+                        sNewTsContent = sTs || "";
+                        if (!bDoFS) { return ""; }
+                        that._setRetroLogStep(
+                            "retro-delta-fs",
+                            "Delta Update - Func Spec",
+                            "Appending changes to existing Functional Specification...",
+                            "processing"
+                        );
+                        return that._retroGenerateFuncSpecDelta(
+                            sCurrentSource,
+                            { name: sObjectName, type: sObjectType },
+                            sExistingFsContent,
+                            sNewTsContent || sExistingTsContent,
+                            oDiff
+                        ).then(function (sFs) {
+                            sNewFsContent = sFs || "";
+                            that._setRetroLogStep(
+                                "retro-delta-fs",
+                                "Delta Update - Func Spec",
+                                "Functional Specification updated with delta changes",
+                                "success",
+                                true,
+                                {
+                                    docKind: "FS",
+                                    documentTitle: "Functional Specification",
+                                    filename: sFsFileName || (sObjectName + "_FS.docx"),
+                                    generatedContent: sNewFsContent
+                                }
+                            );
+                            return sNewFsContent;
+                        });
+                    }).then(function () {
+                        setStep(2, "completed");
+                        updateConnector(2);
+                        setStep(3, "processing");
+
+                        that._setRetroLogStep(
+                            "retro-upload",
+                            "Updating Documents",
+                            "Updating existing FS / TS in Object Store (in place)...",
+                            "processing"
+                        );
+
+                        return that._retroUpdateDocumentsInPlace(
+                            sObjectName,
+                            sObjectType,
+                            bDoTS ? sNewTsContent : "",
+                            bDoFS ? sNewFsContent : "",
+                            sTsFileName,
+                            sFsFileName,
+                            sTsKey,
+                            sFsKey
+                        );
+                    });
+                })
+                .then(function (aResults) {
+                    var aItems = oDefaultModel.getProperty("/downloadItems") || [];
+                    (aResults || []).forEach(function (r) {
+                        if (!r || !r.filename) { return; }
+                        for (var i = aItems.length - 1; i >= 0; i--) {
+                            if (aItems[i].objectName === sObjectName && aItems[i].docKind === r.docKind) {
+                                aItems.splice(i, 1);
+                            }
+                        }
+                        aItems.push({
+                            name: r.type || "Document",
+                            filename: r.filename,
+                            objectName: sObjectName,
+                            objectType: sObjectType,
+                            category: r.category || "Retro",
+                            objectPath: r.objectPath || "",
+                            docKind: r.docKind,
+                            generatedContent: r.generatedContent || "",
+                            fileObject: r.fileObject,
+                            downloadMeta: r,
+                            existingViewUrl: r.docKind === "TS"
+                                ? oRetro.getProperty("/existingTSViewUrl")
+                                : oRetro.getProperty("/existingFSViewUrl"),
+                            existingDownloadUrl: r.docKind === "TS"
+                                ? oRetro.getProperty("/existingTSDownloadUrl")
+                                : oRetro.getProperty("/existingFSDownloadUrl")
+                        });
+                    });
+                    oDefaultModel.setProperty("/downloadItems", aItems);
+                    oDefaultModel.setProperty("/downloadPanelVisible", aItems.length > 0);
+
+                    that._setRetroLogStep(
+                        "retro-upload",
+                        "Updating Documents",
+                        "Existing FS / TS Word document(s) updated in place.",
+                        "success"
+                    );
+                    setStep(3, "completed");
+
+                    oDefaultModel.setProperty("/agentPipelineComplete", true);
+                    oDefaultModel.setProperty("/agentPipelineStatus", "Completed");
+                    that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+                    that._setRetroLogStep(
+                        "retro-completed",
+                        "Completed",
+                        "Pipeline finished. Same FS / TS documents now contain delta changes.",
+                        "success"
+                    );
+
+                    sap.m.MessageToast.show("Documents updated successfully.");
+                })
+                .catch(function (err) {
+                    if (err && err._noChanges) {
+                        return;
+                    }
+                    var sErrorMsg = err && err.message ? err.message : "Delta update failed";
+                    that._setRetroLogStep(
+                        "retro-error",
+                        "Error",
+                        sErrorMsg,
+                        "error"
+                    );
+                    oDefaultModel.setProperty("/agentPipelineStatus", "Failed");
+                    oDefaultModel.setProperty("/agentPipelineComplete", false);
+                    // Enable reset button so user can reset after failure
+                    that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+                    sap.m.MessageBox.error(sErrorMsg);
+                });
+        },
+
+        _retroFetchExistingDocContent: function (sKey) {
+            var sBasePath = this._sBasePath || "";
+            return new Promise(function (resolve, reject) {
+                if (!sKey) {
+                    resolve("");
+                    return;
+                }
+                var sUrl = sBasePath + "/cockpit/getFileDetails?key=" + encodeURIComponent(sKey);
+                $.ajax({
+                    url: sUrl,
+                    type: "GET",
+                    success: function (oResponse) {
+                        var sContent = "";
+                        if (typeof oResponse === "string") {
+                            try {
+                                var oParsed = JSON.parse(oResponse);
+                                sContent = oParsed.value || oParsed.content || oParsed.data || oResponse;
+                            } catch (e) {
+                                sContent = oResponse;
+                            }
+                        } else if (oResponse) {
+                            sContent =
+                                oResponse.value ||
+                                oResponse.content ||
+                                oResponse.data ||
+                                oResponse.fileContent ||
+                                "";
+                        }
+                        resolve(String(sContent || ""));
+                    },
+                    error: function (xhr) {
+                        reject(new Error("Failed to load file. Status: " + (xhr && xhr.status)));
+                    }
+                });
+            });
+        },
+
+        _retroExtractBaselineSource: function (sDocText) {
+            if (!sDocText) { return ""; }
+            var oMatch = String(sDocText).match(/```abap-baseline\s*([\s\S]*?)```/i);
+            return oMatch ? oMatch[1].trim() : "";
+        },
+
+        _retroComputeSourceDiff: function (sOld, sNew) {
+            var aOld = String(sOld || "").split(/\r?\n/);
+            var aNew = String(sNew || "").split(/\r?\n/);
+
+            var normalize = function (s) { return String(s || "").replace(/\s+$/, ""); };
+            var aOldN = aOld.map(normalize);
+            var aNewN = aNew.map(normalize);
+
+            var MAX_LINES = 5000;
+            if (aOldN.length > MAX_LINES || aNewN.length > MAX_LINES) {
+                var oOldSet = {};
+                var oNewSet = {};
+                aOldN.forEach(function (l) { oOldSet[l] = (oOldSet[l] || 0) + 1; });
+                aNewN.forEach(function (l) { oNewSet[l] = (oNewSet[l] || 0) + 1; });
+                var iAdded = 0, iRemoved = 0;
+                Object.keys(oNewSet).forEach(function (k) {
+                    var d = (oNewSet[k] || 0) - (oOldSet[k] || 0);
+                    if (d > 0) { iAdded += d; }
+                });
+                Object.keys(oOldSet).forEach(function (k) {
+                    var d = (oOldSet[k] || 0) - (oNewSet[k] || 0);
+                    if (d > 0) { iRemoved += d; }
+                });
+                return {
+                    added: iAdded,
+                    removed: iRemoved,
+                    modified: 0,
+                    changedLines: iAdded + iRemoved,
+                    unifiedDiff: "(diff omitted - file too large)"
+                };
+            }
+
+            var m = aOldN.length, n = aNewN.length;
+            var dp = new Array(m + 1);
+            for (var i = 0; i <= m; i++) {
+                dp[i] = new Array(n + 1);
+                dp[i][0] = 0;
+            }
+            for (var j = 0; j <= n; j++) { dp[0][j] = 0; }
+            for (i = 1; i <= m; i++) {
+                for (j = 1; j <= n; j++) {
+                    if (aOldN[i - 1] === aNewN[j - 1]) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                    } else {
+                        dp[i][j] = dp[i - 1][j] >= dp[i][j - 1] ? dp[i - 1][j] : dp[i][j - 1];
+                    }
+                }
+            }
+
+            var aDiff = [];
+            var iAddedC = 0, iRemovedC = 0;
+            i = m; j = n;
+            while (i > 0 && j > 0) {
+                if (aOldN[i - 1] === aNewN[j - 1]) {
+                    aDiff.unshift("  " + aOldN[i - 1]);
+                    i--; j--;
+                } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+                    aDiff.unshift("- " + aOldN[i - 1]);
+                    iRemovedC++;
+                    i--;
+                } else {
+                    aDiff.unshift("+ " + aNewN[j - 1]);
+                    iAddedC++;
+                    j--;
+                }
+            }
+            while (i > 0) {
+                aDiff.unshift("- " + aOldN[i - 1]);
+                iRemovedC++;
+                i--;
+            }
+            while (j > 0) {
+                aDiff.unshift("+ " + aNewN[j - 1]);
+                iAddedC++;
+                j--;
+            }
+
+            var sUnified = aDiff.join("\n");
+            if (sUnified.length > 20000) {
+                sUnified = sUnified.substring(0, 20000) + "\n... (diff truncated)";
+            }
+
+            return {
+                added: iAddedC,
+                removed: iRemovedC,
+                modified: 0,
+                changedLines: iAddedC + iRemovedC,
+                unifiedDiff: sUnified
+            };
+        },
+
+        // ============================================================
+        // Added for Update Existing Mode - Change Summary helper.
+        // Parses unified diff to derive a short human-readable summary
+        // listing added / modified / removed ABAP symbols (FORM,
+        // METHOD, FUNCTION, CLASS, INTERFACE, PERFORM, SELECT-OPTIONS).
+        // Falls back to "+X / -Y lines" if no symbolic match is found.
+        // The returned string is injected into FS and TS Word documents.
+        // ============================================================
+        _retroDeriveChangeSummary: function (oDiff) {
+            if (!oDiff) {
+                return "No changes detected.";
+            }
+            var sDiff = String(oDiff.unifiedDiff || "");
+            if (!sDiff) {
+                return "+" + (oDiff.added || 0) + " / -" + (oDiff.removed || 0) + " lines changed";
+            }
+            var aPatterns = [
+                { re: /^([+\-])\s*(?:DEFINE\s+)?FORM\s+([A-Za-z0-9_]+)/i, kind: "FORM" },
+                { re: /^([+\-])\s*METHOD(?:S)?\s+([A-Za-z0-9_]+)/i, kind: "METHOD" },
+                { re: /^([+\-])\s*(?:FUNCTION|FUNCTION-POOL)\s+([A-Za-z0-9_/]+)/i, kind: "FUNCTION" },
+                { re: /^([+\-])\s*CLASS\s+([A-Za-z0-9_]+)/i, kind: "CLASS" },
+                { re: /^([+\-])\s*INTERFACE\s+([A-Za-z0-9_]+)/i, kind: "INTERFACE" },
+                { re: /^([+\-])\s*PERFORM\s+([A-Za-z0-9_]+)/i, kind: "PERFORM" },
+                { re: /^([+\-])\s*SELECT-OPTIONS\s+([A-Za-z0-9_]+)/i, kind: "SELECT-OPTIONS" }
+            ];
+            var oAdded = {}, oRemoved = {};
+            sDiff.split(/\r?\n/).forEach(function (sLine) {
+                if (!sLine || (sLine.charAt(0) !== "+" && sLine.charAt(0) !== "-")) { return; }
+                for (var i = 0; i < aPatterns.length; i++) {
+                    var m = sLine.match(aPatterns[i].re);
+                    if (m) {
+                        var sKey = aPatterns[i].kind + " " + m[2].toUpperCase();
+                        if (m[1] === "+") { oAdded[sKey] = true; } else { oRemoved[sKey] = true; }
+                        break;
+                    }
+                }
+            });
+            var aAdded = Object.keys(oAdded);
+            var aRemoved = Object.keys(oRemoved);
+            var aModified = aAdded.filter(function (k) { return oRemoved[k]; });
+            var aPureAdded = aAdded.filter(function (k) { return !oRemoved[k]; });
+            var aPureRemoved = aRemoved.filter(function (k) { return !oAdded[k]; });
+            var aParts = [];
+            if (aPureAdded.length) { aParts.push("Added " + aPureAdded.slice(0, 5).join(", ")); }
+            if (aModified.length) { aParts.push("Modified " + aModified.slice(0, 5).join(", ")); }
+            if (aPureRemoved.length) { aParts.push("Removed " + aPureRemoved.slice(0, 5).join(", ")); }
+            var sCounts = "+" + (oDiff.added || 0) + " / -" + (oDiff.removed || 0) + " lines";
+            if (aParts.length === 0) { return sCounts + " changed"; }
+            return aParts.join("; ") + " (" + sCounts + ")";
+        },
+
+        // ============================================================
+        // Added for Update Existing Mode - Change Metadata block builder
+        // Returns a markdown table that the LLM is instructed to insert
+        // near the top of the regenerated FS / TS document.
+        // ============================================================
+        _retroBuildChangeMetadataBlock: function (oCtx) {
+            var sObj = (oCtx && oCtx.objectName) || "";
+            var sType = (oCtx && oCtx.objectType) || "";
+            var sTR = (oCtx && oCtx.transportRequest) || "(not provided)";
+            var sSummary = (oCtx && oCtx.changeSummary) || "";
+            var sDate = new Date().toISOString().substring(0, 10);
+            return "" +
+                "## Change Metadata\n" +
+                "| Field             | Value |\n" +
+                "|-------------------|-------|\n" +
+                "| Object Name       | " + sObj + " |\n" +
+                "| Object Type       | " + sType + " |\n" +
+                "| Transport Request | " + sTR + " |\n" +
+                "| Change Date       | " + sDate + " |\n" +
+                "| Change Summary    | " + sSummary + " |\n";
+        },
+
+        _buildTSDeltaPrompt: function (sObjectName, sCurrentCode, sExistingTS, oDiff, oCtx) {
+            oCtx = oCtx || {};
+            var sDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+            var sISODate = new Date().toISOString().substring(0, 10);
+            var sTransport = oCtx.transportRequest || "TRXXXXXX";
+            var sChangeSummary = oCtx.changeSummary || this._retroDeriveChangeSummary(oDiff);
+            return "" +
+                "You are an SAP ABAP Technical Documentation Expert.\n\n" +
+                "An EXISTING Technical Specification document for ABAP object **" + sObjectName + "** is provided below.\n" +
+                "The ABAP source code has been UPDATED. Your task is to produce a COMPLETE, ACCURATE\n" +
+                "Technical Specification that reflects the CURRENT source code in its entirety.\n\n" +
+                "CRITICAL: You must RE-ANALYZE the ENTIRE current source code and ensure EVERY section\n" +
+                "of the Technical Specification accurately describes the current code. Do NOT simply\n" +
+                "copy the existing document unchanged. If error handling was added, the Error Handling\n" +
+                "section MUST reflect it. If new logic was added, the Data Flow section MUST include it.\n\n" +
+                "## MANDATORY DOCUMENT STRUCTURE\n" +
+                "The output document MUST contain ALL of the following sections in this order:\n\n" +
+                "### Front-Matter (same as a newly created TS):\n" +
+                "1. **## Table of Contents** — a table listing all section numbers and titles\n" +
+                "2. **## Revision History** containing:\n" +
+                "   - **Document Control** table (Document Version, Status, Created Date, Last Modified, Author)\n" +
+                "   - Object info table (Object Name: " + sObjectName + ", Object Type: PROG)\n" +
+                "   - **Version History** table with columns: Version | Author of Revision | Creation Date | Transport Request (TR)\n" +
+                "     * Keep all existing version rows and ADD a new row:\n" +
+                "       | [next version] | System | " + sDate + " | " + sTransport + " |\n" +
+                "   - Update 'Last Modified' in Document Control to: " + sDate + "\n" +
+                "   - Increment the Document Version number\n" +
+                "3. **## Review, Approval, and Sign-off** table (Name | Role | Signature | Date)\n\n" +
+                "### Technical Content Sections (ALL must be present and ACCURATE):\n" +
+                "After the front-matter separator (---), include ALL these sections.\n" +
+                "Each section MUST be fully re-analyzed against the CURRENT source code:\n\n" +
+                "1. **OVERVIEW** - Purpose, business context, functionality summary\n" +
+                "2. **PROGRAM DETAILS** - Program name, type, package, development class\n" +
+                "3. **INPUT PARAMETERS** - Selection screen parameters, import parameters\n" +
+                "4. **OUTPUT** - Reports, files, database changes, messages\n" +
+                "5. **DATA FLOW** - Step-by-step processing logic, decision points\n" +
+                "6. **DATABASE TABLES USED** - Tables read and modified\n" +
+                "7. **FUNCTION MODULES / BAPIs / METHODS CALLED** - All external calls\n" +
+                "8. **ERROR HANDLING** - Exception handling, error messages, recovery\n" +
+                "9. **PERFORMANCE CONSIDERATIONS** - Optimizations, bottlenecks\n" +
+                "10. **DEPENDENCIES** - Includes, function groups, classes, auth objects\n\n" +
+                "### Version History Section (at the VERY END of the document):\n\n" +
+                "## Version History\n\n" +
+                "| Version | Author of Revision | Creation Date | Transport Request (TR) |\n" +
+                "|---------|-------------------|---------------|------------------------|\n" +
+                "(Keep all existing version rows from previous updates and ADD a new row)\n" +
+                "| [next version e.g. 2.0] | System | " + sDate + " | " + sTransport + " |\n\n" +
+                "### Changes in Version [next version]\n\n" +
+                "**What Got Changed in the Code:**\n" +
+                "- List each specific code change (added/removed/modified FORMs, METHODs,\n" +
+                "  FUNCTIONs, variables, SELECT statements, error handling, etc.)\n" +
+                "- Lines added: " + (oDiff && oDiff.added || 0) + ", Lines removed: " + (oDiff && oDiff.removed || 0) + "\n" +
+                "- Reference the exact FORM/METHOD/FUNCTION names that were changed\n\n" +
+                "**What Logic Was Updated:**\n" +
+                "- Describe what business logic or technical logic was modified\n" +
+                "- Explain the purpose/impact of the logic change\n" +
+                "- If error handling was added/modified, describe what errors are now handled\n\n" +
+                "**What Got Updated in this Document:**\n" +
+                "- List which sections of this Technical Specification were updated\n" +
+                "  and briefly describe the update made to each section\n\n" +
+                "**Transport Request:** " + sTransport + "\n\n" +
+                "---\n\n" +
+                "## RULES\n" +
+                "1. The output must be the COMPLETE Technical Specification - same quality and\n" +
+                "   completeness as if freshly created from scratch, but with version history.\n" +
+                "2. EVERY technical section (1-10 above) must accurately reflect the CURRENT source code.\n" +
+                "   Do NOT leave any section with outdated content from the previous version.\n" +
+                "3. If new error handling logic exists in the code, the Error Handling section MUST\n" +
+                "   describe it fully. If new FORMs/METHODs exist, they MUST appear in relevant sections.\n" +
+                "4. Use the EXISTING TS as a reference for formatting and structure, but verify\n" +
+                "   every section's content against the CURRENT source code.\n" +
+                "5. If a '## Version History' section already exists from a previous update,\n" +
+                "   keep ALL existing entries and append the NEW version entry below them.\n" +
+                "6. Output the FULL document text (do not return only the diff).\n" +
+                "7. Do NOT include any markdown code fences around the whole document.\n" +
+                "8. The document format and style must look identical to a freshly created TS.\n\n" +
+                "## EXISTING TECHNICAL SPECIFICATION (reference for structure/format)\n" +
+                (sExistingTS || "(empty)") + "\n\n" +
+                "## CURRENT ABAP SOURCE CODE (use this as the source of truth)\n" +
+                "```abap\n" + sCurrentCode + "\n```\n\n" +
+                "## SOURCE CODE DIFF (shows what changed between versions)\n" +
+                "Changed lines: " + (oDiff && oDiff.changedLines) + " (added: " +
+                (oDiff && oDiff.added) + ", removed: " + (oDiff && oDiff.removed) + ")\n" +
+                "```diff\n" + (oDiff && oDiff.unifiedDiff || "") + "\n```\n\n" +
+                "Now produce the FULL updated Technical Specification with all front-matter sections,\n" +
+                "ALL technical content sections (1-10) fully accurate against current code,\n" +
+                "and the Version History section at the end showing what changed in this version.\n\n" +
+                "CRITICAL FINAL REMINDER: The document MUST end with a clearly separated section titled\n" +
+                "'## Changes in Version [X.X]' (where X.X is the new version number like 2.0, 3.0, etc.)\n" +
+                "This section is MANDATORY and must contain ALL of the following sub-sections:\n" +
+                "1. **What Got Changed in the Code:** - specific FORM/METHOD/FUNCTION names added/removed/modified\n" +
+                "2. **What Logic Was Updated:** - business/technical logic changes and their purpose\n" +
+                "3. **What Got Updated in this Document:** - which spec sections were updated\n" +
+                "4. **Transport Request:** - the TR number\n" +
+                "WITHOUT this 'Changes in Version' section, the document is considered INCOMPLETE and FAILED.\n" +
+                "This section is the KEY DIFFERENTIATOR of update mode - users MUST see what changed.";
+        },
+
+        _buildFSDeltaPrompt: function (sObjectName, sCurrentCode, sExistingFS, sLatestTS, oDiff, oCtx) {
+            oCtx = oCtx || {};
+            var sDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+            var sISODate = new Date().toISOString().substring(0, 10);
+            var sTransport = oCtx.transportRequest || "TRXXXXXX";
+            var sChangeSummary = oCtx.changeSummary || this._retroDeriveChangeSummary(oDiff);
+            return "" +
+                "You are an SAP Functional Documentation Expert.\n\n" +
+                "An EXISTING Functional Specification document for ABAP object **" + sObjectName + "** is provided below.\n" +
+                "The ABAP source code has been updated. Your task is to UPDATE the existing\n" +
+                "document IN PLACE so that it accurately reflects the new functional behavior,\n" +
+                "while keeping the SAME document structure and formatting as a freshly created document.\n\n" +
+                "## MANDATORY DOCUMENT STRUCTURE\n" +
+                "The output document MUST start with ALL of the following front-matter sections\n" +
+                "in EXACTLY this order (same as a newly created Functional Specification):\n\n" +
+                "1. **## Table of Contents** — a table listing all section numbers and titles\n" +
+                "2. **## Revision History** containing:\n" +
+                "   - **Document Control** table (Document Version, Status, Created Date, Last Modified, Author)\n" +
+                "   - Object info table (Object Name: " + sObjectName + ", Object Type: PROG)\n" +
+                "   - **Version History** table with columns: Version | Author of Revision | Creation Date | Transport Request (TR)\n" +
+                "     * Keep all existing version rows and ADD a new row:\n" +
+                "       | [next version] | System | " + sDate + " | " + sTransport + " |\n" +
+                "   - Update 'Last Modified' in Document Control to: " + sDate + "\n" +
+                "   - Increment the Document Version number\n" +
+                "3. **## Review, Approval, and Sign-off** table (Name | Role | Signature | Date)\n\n" +
+                "After these front-matter sections, include the separator line (---) and then\n" +
+                "all the functional content sections.\n\n" +
+                "## RULES FOR CONTENT UPDATE\n" +
+                "1. Preserve all existing functional content, headings and unchanged sections as-is.\n" +
+                "2. Only modify the sections that are affected by the source code changes.\n" +
+                "3. AFTER all existing functional sections, add a new section:\n\n" +
+                "   ## Enhancement Details\n\n" +
+                "   ### Change Reference\n" +
+                "   | Field | Value |\n" +
+                "   |-------|-------|\n" +
+                "   | Transport Request | " + sTransport + " |\n" +
+                "   | Change Date | " + sDate + " |\n" +
+                "   | Object Name | " + sObjectName + " |\n" +
+                "   | Lines Added | " + (oDiff && oDiff.added || 0) + " |\n" +
+                "   | Lines Removed | " + (oDiff && oDiff.removed || 0) + " |\n\n" +
+                "   ### What Changed in the Code\n" +
+                "   - List each specific code change (added/removed/modified FORMs, METHODs,\n" +
+                "     FUNCTIONs, variables, SELECT statements, business logic, etc.)\n" +
+                "   - Describe the functional impact of each change\n\n" +
+                "   ### Document Sections Updated\n" +
+                "   - List which sections of this Functional Specification were updated\n" +
+                "     and briefly describe the update\n\n" +
+                "   ### Change Summary\n" +
+                "   - " + (oDiff && oDiff.added || 0) + " lines added, " + (oDiff && oDiff.removed || 0) + " lines removed.\n" +
+                "   - Brief human-readable description of the overall functional impact of the changes.\n\n" +
+                "4. If a '## Change Log' / '## Enhancement Details' section already exists from a\n" +
+                "   previous update, keep it and append a NEW version entry below it.\n" +
+                "5. Output the FULL updated document text (do not return only the diff).\n" +
+                "6. Do NOT include any markdown code fences around the whole document.\n" +
+                "7. The document format and style must look identical to a freshly created FS document.\n\n" +
+                "## EXISTING FUNCTIONAL SPECIFICATION\n" +
+                (sExistingFS || "(empty)") + "\n\n" +
+                "## LATEST TECHNICAL SPECIFICATION (reference)\n" +
+                (sLatestTS || "(not available)") + "\n\n" +
+                "## CURRENT ABAP SOURCE CODE\n" +
+                "```abap\n" + sCurrentCode + "\n```\n\n" +
+                "## SOURCE CODE DIFF (unified)\n" +
+                "Changed lines: " + (oDiff && oDiff.changedLines) + " (added: " +
+                (oDiff && oDiff.added) + ", removed: " + (oDiff && oDiff.removed) + ")\n" +
+                "```diff\n" + (oDiff && oDiff.unifiedDiff || "") + "\n```\n\n" +
+                "Now produce the FULL updated Functional Specification document with all front-matter sections (TOC, Revision History, Version History, Review/Sign-off), updated functional content, and Enhancement Details section.\n\n" +
+                "CRITICAL FINAL REMINDER: The document MUST end with a clearly separated '## Enhancement Details' section.\n" +
+                "This section is MANDATORY and must contain:\n" +
+                "1. **Change Reference** table (Transport Request, Change Date, Object Name, Lines Added/Removed)\n" +
+                "2. **What Changed in the Code** - specific FORM/METHOD/FUNCTION names added/removed/modified and functional impact\n" +
+                "3. **Document Sections Updated** - which FS sections were updated and why\n" +
+                "4. **Change Summary** - lines added/removed + human-readable functional impact description\n" +
+                "WITHOUT this 'Enhancement Details' section, the document is INCOMPLETE and FAILED.\n" +
+                "This is the KEY DIFFERENTIATOR of update mode - users MUST see what changed.";
+        },
+
+        _retroGenerateTechSpecDelta: function (sCode, oMeta, sExistingTS, oDiff, oCtx) {
+            sCode = this._cleanMcpSourceCode ? this._cleanMcpSourceCode(sCode) : sCode;
+            if (!sCode || !String(sCode).trim()) {
+                return Promise.reject(new Error("Empty ABAP source"));
+            }
+            // oCtx contains: { objectType, transportRequest, changeSummary }
+            var sPrompt = this._buildTSDeltaPrompt(oMeta.name, sCode, sExistingTS, oDiff, oCtx);
+            return this._callAICoreCompletion(sPrompt).then(function (sOut) {
+                if (!sOut || !String(sOut).trim()) {
+                    throw new Error("Delta TS not generated");
+                }
+                return sOut;
+            });
+        },
+
+        _retroGenerateFuncSpecDelta: function (sCode, oMeta, sExistingFS, sLatestTS, oDiff, oCtx) {
+            sCode = this._cleanMcpSourceCode ? this._cleanMcpSourceCode(sCode) : sCode;
+            if (!sCode || !String(sCode).trim()) {
+                return Promise.reject(new Error("Empty ABAP source"));
+            }
+            // oCtx contains: { objectType, transportRequest, changeSummary }
+            var sPrompt = this._buildFSDeltaPrompt(oMeta.name, sCode, sExistingFS, sLatestTS, oDiff, oCtx);
+            return this._callAICoreCompletion(sPrompt).then(function (sOut) {
+                if (!sOut || !String(sOut).trim()) {
+                    throw new Error("Delta FS not generated");
+                }
+                return sOut;
+            });
+        },
+
+        _retroUpdateDocumentsInPlace: function (sObjectName, sObjectType, sTSContent, sFSContent,
+            sExistingTSFileName, sExistingFSFileName,
+            sExistingTSKey, sExistingFSKey) {
+            var that = this;
+            var aOps = [];
+
+            if (sTSContent) {
+                aOps.push(
+                    that._retroOverwriteRetroDoc(
+                        sTSContent, sObjectName, sObjectType, "TS",
+                        sExistingTSFileName, sExistingTSKey
+                    )
                 );
             }
+            if (sFSContent) {
+                aOps.push(
+                    that._retroOverwriteRetroDoc(
+                        sFSContent, sObjectName, sObjectType, "FS",
+                        sExistingFSFileName, sExistingFSKey
+                    )
+                );
+            }
+            if (aOps.length === 0) {
+                return Promise.reject(new Error("No content to update"));
+            }
+            return Promise.all(aOps);
+        },
+
+        _retroOverwriteRetroDoc: function (sContent, sObjectName, sObjectType, sDocKind,
+            sExistingFileName, sExistingKey) {
+            var that = this;
+
+            var sFileName = sExistingFileName ||
+                this._buildRetroWordFileName(sObjectName, sObjectType, sDocKind);
+
+            var sObjectPath = sExistingKey ||
+                this._buildRetroObjectPath(sObjectName, sObjectType, sDocKind);
+
+            var sTitle = sDocKind === "TS"
+                ? "Technical Specification - " + sObjectName
+                : "Functional Specification - " + sObjectName;
+
+            var sSubFolder = sDocKind === "TS" ? "TechnicalSpec" : "FunctionalSpec";
+            var sFullFileName;
+            if (sExistingKey && sExistingKey.indexOf("/") !== -1) {
+                var sStripped = sExistingKey.replace(/^\/+/, "")
+                    .replace(/^Retro\//i, "");
+                sFullFileName = sStripped;
+            } else {
+                sFullFileName = sSubFolder + "/" + sFileName;
+            }
+
+            return this._generateDocxFromTemplate(sTitle, sContent, sFullFileName)
+                .then(function (oWordFile) {
+                    try {
+                        if (oWordFile && oWordFile.name !== sFullFileName) {
+                            try {
+                                oWordFile = new File([oWordFile], sFullFileName, {
+                                    type: oWordFile.type ||
+                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                });
+                            } catch (e) {
+                                oWordFile.name = sFullFileName;
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    return that._uploadFileNew(
+                        oWordFile,
+                        "Retro",
+                        that._ProjectDetail
+                    ).then(function (oUploadResponse) {
+                        return {
+                            type: sDocKind === "TS"
+                                ? "Technical Specification"
+                                : "Functional Specification",
+                            docKind: sDocKind,
+                            filename: sFileName,
+                            category: "Retro",
+                            objectPath: sObjectPath,
+                            generatedContent: sContent,
+                            fileObject: oWordFile,
+                            response: oUploadResponse,
+                            inPlaceUpdate: true
+                        };
+                    });
+                });
+        },
+        // Append a log entry with timestamp and auto-scroll
+        _appendRetroLog: function (title, content, type, hasViewButton) {
+            var oDefaultModel = this.getView().getModel();
+            if (!oDefaultModel) {
+                oDefaultModel = new sap.ui.model.json.JSONModel({});
+                this.getView().setModel(oDefaultModel);
+            }
+            var aLog = oDefaultModel.getProperty("/logEntries") || [];
+            var sTime = (this._getCurrentTimestamp && this._getCurrentTimestamp()) ||
+                new Date().toLocaleTimeString();
+            aLog.push({
+                title: title || "",
+                content: content || "",
+                type: type || "info",
+                time: sTime,
+                hasViewButton: !!hasViewButton
+            });
+            oDefaultModel.setProperty("/logEntries", aLog);
+            oDefaultModel.setProperty("/logPanelVisible", true);
+            this._autoScrollRetro();
+        },
+        _setRetroLogStep: function (sKey, sTitle, sContent, sType, bHasViewButton, oExtraData) {
+            var oDefaultModel = this.getView().getModel();
+
+            if (!oDefaultModel) {
+                oDefaultModel = new sap.ui.model.json.JSONModel({});
+                this.getView().setModel(oDefaultModel);
+            }
+
+            var aLog = oDefaultModel.getProperty("/logEntries") || [];
+            var sTime =
+                (this._getCurrentTimestamp && this._getCurrentTimestamp()) ||
+                new Date().toLocaleTimeString();
+
+            var iIndex = -1;
+
+            for (var i = 0; i < aLog.length; i++) {
+                if (aLog[i].key === sKey) {
+                    iIndex = i;
+                    break;
+                }
+            }
+
+            var oEntry = Object.assign({
+                key: sKey,
+                title: sTitle || "",
+                content: sContent || "",
+                type: sType || "info",
+                time: sTime,
+                hasViewButton: !!bHasViewButton
+            }, oExtraData || {});
+
+            if (iIndex >= 0) {
+                aLog[iIndex] = Object.assign({}, aLog[iIndex], oEntry);
+            } else {
+                aLog.push(oEntry);
+            }
+
+            oDefaultModel.setProperty("/logEntries", aLog);
+            oDefaultModel.setProperty("/logPanelVisible", true);
+
+            this._autoScrollRetro();
+        },
+
+        // Auto-scroll Process Log to the latest item when enabled
+        _autoScrollRetro: function () {
+            var oCheck = this.byId("autoScrollCheckbox");
+            if (oCheck && !oCheck.getSelected()) {
+                return;
+            }
+            // Defer to ensure list is rendered
+            setTimeout(function () {
+                var oList = this.byId("processLogList");
+                if (oList) {
+                    var oDom = oList.getDomRef();
+                    if (oDom) {
+                        oDom.scrollTop = oDom.scrollHeight;
+                    }
+                }
+            }.bind(this), 0);
+        },
+
+        // building prompt for FS/TS generation based on source code and object metadata
+        buildTSPrompt: function (programName, code, sTransportRequest) {
+            var sTR = sTransportRequest || "TRXXXXXX";
+            return `You are a technical documentation expert specializing in ABAP/SAP systems.
+
+Generate a detailed Technical Specification Document from the provided ABAP program, strictly following the supplied template. Populate each section only with information derived from the source code.
+Examples:
+Data Declarations: Document all variables, internal tables, work areas, types, constants, field symbols, and objects.
+Selection Screen: Capture all parameters, select-options, and screen elements.
+Validations: Document all checks, validations, messages, and conditional logic.
+Processing Logic: Describe business processing, calculations, loops, method/function calls, and data handling.
+Ensure complete traceability between the code and the corresponding template sections. Do not infer or add information not present in the source code.
+
+## ABAP Program Name: ${programName}
+
+## Transport Request: ${sTR}
+
+## ABAP Program Code:
+\`\`\`abap
+${code}
+\`\`\`
+
+## Language:
+Please write the Technical Specification in English.
+
+## Required Sections in the Technical Specification:
+
+1. **OVERVIEW**
+   - Purpose of the program
+   - Business context and use case
+   - Brief summary of functionality
+
+2. **PROGRAM DETAILS**
+   - Program name and type (Report, Module Pool, Include, etc.)
+   - Author (if available in comments)
+   - Creation/modification date (if available)
+   - Package/Development class
+
+3. **INPUT PARAMETERS**
+   - Selection screen parameters (PARAMETERS, SELECT-OPTIONS)
+   - Import parameters for function modules/methods
+   - File inputs if applicable
+
+4. **OUTPUT**
+   - Reports generated (ALV, Classical, etc.)
+   - Files created/modified
+   - Database changes
+   - Messages displayed
+
+5. **DATA FLOW**
+   - Step-by-step description of how data moves through the program
+   - Main processing logic
+   - Key decision points
+
+6. **DATABASE TABLES USED**
+   - Tables read (SELECT statements)
+   - Tables modified (INSERT, UPDATE, DELETE, MODIFY)
+   - Table relationships
+
+7. **FUNCTION MODULES / BAPIS / METHODS CALLED**
+   - External function module calls
+   - BAPI calls
+   - Class method calls
+   - RFC calls if any
+
+8. **ERROR HANDLING**
+   - Exception handling mechanisms
+   - Error messages and their conditions
+   - Recovery procedures
+
+9. **PERFORMANCE CONSIDERATIONS**
+   - Database access optimization
+   - Loop optimizations
+   - Memory considerations
+   - Potential bottlenecks
+
+10. **DEPENDENCIES**
+    - Required includes
+    - Required function groups
+    - Required classes
+    - Authorization objects used
+
+Please provide the Technical Specification in plain text format with clear section headers.`;
+        }, _retroGenerateTechSpecLocally: function (sCode, oMeta, sTransportRequest) {
+            sCode = this._cleanMcpSourceCode ? this._cleanMcpSourceCode(sCode) : sCode;
+
+            if (!sCode || !String(sCode).trim()) {
+                return Promise.reject(new Error("Empty ABAP source returned from MCP"));
+            }
+
+            var sPrompt = this.buildTSPrompt(oMeta.name, sCode, sTransportRequest);
+
+            return this._callAICoreCompletion(sPrompt)
+                .then(function (sTechnicalSpecification) {
+                    if (!sTechnicalSpecification || !String(sTechnicalSpecification).trim()) {
+                        throw new Error("TS not generated");
+                    }
+
+                    return sTechnicalSpecification;
+                });
+        },
+        buildFSPrompt: function (programName, code, technicalSpecification, sTransportRequest) {
+            var sDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+            var sTR = sTransportRequest || "TRXXXXXX";
+            return `You are a functional documentation expert specializing in ABAP/SAP systems.
+
+
+FS:Generate a complete and detailed Functional Specification Document from the provided Technical Specification. Map all technical components, validations, processes, interfaces, reports, and data flows to their corresponding functional requirements. Follow the given template exactly, use business-focused language, ensure full traceability to the Technical Specification, and mark unavailable sections as "Not Applicable".
+
+## ABAP Program Name: ${programName}
+
+## Transport Request: ${sTR}
+
+## Source Code:
+\`\`\`abap
+${code}
+\`\`\`
+
+## Technical Specification Reference:
+${technicalSpecification || 'None provided'}
+
+## Language:
+Please write the Functional Specification in English.
+
+## Required Sections in the Functional Specification:
+
+1. **DOCUMENT INFORMATION**
+   - Document title
+   - Program name: ${programName}
+   - Transport Request: ${sTR}
+   - Version: 1.0
+   - Date: ${sDate}
+   - Author/Prepared by: System
+
+2. **EXECUTIVE SUMMARY**
+   - Brief overview of the functionality
+   - Business value and benefits
+   - Target users/stakeholders
+
+3. **BUSINESS REQUIREMENTS**
+   - Business problem being solved
+   - Business objectives
+   - Success criteria
+   - Key performance indicators (KPIs)
+
+4. **FUNCTIONAL REQUIREMENTS**
+   - Detailed functional requirements (FR-001, FR-002, etc.)
+   - Each requirement should include:
+     - Requirement ID
+     - Description
+     - Priority (High/Medium/Low)
+     - Acceptance criteria
+
+5. **USER INTERFACE SPECIFICATIONS**
+   - Selection screen layout and fields
+   - Input field descriptions and validations
+   - Output report layout
+   - User interaction flow
+
+6. **BUSINESS RULES**
+   - Data validation rules
+   - Calculation rules
+   - Business logic rules
+   - Conditional processing rules
+
+7. **DATA SPECIFICATIONS**
+   - Input data requirements
+   - Output data specifications
+   - Data transformations
+   - Data quality requirements
+
+8. **INTEGRATION POINTS**
+   - Interfaces with other systems
+   - Data exchange formats
+   - Integration dependencies
+
+9. **SECURITY AND AUTHORIZATION**
+   - User roles and permissions
+   - Authorization checks
+   - Data access restrictions
+
+10. **ERROR HANDLING AND MESSAGES**
+    - Error scenarios
+    - Error messages (user-friendly descriptions)
+    - Recovery procedures
+
+11. **TESTING REQUIREMENTS**
+    - Test scenarios
+    - Test data requirements
+    - Expected results
+
+12. **ASSUMPTIONS AND CONSTRAINTS**
+    - Business assumptions
+    - Technical constraints
+    - Dependencies
+
+13. **GLOSSARY**
+    - Business terms and definitions
+    - Abbreviations used
+
+Write the Functional Specification with clear section headers using ## for main sections and ### for sub-sections.
+
+Please provide the Functional Specification in plain text format with clear section headers. Focus on business-oriented language that can be understood by non-technical stakeholders. Analyze the code to understand its business purpose and translate technical implementation into functional requirements.`;
+        },
+        _retroGenerateFuncSpecLocally: function (sCode, oMeta, sTS, sTransportRequest) {
+            sCode = this._cleanMcpSourceCode ? this._cleanMcpSourceCode(sCode) : sCode;
+
+            if (!sCode || !String(sCode).trim()) {
+                return Promise.reject(new Error("Empty ABAP source returned from MCP"));
+            }
+
+            var sPrompt = this.buildFSPrompt(oMeta.name, sCode, sTS, sTransportRequest);
+
+            return this._callAICoreCompletion(sPrompt)
+                .then(function (sFunctionalSpecification) {
+                    if (!sFunctionalSpecification || !String(sFunctionalSpecification).trim()) {
+                        throw new Error("FS not generated");
+                    }
+
+                    return sFunctionalSpecification;
+                });
+        },
+        _isValidAbapSource: function (sCode) {
+            if (!sCode || !String(sCode).trim()) {
+                return false;
+            }
+
+            var sText = String(sCode).trim();
+
+            // Remove MCP cache prefix if present
+            sText = sText
+                .replace(/^\[cached:revalidated\]\s*/i, "")
+                .replace(/^\[cached\]\s*/i, "")
+                .trim();
+
+            // Comprehensive ABAP source validation - checks for common ABAP keywords
+            // to determine if the response is valid ABAP source code
+            var sUpper = sText.toUpperCase();
+            return (
+                sUpper.indexOf("REPORT ") !== -1 ||
+                sUpper.indexOf("PROGRAM ") !== -1 ||
+                sUpper.indexOf("CLASS ") !== -1 ||
+                sUpper.indexOf("FUNCTION ") !== -1 ||
+                sUpper.indexOf("INTERFACE ") !== -1 ||
+                sUpper.indexOf("FORM ") !== -1 ||
+                sUpper.indexOf("METHOD ") !== -1 ||
+                sUpper.indexOf("SELECT ") !== -1 ||
+                sUpper.indexOf("DATA:") !== -1 ||
+                sUpper.indexOf("DATA ") !== -1 ||
+                sUpper.indexOf("TYPES:") !== -1 ||
+                sUpper.indexOf("TYPES ") !== -1 ||
+                sUpper.indexOf("TABLES:") !== -1 ||
+                sUpper.indexOf("TABLES ") !== -1 ||
+                sUpper.indexOf("CONSTANTS:") !== -1 ||
+                sUpper.indexOf("CONSTANTS ") !== -1 ||
+                sUpper.indexOf("INCLUDE ") !== -1 ||
+                sUpper.indexOf("TYPE-POOL") !== -1 ||
+                sUpper.indexOf("FIELD-SYMBOLS") !== -1 ||
+                sUpper.indexOf("PERFORM ") !== -1 ||
+                sUpper.indexOf("CALL FUNCTION") !== -1 ||
+                sUpper.indexOf("CALL METHOD") !== -1 ||
+                sUpper.indexOf("MODULE ") !== -1 ||
+                sUpper.indexOf("ENDFORM") !== -1 ||
+                sUpper.indexOf("ENDMETHOD") !== -1 ||
+                sUpper.indexOf("ENDFUNCTION") !== -1 ||
+                sUpper.indexOf("ENDCLASS") !== -1 ||
+                sUpper.indexOf("IF ") !== -1 ||
+                sUpper.indexOf("LOOP ") !== -1 ||
+                sUpper.indexOf("DO ") !== -1 ||
+                sUpper.indexOf("WRITE ") !== -1 ||
+                sUpper.indexOf("MOVE ") !== -1 ||
+                sUpper.indexOf("APPEND ") !== -1 ||
+                sUpper.indexOf("MODIFY ") !== -1 ||
+                sUpper.indexOf("DELETE ") !== -1 ||
+                sUpper.indexOf("INSERT ") !== -1 ||
+                sUpper.indexOf("UPDATE ") !== -1 ||
+                sUpper.indexOf("PARAMETERS") !== -1 ||
+                sUpper.indexOf("SELECT-OPTIONS") !== -1 ||
+                sUpper.indexOf("SELECTION-SCREEN") !== -1 ||
+                sUpper.indexOf("START-OF-SELECTION") !== -1 ||
+                sUpper.indexOf("INITIALIZATION") !== -1 ||
+                sUpper.indexOf("AT SELECTION-SCREEN") !== -1 ||
+                sUpper.indexOf("TOP-OF-PAGE") !== -1 ||
+                sUpper.indexOf("END-OF-PAGE") !== -1 ||
+                sUpper.indexOf("FUNCTION-POOL") !== -1 ||
+                (sText.length > 100 && /^[*"]/.test(sText))
+            );
+        },
+        _cleanMcpSourceCode: function (sCode) {
+            return String(sCode || "")
+                .replace(/^\[cached:revalidated\]\s*/i, "")
+                .replace(/^\[cached\]\s*/i, "")
+                .trim();
+        },
+
+
+        // aicore-call
+        // _callAICoreCompletion: function (sPrompt) {
+        //     var sModelName = this.getView().byId("selModelRetro").getValue();
+        //     var sDeploymentId = this.getView().byId("selModelRetro").getSelectedKey();
+        //     //var sApiUrl = Utility.getApiUrl(sModelName, sDeploymentId, this.sApiUrl);
+        //     var sApiUrl = Utility.getApiUrl(sModelName, sDeploymentId, this.sApiUrl, this._sBasePath);
+
+
+        //     var aMessages = [
+        //         {
+        //             role: "user",
+        //             content: sPrompt
+        //         }
+        //     ];
+
+        //     var oViewModel = this.getView().getModel("viewModel");
+        //     var oPayload = Utility.createPayloadBasedOnModel(sModelName, aMessages, oViewModel, this);
+        //     // Force non-streaming for completion calls since res.json() cannot parse SSE stream format
+        //     // Anthropic/Bedrock API does not accept 'stream' as a parameter - remove it entirely
+        //     if (sModelName && sModelName.indexOf("anthropic") !== -1) {
+        //         delete oPayload.stream;
+        //     } else {
+        //         oPayload.stream = false;
+        //     }
+
+        //     return fetch(sApiUrl, {
+        //         method: "POST",
+        //         headers: {
+        //             "Content-Type": "application/json",
+        //             "Accept": "application/json",
+        //             "AI-Resource-Group": "default"
+        //         },
+        //         credentials: "include",
+        //         body: JSON.stringify(oPayload)
+        //     })
+        //         .then(function (res) {
+        //             if (!res.ok) {
+        //                 return res.text().then(function (sError) {
+        //                     throw new Error("AI Core call failed: " + res.status + " - " + sError);
+        //                 });
+        //             }
+        //             return res.json();
+        //         })
+        //         .then(function (data) {
+        //             return this._extractAICoreText(data);
+        //         }.bind(this));
+        // },
+
+        // aicore-call
+        _callAICoreCompletion: async function (sPrompt) {
+            var sModelName = this.getView().byId("selModelRetro").getValue();
+            var sDeploymentId = this.getView().byId("selModelRetro").getSelectedKey();
+            var sApiUrl = await Utility.getApiUrl(sModelName, sDeploymentId, this.sApiUrl, this._sBasePath);
+
+            var aMessages = [{ role: "user", content: sPrompt }];
+            var oViewModel = this.getView().getModel("viewModel");
+            var oPayload = Utility.createPayloadBasedOnModel(sModelName, aMessages, oViewModel, this);
+
+            // Remove stream from payload entirely - orchestration_config.stream must also be removed
+            // so that AI Core returns a plain JSON response instead of an SSE stream
+            var sModelNameLower = (sModelName || "").toLowerCase();
+            var bIsAnthropic = sModelNameLower.includes("anthropic") || sModelNameLower.includes("claude");
+            // delete oPayload.stream;
+            // if (oPayload.orchestration_config && !bIsAnthropic) {
+            //     delete oPayload.orchestration_config.stream;
+            // }
+
+            var that = this;
+
+            return fetch(sApiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "AI-Resource-Group": "default"
+                },
+                credentials: "include",
+                body: JSON.stringify(oPayload)
+            }).then(function (res) {
+                if (!res.ok) {
+                    return res.text().then(function (sError) {
+                        throw new Error("AI Core call failed: " + res.status + " - " + sError);
+                    });
+                }
+                // Always read as text - parser handles both plain JSON and SSE streaming formats
+                return res.text().then(function (sResponseText) {
+                    return that._parseAnthropicSSEResponse(sResponseText);
+                });
+            });
+        },
+
+
+        // Helper function to parse Anthropic SSE streaming response
+        // _parseAnthropicSSEResponse: function (sResponseText) {
+        //     var aLines = sResponseText.split("\n");
+        //     var aTextParts = [];
+
+        //     for (var i = 0; i < aLines.length; i++) {
+        //         var sLine = aLines[i].trim();
+
+        //         // Skip empty lines
+        //         if (!sLine) {
+        //             continue;
+        //         }
+
+        //         // Process SSE data lines
+        //         if (sLine.startsWith("data: ")) {
+        //             var sJsonStr = sLine.substring(6); // Remove "data: " prefix
+
+        //             // Skip [DONE] marker
+        //             if (sJsonStr === "[DONE]") {
+        //                 continue;
+        //             }
+
+        //             try {
+        //                 var oData = JSON.parse(sJsonStr);
+
+        //                 // Handle Anthropic streaming format - content_block_delta events
+        //                 if (oData.type === "content_block_delta" && oData.delta && oData.delta.text) {
+        //                     aTextParts.push(oData.delta.text);
+        //                 }
+        //                 // Handle message_delta for stop reason (usually at end)
+        //                 else if (oData.type === "message_delta") {
+        //                     // End of message, no text to extract
+        //                 }
+        //                 // Handle content_block_start (may contain initial text)
+        //                 else if (oData.type === "content_block_start" && oData.content_block && oData.content_block.text) {
+        //                     aTextParts.push(oData.content_block.text);
+        //                 }
+        //                 // Handle non-streaming response format (fallback)
+        //                 else if (oData.content && Array.isArray(oData.content)) {
+        //                     for (var j = 0; j < oData.content.length; j++) {
+        //                         if (oData.content[j].type === "text" && oData.content[j].text) {
+        //                             aTextParts.push(oData.content[j].text);
+        //                         }
+        //                     }
+        //                 }
+        //             } catch (e) {
+        //                 console.warn("Failed to parse SSE JSON chunk:", sJsonStr, e);
+        //             }
+        //         }
+        //     }
+
+        //     var sResult = aTextParts.join("");
+
+        //     if (!sResult || !sResult.trim()) {
+        //         throw new Error("No generated text found in AI Core streaming response");
+        //     }
+
+        //     return sResult;
+        // },
+
+        _parseAnthropicSSEResponse: function (sResponseText) {
+            // First: try to parse as plain JSON (non-streaming response from AI Core)
+            try {
+                var oJson = JSON.parse(sResponseText.trim());
+                // Anthropic non-streaming format: { content: [{ type: "text", text: "..." }] }
+                if (oJson.content && Array.isArray(oJson.content)) {
+                    var sPlainText = oJson.content
+                        .filter(function (b) { return b.type === "text" && b.text; })
+                        .map(function (b) { return b.text; })
+                        .join("");
+                    if (sPlainText) {
+                        return sPlainText;
+                    }
+                }
+                // OpenAI-compatible format fallback
+                if (oJson.choices && oJson.choices[0] && oJson.choices[0].message && oJson.choices[0].message.content) {
+                    return oJson.choices[0].message.content;
+                }
+                // SAP AI Core Orchestration non-streaming wrapper format
+                if (oJson.orchestration_result) {
+                    var oOrch = oJson.orchestration_result;
+                    if (oOrch.choices && oOrch.choices[0] && oOrch.choices[0].message && oOrch.choices[0].message.content) {
+                        return oOrch.choices[0].message.content;
+                    }
+                }
+            } catch (e) {
+                // Not valid JSON — proceed to SSE line-by-line parsing below
+            }
+
+            var aLines = sResponseText.split("\n");
+            var aTextParts = [];
+
+            for (var i = 0; i < aLines.length; i++) {
+                var sLine = aLines[i].trim();
+                if (!sLine) continue;
+
+                if (sLine.startsWith("data: ")) {
+                    var sJsonStr = sLine.substring(6);
+                    if (sJsonStr === "[DONE]") continue;
+
+                    try {
+                        var oData = JSON.parse(sJsonStr);
+
+                        // SAP AI Core Orchestration streaming wrapper format
+                        if (oData.orchestration_result) {
+                            var oOrchResult = oData.orchestration_result;
+                            if (oOrchResult.choices && oOrchResult.choices[0]) {
+                                var orchDelta = oOrchResult.choices[0].delta;
+                                var orchMessage = oOrchResult.choices[0].message;
+                                if (orchDelta && orchDelta.content) {
+                                    aTextParts.push(orchDelta.content);
+                                } else if (orchMessage && orchMessage.content) {
+                                    aTextParts.push(orchMessage.content);
+                                }
+                            }
+                        }
+                        // OpenAI/GPT streaming format: choices[0].delta.content
+                        else if (oData.choices && oData.choices[0]) {
+                            var delta = oData.choices[0].delta;
+                            var message = oData.choices[0].message;
+                            if (delta && delta.content) {
+                                aTextParts.push(delta.content);
+                            } else if (message && message.content) {
+                                aTextParts.push(message.content);
+                            }
+                        }
+                        // Anthropic streaming format - content_block_delta events
+                        else if (oData.type === "content_block_delta" && oData.delta && oData.delta.text) {
+                            aTextParts.push(oData.delta.text);
+                        }
+                        // Anthropic content_block_start (may contain initial text)
+                        else if (oData.type === "content_block_start" && oData.content_block && oData.content_block.text) {
+                            aTextParts.push(oData.content_block.text);
+                        }
+                        // Non-streaming Anthropic format wrapped in SSE
+                        else if (oData.content && Array.isArray(oData.content)) {
+                            for (var j = 0; j < oData.content.length; j++) {
+                                if (oData.content[j].type === "text" && oData.content[j].text) {
+                                    aTextParts.push(oData.content[j].text);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse SSE JSON chunk:", sJsonStr, e);
+                    }
+                }
+            }
+
+            var sResult = aTextParts.join("");
+            if (!sResult || !sResult.trim()) {
+                throw new Error("No generated text found in AI Core streaming response");
+            }
+            return sResult;
+        },
+
+        
+        _extractAICoreText: function (data) {
+            // Claude / Anthropic response format
+            if (data && Array.isArray(data.content)) {
+                return data.content
+                    .filter(function (block) {
+                        return block && block.type === "text";
+                    })
+                    .map(function (block) {
+                        return block.text;
+                    })
+                    .join("\n");
+            }
+
+            // OpenAI-compatible response format fallback
+            if (
+                data &&
+                data.choices &&
+                data.choices[0] &&
+                data.choices[0].message &&
+                data.choices[0].message.content
+            ) {
+                return data.choices[0].message.content;
+            }
+
+            // Other simple fallback fields
+            if (data && data.text) {
+                return data.text;
+            }
+
+            if (data && data.output) {
+                return data.output;
+            }
+
+            throw new Error("No generated text found in AI Core response");
+        },
+
+        // document code changes
+        _sanitizeRetroFilePart: function (sValue) {
+            return String(sValue || "")
+                .trim()
+                .replace(/[^A-Za-z0-9_.-]/g, "_")
+                .replace(/_+/g, "_");
+        },
+
+        _buildRetroDocxFileName: function (sObjectName, sObjectType, sDocKind) {
+            var sObjType = this._sanitizeRetroFilePart(
+                String(sObjectType || "PROG").split("/")[0]
+            );
+
+            var sObjName = this._sanitizeRetroFilePart(sObjectName || "UNKNOWN");
+
+            var sDocName = sDocKind === "TS"
+                ? "technical_specification"
+                : "functional_specification";
+
+            return sObjType + "_" + sDocName + "_" + sObjName + ".docx";
+        },
+
+
+
+
+
+        // upload generated documents to object store via MCP
+        _uploadRetroWordDocumentToObjectStore: function (sContent, sObjectName, sObjectType, sDocKind) {
+            var that = this;
+
+            var sFileName = this._buildRetroWordFileName(
+                sObjectName,
+                sObjectType,
+                sDocKind
+            );
+
+            var sObjectPath = this._buildRetroObjectPath(
+                sObjectName,
+                sObjectType,
+                sDocKind
+            );
+
+            var sTitle = sDocKind === "TS"
+                ? "Technical Specification - " + sObjectName
+                : "Functional Specification - " + sObjectName;
+
+            // Use the base file name directly (without subfolder prefix) to ensure
+            // the file is stored cleanly under Category=Retro and can be retrieved correctly
+            // The filename already contains "functional_specification" or "technical_specification" to differentiate
+            // Use HTML-based Word generation to avoid malware scanner false positives
+            return this._generateDocxFromTemplate(sTitle, sContent, sFileName)
+                .then(function (oWordFile) {
+                    return that._uploadFileNew(
+                        oWordFile,
+                        "Retro",
+                        that._ProjectDetail
+                    ).then(function (oUploadResponse) {
+                        return {
+                            type: sDocKind === "TS"
+                                ? "Technical Specification"
+                                : "Functional Specification",
+                            docKind: sDocKind,
+                            filename: sFileName,
+                            category: "Retro",
+                            objectPath: sObjectPath,
+                            generatedContent: sContent,
+                            fileObject: oWordFile,
+                            response: oUploadResponse
+                        };
+                    });
+                });
+        },
+        /**
+         * Generates an HTML-based Word document (.doc) for Retro Documentation.
+         * This format avoids malware scanner false positives that occur with
+         * JSZip-generated DOCX files containing ABAP code snippets.
+         * Only used by Retro Documentation feature - does not affect other tabs.
+         * @param {string} sTitle - Document title
+         * @param {string} sContent - AI-generated markdown content
+         * @param {string} sFileName - Output filename
+         * @returns {Promise<File>} Promise resolving to a File object
+         */
+        _generateRetroWordDocumentAsHtml: function (sTitle, sContent, sFileName) {
+            sFileName = String(sFileName || "Generated_Document.docx")
+                .replace(/\.doc$/i, ".docx")
+                .replace(/\.docx$/i, "") + ".docx";
+            var sHtml = this._markdownToHtmlForRetroWord(sContent);
+            var sDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+            var sWordContent = "<!DOCTYPE html>" +
+                "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" " +
+                "xmlns:w=\"urn:schemas-microsoft-com:office:word\" " +
+                "xmlns=\"http://www.w3.org/TR/REC-html40\">" +
+                "<head><meta charset=\"utf-8\"><title>" + (sTitle || "").replace(/</g, "&lt;") + "</title>" +
+                "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->" +
+                "<style>@page{margin:1in}body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#333}" +
+                "h1{color:#0A6ED1;font-size:18pt;font-weight:bold;border-bottom:2pt solid #0A6ED1;padding-bottom:6pt}" +
+                "h2{color:#0A6ED1;font-size:14pt;font-weight:bold}h3{color:#354A5F;font-size:12pt;font-weight:bold}" +
+                "pre{font-family:Consolas,monospace;background:#F5F6F7;padding:10pt;border:1pt solid #D9D9D9;border-left:3pt solid #0A6ED1;white-space:pre-wrap;font-size:9pt}" +
+                "code{font-family:Consolas,monospace;background:#F5F6F7;padding:2pt 4pt;font-size:10pt}" +
+                "table{border-collapse:collapse;width:100%;margin:12pt 0}" +
+                "th{background:#0A6ED1;color:white;padding:8pt;text-align:left;border:1pt solid #0854A0;font-weight:bold}" +
+                "td{padding:8pt;border:1pt solid #D9D9D9}tr:nth-child(even){background:#F5F6F7}" +
+                "ul,ol{margin:8pt 0 8pt 24pt}li{margin-bottom:4pt}</style></head>" +
+                "<body><div style=\"text-align:center;margin-bottom:24pt\">" +
+                "<h1>" + (sTitle || "").replace(/</g, "&lt;") + "</h1>" +
+                "<p style=\"color:#666\">Generated: " + sDate + "</p></div>" +
+                sHtml + "</body></html>";
+            var oBlob = new Blob([sWordContent], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+            var oFile;
+            try {
+                oFile = new File([oBlob], sFileName, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+            } catch (e) {
+                oFile = oBlob;
+                oFile.name = sFileName;
+                oFile.lastModified = new Date().getTime();
+            }
+            return Promise.resolve(oFile);
+        },
+
+        /**
+         * Convert markdown to HTML for Retro Word document.
+         * HTML-encodes code blocks to avoid malware scanner false positives.
+         * Only used by Retro Documentation feature.
+         */
+        _markdownToHtmlForRetroWord: function (sMarkdown) {
+            var sHtml = sMarkdown || "";
+            sHtml = sHtml.replace(/```[\w]*\n([\s\S]*?)```/g, function (match, code) {
+                var encoded = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                return "<pre><code>" + encoded + "</code></pre>";
+            });
+            sHtml = sHtml.replace(/^#{1}\s+(.+)$/gm, "<h1>$1</h1>");
+            sHtml = sHtml.replace(/^#{2}\s+(.+)$/gm, "<h2>$1</h2>");
+            sHtml = sHtml.replace(/^#{3}\s+(.+)$/gm, "<h3>$1</h3>");
+            sHtml = sHtml.replace(/^#{4}\s+(.+)$/gm, "<h4>$1</h4>");
+            sHtml = sHtml.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+            sHtml = sHtml.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+            sHtml = sHtml.replace(/`([^`]+)`/g, "<code>$1</code>");
+            sHtml = sHtml.replace(/^[-*]\s+(.+)$/gm, "<li>$1</li>");
+            sHtml = sHtml.replace(/^\d+\.\s+(.+)$/gm, "<li>$1</li>");
+            sHtml = sHtml.replace(/^---+$/gm, "<hr>");
+            sHtml = sHtml.replace(/\n\n/g, "</p><p>");
+            sHtml = sHtml.replace(/\n/g, "<br>");
+            return "<p>" + sHtml + "</p>";
+        },
+
+        /**
+         * Generates a .docx file by injecting content into the selected template.
+         * Uses the default template (Style_Capgemini_Standard.docx) or user-uploaded template.
+         * @param {string} sTitle - Document title
+         * @param {string} sContent - AI-generated content to inject
+         * @param {string} sFileName - Output filename
+         * @returns {Promise<File>} Promise resolving to a File object
+         */
+        _generateDocxFromTemplate: function (sTitle, sContent, sFileName, sDocKind) {
+            var that = this;
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+
+            // Ensure .docx extension
+            sFileName = String(sFileName || "Generated_Document.docx").replace(/\.doc$/i, ".docx");
+            if (!/\.docx$/i.test(sFileName)) {
+                sFileName += ".docx";
+            }
+
+            // Determine document kind: explicit parameter > filename inference >
+            // title inference. Filenames produced by _buildRetroWordFileName
+            // always contain "technical_specification" / "functional_specification".
+            var sKind = String(sDocKind || "").toUpperCase();
+            if (sKind !== "TS" && sKind !== "FS") {
+                var sLower = String(sFileName || "").toLowerCase();
+                if (sLower.indexOf("technical_specification") !== -1 ||
+                    sLower.indexOf("technicalspec") !== -1) {
+                    sKind = "TS";
+                } else if (sLower.indexOf("functional_specification") !== -1 ||
+                    sLower.indexOf("functionalspec") !== -1) {
+                    sKind = "FS";
+                } else {
+                    var sTitleLower = String(sTitle || "").toLowerCase();
+                    if (sTitleLower.indexOf("technical") !== -1) {
+                        sKind = "TS";
+                    } else if (sTitleLower.indexOf("functional") !== -1) {
+                        sKind = "FS";
+                    }
+                }
+            }
+
+            // Pick the per-type uploaded template (TS or FS). When the user
+            // has uploaded a custom template for that doc kind, use it;
+            // otherwise fall back to the default Capgemini standard template.
+            var bHasTypedUpload = false;
+            var sTypedBase64 = null;
+            if (sKind === "TS") {
+                bHasTypedUpload = !!oRetroTemplateModel.getProperty("/hasUploadedTemplateTS");
+                sTypedBase64 = oRetroTemplateModel.getProperty("/uploadedTemplateDataTS");
+            } else if (sKind === "FS") {
+                bHasTypedUpload = !!oRetroTemplateModel.getProperty("/hasUploadedTemplateFS");
+                sTypedBase64 = oRetroTemplateModel.getProperty("/uploadedTemplateDataFS");
+            }
+
+            // Backward-compat: if doc kind couldn't be inferred, honour the
+            // legacy "currently selected" template from the dialog.
+            if (sKind !== "TS" && sKind !== "FS") {
+                var sSelectedKey = oRetroTemplateModel.getProperty("/selectedTemplateKey");
+                var bHasUploaded = oRetroTemplateModel.getProperty("/hasUploadedTemplate");
+                if (sSelectedKey === "uploaded" && bHasUploaded) {
+                    bHasTypedUpload = true;
+                    sTypedBase64 = oRetroTemplateModel.getProperty("/uploadedTemplateData");
+                }
+            }
+
+            // Step 1: Get the template as ArrayBuffer (returns a Promise)
+            var pTemplateData;
+
+            if (bHasTypedUpload && sTypedBase64) {
+                var byteChars = atob(sTypedBase64);
+                var byteNums = new Array(byteChars.length);
+                for (var idx = 0; idx < byteChars.length; idx++) {
+                    byteNums[idx] = byteChars.charCodeAt(idx);
+                }
+                var arrBuf = new Uint8Array(byteNums).buffer;
+                pTemplateData = Promise.resolve(arrBuf);
+            } else {
+                pTemplateData = that._loadDefaultRetroTemplate().catch(function (loadErr) {
+                    console.warn("RETRO: Failed to load default template, falling back to plain doc generation:", loadErr);
+                    return null;
+                });
+            }
+
+            // Step 2: Load template with JSZip v2 (sync API), inject content, produce .docx
+            return pTemplateData.then(function (templateArrayBuffer) {
+                // If template loading failed (null from catch above), use plain doc fallback
+                if (!templateArrayBuffer) {
+                    console.warn("RETRO: Template data unavailable, using _textToWordDocFile fallback");
+                    return that._textToWordDocFile(sTitle, sContent, sFileName);
+                }
+                try {
+                    // JSZip v2: synchronous constructor to load zip
+                    // Pass as Uint8Array for compatibility (ArrayBuffer may not work in all JSZip v2 builds)
+                    var zip = new JSZip(new Uint8Array(templateArrayBuffer));
+
+                    // Get word/document.xml from the template
+                    var docXmlEntry = zip.file("word/document.xml");
+                    if (!docXmlEntry) {
+                        throw new Error("Template does not contain word/document.xml");
+                    }
+
+                    var sDocXml = docXmlEntry.asText();
+
+                    // Build Word XML paragraphs from the AI-generated content
+                    var sContentXml = that._buildWordXmlContent(sTitle, sContent, sKind);
+
+                    // Strategy: Find and replace the {content} placeholder in word/document.xml.
+                    // Word may split the placeholder text across multiple <w:r>/<w:t> runs
+                    // (e.g. "{CONTEN" in one run and "T}" in the next), so a literal
+                    // indexOf("{content}") will not reliably find it. Instead, iterate over
+                    // every <w:p>...</w:p> paragraph, concatenate the contents of all its
+                    // <w:t> elements, and if the concatenated text contains "{content}"
+                    // (case-insensitive, with or without double braces), replace the WHOLE
+                    // paragraph with the generated content XML. This preserves any cover
+                    // page, headers/footers, section properties and any other content that
+                    // sits outside the placeholder paragraph.
+                    var bReplaced = false;
+                    var paragraphRegex = /<w:p\b[^>]*\/>|<w:p\b[^>]*>[\s\S]*?<\/w:p>/g;
+                    sDocXml = sDocXml.replace(paragraphRegex, function (sParaXml) {
+                        if (bReplaced) {
+                            return sParaXml;
+                        }
+                        // Self-closing <w:p/> can never contain a placeholder
+                        if (/<w:p\b[^>]*\/>$/.test(sParaXml)) {
+                            return sParaXml;
+                        }
+                        // Concatenate all <w:t>...</w:t> text contents within the paragraph
+                        var sParaText = "";
+                        var tRegex = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g;
+                        var tMatch;
+                        while ((tMatch = tRegex.exec(sParaXml)) !== null) {
+                            sParaText += tMatch[1];
+                        }
+                        // Decode common XML entities so "&#123;content&#125;" also matches
+                        var sNormalized = sParaText
+                            .replace(/&amp;/g, "&")
+                            .replace(/&lt;/g, "<")
+                            .replace(/&gt;/g, ">")
+                            .replace(/&quot;/g, "\"")
+                            .replace(/&#123;/g, "{")
+                            .replace(/&#125;/g, "}");
+                        if (/\{\{?\s*content\s*\}?\}/i.test(sNormalized)) {
+                            bReplaced = true;
+                            return sContentXml;
+                        }
+                        return sParaXml;
+                    });
+
+                    if (!bReplaced) {
+                        // Fallback: no {content} placeholder was found in the template.
+                        // Replace the entire body content while preserving the final
+                        // <w:sectPr> (page size, margins, headers/footers) so the
+                        // generated document still has correct page setup.
+                        console.warn("RETRO: {content} placeholder not found in template - falling back to full body replacement.");
+                        var bodyRegex = /(<w:body[^>]*>)([\s\S]*?)(<\/w:body>)/;
+                        var bodyMatch = sDocXml.match(bodyRegex);
+                        if (bodyMatch) {
+                            var sSectPr = "";
+                            // Use the LAST sectPr inside the body (the document-level one)
+                            var aSectPrs = bodyMatch[2].match(/<w:sectPr[\s\S]*?<\/w:sectPr>/g);
+                            if (aSectPrs && aSectPrs.length) {
+                                sSectPr = aSectPrs[aSectPrs.length - 1];
+                            }
+                            sDocXml = sDocXml.replace(bodyRegex, "$1" + sContentXml + sSectPr + "$3");
+                        } else {
+                            throw new Error("Could not find w:body in template document.xml");
+                        }
+                    }
+
+                    // Write modified document.xml back
+                    zip.file("word/document.xml", sDocXml);
+
+                    // Generate .docx as base64 (JSZip v2 sync)
+                    var sBase64Output = zip.generate({ type: "base64", compression: "DEFLATE" });
+
+                    // Convert base64 to Blob
+                    var binaryStr = atob(sBase64Output);
+                    var len = binaryStr.length;
+                    var bytes = new Uint8Array(len);
+                    for (var i = 0; i < len; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
+                    var oBlob = new Blob([bytes], {
+                        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    });
+
+                    // Create File object
+                    var oFile;
+                    try {
+                        oFile = new File([oBlob], sFileName, {
+                            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        });
+                    } catch (e) {
+                        oFile = oBlob;
+                        oFile.name = sFileName;
+                        oFile.lastModified = new Date().getTime();
+                    }
+                    return oFile;
+                } catch (err) {
+                    console.error("RETRO: Template-based generation failed, falling back to plain doc:", err);
+                    return that._textToWordDocFile(sTitle, sContent, sFileName);
+                }
+            });
+        },
+
+        /**
+         * Loads the default template (Style_Capgemini_Standard.docx) from app resources
+         * @returns {Promise<ArrayBuffer>} Promise resolving to template file as ArrayBuffer
+         */
+        _loadDefaultRetroTemplate: function () {
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var sDefaultFile = oRetroTemplateModel.getProperty("/defaultTemplateFile") || "Style_Capgemini_Standard.docx";
+            //var sUrl = sap.ui.require.toUrl("aidevcp/ns/projectgenai/templates/" + sDefaultFile);
+            var sUrl = sap.ui.require.toUrl("aicockpitfeq/templates/" + sDefaultFile);
+
+
+            return new Promise(function (resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", sUrl, true);
+                xhr.responseType = "arraybuffer";
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        resolve(xhr.response);
+                    } else {
+                        reject(new Error("Failed to load template: HTTP " + xhr.status));
+                    }
+                };
+                xhr.onerror = function () {
+                    reject(new Error("Network error loading template"));
+                };
+                xhr.send();
+            });
+        },
+
+        /**
+         * Builds Word Open XML paragraph content from plain text/markdown content.
+         * @param {string} sTitle - Document title
+         * @param {string} sContent - Generated text content
+         * @returns {string} Word XML string with w:p paragraphs
+         */
+        _buildWordXmlContent: function (sTitle, sContent, sDocKind) {
+            var aLines = String(sContent || "").split(/\r?\n/);
+            var sXml = "";
+            var bInCodeBlock = false;
+
+            // Common left indent (in twips) applied to all paragraphs / tables /
+            // code blocks so the rendered Word document content sits a bit to
+            // the right of the page edge instead of being flush against the
+            // left margin (matches the visual indentation of the on-screen
+            // preview dialog). 720 twips == 0.5 inch.
+            var BODY_LEFT_INDENT = 720;
+
+            function escXml(s) {
+                return String(s || "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;");
+            }
+
+            function makePara(text, style, bold, jc) {
+                var pPr = "<w:pPr>";
+                if (style) {
+                    pPr += '<w:pStyle w:val="' + style + '"/>';
+                }
+                if (jc) {
+                    pPr += '<w:jc w:val="' + jc + '"/>';
+                }
+                // Apply the body left indent. For bullets we add the bullet
+                // hanging-indent on top of the body indent so bullet lists
+                // stay aligned with the rest of the content.
+                if (style === "ListBullet") {
+                    pPr += '<w:ind w:left="' + (BODY_LEFT_INDENT + 360) +
+                        '" w:hanging="360"/>';
+                } else if (style !== "Title" && jc !== "center") {
+                    pPr += '<w:ind w:left="' + BODY_LEFT_INDENT + '"/>';
+                }
+                pPr += "</w:pPr>";
+                var rPr = "";
+                if (bold) {
+                    rPr = "<w:rPr><w:b/><w:bCs/></w:rPr>";
+                }
+                if (style && (style.indexOf("Heading") === 0)) {
+                    rPr = '<w:rPr><w:b/><w:bCs/><w:color w:val="1F4E79"/></w:rPr>';
+                }
+                var parts = String(text || "").split(/\*\*(.*?)\*\*/g);
+                var runs = "";
+                for (var pi = 0; pi < parts.length; pi++) {
+                    if (pi % 2 === 1) {
+                        runs += '<w:r><w:rPr><w:b/><w:bCs/></w:rPr><w:t xml:space="preserve">' + escXml(parts[pi]) + '</w:t></w:r>';
+                    } else if (parts[pi]) {
+                        runs += '<w:r>' + rPr + '<w:t xml:space="preserve">' + escXml(parts[pi]) + '</w:t></w:r>';
+                    }
+                }
+                return "<w:p>" + pPr + runs + "</w:p>";
+            }
+
+            // Build a Word XML table from markdown pipe-separated rows.
+            // IMPORTANT: a valid OOXML table MUST contain a <w:tblGrid> element
+            // declaring each column. Without it, Word may render every cell as
+            // an individual stacked paragraph instead of a real table (which is
+            // exactly the broken behaviour seen in the downloaded FS/TS docs).
+            function makeTable(aRows) {
+                if (!aRows || !aRows.length) {
+                    return "";
+                }
+
+                // Determine the maximum number of columns across all rows so
+                // that ragged rows still get rendered consistently.
+                var maxCols = 0;
+                for (var ci0 = 0; ci0 < aRows.length; ci0++) {
+                    if (aRows[ci0].length > maxCols) {
+                        maxCols = aRows[ci0].length;
+                    }
+                }
+                if (maxCols === 0) {
+                    return "";
+                }
+
+                // Total usable width inside default Capgemini template page
+                // margins is around 9360 twips (~6.5 inches). Distribute it
+                // evenly across the columns so the table fills the page just
+                // like the on-screen preview does.
+                var iTotalWidth = 9360;
+                var iColWidth = Math.floor(iTotalWidth / maxCols);
+
+                var iTableWidth = Math.max(iTotalWidth - BODY_LEFT_INDENT, 4000);
+                var iTableColWidth = Math.floor(iTableWidth / maxCols);
+
+                var xml = '<w:tbl>';
+                xml += '<w:tblPr>';
+                xml += '<w:tblStyle w:val="TableGrid"/>';
+                xml += '<w:tblW w:w="' + iTableWidth + '" w:type="dxa"/>';
+                xml += '<w:tblInd w:w="' + BODY_LEFT_INDENT + '" w:type="dxa"/>';
+                xml += '<w:jc w:val="left"/>';
+                xml += '<w:tblBorders>';
+                xml += '<w:top w:val="single" w:sz="4" w:space="0" w:color="D0D7DE"/>';
+                xml += '<w:left w:val="single" w:sz="4" w:space="0" w:color="D0D7DE"/>';
+                xml += '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="D0D7DE"/>';
+                xml += '<w:right w:val="single" w:sz="4" w:space="0" w:color="D0D7DE"/>';
+                xml += '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="D0D7DE"/>';
+                xml += '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="D0D7DE"/>';
+                xml += '</w:tblBorders>';
+                xml += '<w:tblLayout w:type="fixed"/>';
+                xml += '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" ' +
+                    'w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>';
+                xml += '</w:tblPr>';
+
+                // The required column grid declaration.
+                xml += '<w:tblGrid>';
+                for (var gi = 0; gi < maxCols; gi++) {
+                    xml += '<w:gridCol w:w="' + iTableColWidth + '"/>';
+                }
+                xml += '</w:tblGrid>';
+
+                for (var ri = 0; ri < aRows.length; ri++) {
+                    var cells = aRows[ri];
+                    var isHeader = (ri === 0);
+                    xml += '<w:tr>';
+                    if (isHeader) {
+                        xml += '<w:trPr><w:tblHeader/></w:trPr>';
+                    }
+                    for (var ci = 0; ci < maxCols; ci++) {
+                        var sCellText = (ci < cells.length) ? String(cells[ci] || "") : "";
+                        xml += '<w:tc>';
+                        xml += '<w:tcPr>';
+                        xml += '<w:tcW w:w="' + iTableColWidth + '" w:type="dxa"/>';
+                        if (isHeader) {
+                            xml += '<w:shd w:val="clear" w:color="auto" w:fill="EAF2FB"/>';
+                        }
+                        xml += '<w:vAlign w:val="top"/>';
+                        xml += '</w:tcPr>';
+
+                        // Honour inline **bold** within cell text and align cells
+                        // to the left so values read naturally (matches preview).
+                        xml += '<w:p>';
+                        xml += '<w:pPr>';
+                        xml += '<w:spacing w:before="40" w:after="40"/>';
+                        xml += '<w:jc w:val="left"/>';
+                        xml += '</w:pPr>';
+
+                        var aCellParts = sCellText.split(/\*\*(.*?)\*\*/g);
+                        var bAddedAnyRun = false;
+                        for (var cpi = 0; cpi < aCellParts.length; cpi++) {
+                            var sPart = aCellParts[cpi];
+                            if (!sPart && cpi % 2 === 0) {
+                                continue;
+                            }
+                            var sRunRpr;
+                            if (cpi % 2 === 1 || isHeader) {
+                                sRunRpr = '<w:rPr><w:b/><w:bCs/></w:rPr>';
+                            } else {
+                                sRunRpr = '';
+                            }
+                            xml += '<w:r>' + sRunRpr +
+                                '<w:t xml:space="preserve">' + escXml(sPart) + '</w:t></w:r>';
+                            bAddedAnyRun = true;
+                        }
+                        if (!bAddedAnyRun) {
+                            // Empty cell: emit a single empty run so the cell
+                            // still has a paragraph and renders with borders.
+                            xml += '<w:r><w:t xml:space="preserve"> </w:t></w:r>';
+                        }
+                        xml += '</w:p>';
+                        xml += '</w:tc>';
+                    }
+                    xml += '</w:tr>';
+                }
+                xml += '</w:tbl>';
+                // Trailing empty paragraph so subsequent content does not
+                // collapse onto the table edge.
+                xml += '<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>';
+                return xml;
+            }
+
+            // Makes a monospace paragraph for code blocks / flowcharts with center alignment
+            function makeCodePara(text) {
+                var sEscaped = escXml(text);
+                return '<w:p>' +
+                    '<w:pPr>' +
+                    '<w:ind w:left="' + BODY_LEFT_INDENT + '"/>' +
+                    '<w:jc w:val="left"/>' +
+                    '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>' +
+                    '</w:pPr>' +
+                    '<w:r>' +
+                    '<w:rPr>' +
+                    '<w:rFonts w:ascii="Courier New" w:hAnsi="Courier New" w:cs="Courier New"/>' +
+                    '<w:sz w:val="18"/>' +
+                    '<w:szCs w:val="18"/>' +
+                    '</w:rPr>' +
+                    '<w:t xml:space="preserve">' + sEscaped + '</w:t>' +
+                    '</w:r>' +
+                    '</w:p>';
+            }
+
+            // Check if a line contains box-drawing characters (flowchart/ASCII art)
+            function isBoxDrawingLine(sText) {
+                return /[\u2500-\u257F\u250C\u2510\u2514\u2518\u251C\u2524\u252C\u2534\u253C\u2502\u2550-\u256C\u2554\u2557\u255A\u255D\u2560\u2563\u2566\u2569\u256C\u2551]/.test(sText);
+            }
+
+            // Title paragraph - centered
+            sXml += makePara(sTitle, "Title", true, "center");
+            sXml += '<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>';
+            // ============================================================
+            // DYNAMIC TABLE OF CONTENTS GENERATION
+            // Pre-scan all lines to collect section headings, then build
+            // a TOC table that accurately reflects the document content.
+            // Assigns proper hierarchical numbering (1, 1.1, 1.2, 2, 2.1, etc.)
+            // Skips front-matter entries (Revision History, Document Control, etc.)
+            // ============================================================
+            var aTocEntries = [];
+            var bTocInCode = false;
+            // Front-matter headings to skip from TOC
+            var aFrontMatterPatterns = [
+                /table\s+of\s+contents/i,
+                /revision\s+history/i,
+                /document\s+control/i,
+                /version\s+history/i,
+                /review.*approval.*sign/i,
+                /review.*sign.*off/i
+            ];
+
+            function isFrontMatter(sText) {
+                for (var fi = 0; fi < aFrontMatterPatterns.length; fi++) {
+                    if (aFrontMatterPatterns[fi].test(sText)) { return true; }
+                }
+                return false;
+            }
+
+            for (var ti = 0; ti < aLines.length; ti++) {
+                var sTocLine = aLines[ti].trim();
+                // Skip code blocks
+                if (/^```/.test(sTocLine)) { bTocInCode = !bTocInCode; continue; }
+                if (bTocInCode) { continue; }
+                if (!sTocLine) { continue; }
+
+                // Detect markdown headings (## Heading, ### Sub-heading)
+                var tocHeadMatch = sTocLine.match(/^(#{1,4})\s+(.*)/);
+                if (tocHeadMatch) {
+                    var tocLevel = tocHeadMatch[1].length;
+                    var tocText = tocHeadMatch[2].replace(/\*\*/g, "").trim();
+                    // Skip front-matter headings from TOC
+                    if (!isFrontMatter(tocText)) {
+                        // Check if heading already has a number prefix (e.g., "## 1. OVERVIEW")
+                        var existingNumMatch = tocText.match(/^([0-9]+(?:\.[0-9]+){0,3})\.?\s+(.*)/);
+                        if (existingNumMatch) {
+                            aTocEntries.push({ level: tocLevel, title: existingNumMatch[2], sectionNum: existingNumMatch[1] });
+                        } else {
+                            aTocEntries.push({ level: tocLevel, title: tocText });
+                        }
+                    }
+                    continue;
+                }
+
+                // Detect numbered headings like "1. OVERVIEW", "3.1 Selection Screen", "5.2.1 Decision Matrix"
+                if (/^[0-9]+(\.[0-9]+){0,3}\.?\s+\S/.test(sTocLine) &&
+                    sTocLine.length < 120 &&
+                    !/[.:!?]$/.test(sTocLine)) {
+                    var sNumMatch = sTocLine.match(/^([0-9]+(?:\.[0-9]+){0,3})\.?\s+(.*)/);
+                    if (sNumMatch) {
+                        var sSectionNum = sNumMatch[1];
+                        var sSectionTitle = sNumMatch[2].replace(/\*\*/g, "").trim();
+                        if (!isFrontMatter(sSectionTitle)) {
+                            var iDots = (sSectionNum.match(/\./g) || []).length;
+                            aTocEntries.push({ level: iDots + 2, title: sSectionTitle, sectionNum: sSectionNum });
+                        }
+                    }
+                    continue;
+                }
+
+                // Detect ALL-CAPS headings (skip front-matter)
+                if (/^[A-Z][A-Z0-9\s\/&()_-]{4,}:?$/.test(sTocLine) && sTocLine.length < 80) {
+                    var sCapText = sTocLine.replace(/:$/, "");
+                    if (!isFrontMatter(sCapText)) {
+                        aTocEntries.push({ level: 2, title: sCapText });
+                    }
+                    continue;
+                }
+
+                // Detect **Bold Sub-headings** (skip front-matter)
+                if (/^\*\*[^*]+\*\*$/.test(sTocLine)) {
+                    var sBoldText = sTocLine.replace(/^\*\*/, "").replace(/\*\*$/, "");
+                    if (!isFrontMatter(sBoldText)) {
+                        aTocEntries.push({ level: 3, title: sBoldText });
+                    }
+                    continue;
+                }
+            }
+
+            // Build the TOC table with proper hierarchical numbering
+            if (aTocEntries.length > 0) {
+                sXml += makePara("Table of Contents", "Heading1", true, "left");
+                sXml += '<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>';
+
+                var aTocRows = [["Section", "Title"]];
+                // Hierarchical numbering counters
+                var iLevel1 = 0;
+                var iLevel2 = 0;
+                var iLevel3 = 0;
+
+                for (var tci = 0; tci < aTocEntries.length; tci++) {
+                    var oTocEntry = aTocEntries[tci];
+                    var sTocNum = oTocEntry.sectionNum || "";
+
+                    if (!sTocNum) {
+                        // Assign hierarchical numbers based on level
+                        if (oTocEntry.level <= 2) {
+                            // Main section: 1, 2, 3, ...
+                            iLevel1++;
+                            iLevel2 = 0;
+                            iLevel3 = 0;
+                            sTocNum = String(iLevel1);
+                        } else if (oTocEntry.level === 3) {
+                            // Sub-section: 1.1, 1.2, 2.1, ...
+                            iLevel2++;
+                            iLevel3 = 0;
+                            sTocNum = iLevel1 + "." + iLevel2;
+                        } else {
+                            // Sub-sub-section: 1.1.1, 1.1.2, ...
+                            iLevel3++;
+                            sTocNum = iLevel1 + "." + iLevel2 + "." + iLevel3;
+                        }
+                    } else {
+                        // Entry already has a section number - update counters to stay in sync
+                        var aParts = sTocNum.split(".");
+                        if (aParts.length === 1) {
+                            iLevel1 = parseInt(aParts[0], 10) || iLevel1;
+                            iLevel2 = 0;
+                            iLevel3 = 0;
+                        } else if (aParts.length === 2) {
+                            iLevel1 = parseInt(aParts[0], 10) || iLevel1;
+                            iLevel2 = parseInt(aParts[1], 10) || iLevel2;
+                            iLevel3 = 0;
+                        } else if (aParts.length >= 3) {
+                            iLevel1 = parseInt(aParts[0], 10) || iLevel1;
+                            iLevel2 = parseInt(aParts[1], 10) || iLevel2;
+                            iLevel3 = parseInt(aParts[2], 10) || iLevel3;
+                        }
+                    }
+                    aTocRows.push([sTocNum, oTocEntry.title]);
+                }
+                sXml += makeTable(aTocRows);
+                sXml += '<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>';
+            }
+            // ============================================================
+            // END OF DYNAMIC TOC GENERATION
+            // ============================================================
+
+            for (var li = 0; li < aLines.length; li++) {
+                var sLine = aLines[li];
+                var sTrimmed = sLine.trim();
+
+                // Handle code block markers (```)
+                if (/^```/.test(sTrimmed)) {
+                    bInCodeBlock = !bInCodeBlock;
+                    continue;
+                }
+
+                // If inside a code block, render with monospace font and centered
+                if (bInCodeBlock) {
+                    if (!sLine && !sLine.trim()) {
+                        sXml += makeCodePara("");
+                    } else {
+                        sXml += makeCodePara(sLine);
+                    }
+                    continue;
+                }
+
+                // If line contains box-drawing characters (even outside code block), use monospace
+                if (isBoxDrawingLine(sLine)) {
+                    sXml += makeCodePara(sLine);
+                    continue;
+                }
+
+                if (!sTrimmed) {
+                    sXml += '<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>';
+                    continue;
+                }
+
+                // Markdown headings
+                var headingMatch = sTrimmed.match(/^(#{1,4})\s+(.*)/);
+                if (headingMatch) {
+                    var iLevel = headingMatch[1].length;
+                    sXml += makePara(headingMatch[2], "Heading" + iLevel, false);
+                    continue;
+                }
+
+                // Numbered headings like "1. OVERVIEW" or "1.1 Purpose of the Program".
+                // Aligned with the on-screen preview parser so the downloaded
+                // Word doc shows the same hierarchy of section titles.
+                if (/^[0-9]+(\.[0-9]+){0,3}\.?\s+\S/.test(sTrimmed) &&
+                    sTrimmed.length < 120 &&
+                    !/[.:!?]$/.test(sTrimmed)) {
+                    // Use Heading2 for top-level (e.g. "1. OVERVIEW") and
+                    // Heading3 for sub-sections (e.g. "1.1 Purpose").
+                    var bSubSection = /^[0-9]+\.[0-9]+/.test(sTrimmed);
+                    sXml += makePara(sTrimmed, bSubSection ? "Heading3" : "Heading2", false);
+                    continue;
+                }
+
+                // ALL CAPS headings
+                if (/^[A-Z][A-Z0-9\s\/&()_-]{4,}:?$/.test(sTrimmed)) {
+                    sXml += makePara(sTrimmed.replace(/:$/, ""), "Heading2", false);
+                    continue;
+                }
+
+                // Bullet points
+                if (/^[-\u2022\u25CF\u2219\u2023\u25B8\u25BA\u25AA]\s+/.test(sTrimmed)) {
+                    var sBulletText = sTrimmed.replace(/^[-\u2022\u25CF\u2219\u2023\u25B8\u25BA\u25AA]\s*/, "");
+                    sXml += makePara("\u2022 " + sBulletText, "ListBullet", false);
+                    continue;
+                }
+
+                // Sub-headings with bold markers **Text**
+                if (/^\*\*[^*]+\*\*$/.test(sTrimmed)) {
+                    var sSubHeading = sTrimmed.replace(/^\*\*/, "").replace(/\*\*$/, "");
+                    sXml += makePara(sSubHeading, "Heading3", true);
+                    continue;
+                }
+
+                // Separator lines (---)
+                if (/^-{3,}$/.test(sTrimmed)) {
+                    sXml += '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr></w:pPr></w:p>';
+                    continue;
+                }
+
+                // Markdown table lines (pipe-separated)
+                if (sTrimmed.indexOf("|") !== -1 && (sTrimmed.match(/\|/g) || []).length >= 2) {
+                    // Collect all consecutive table lines
+                    var aTableRows = [];
+                    var tli = li;
+                    while (tli < aLines.length) {
+                        var tLine = aLines[tli].trim();
+                        if (tLine.indexOf("|") === -1 || (tLine.match(/\|/g) || []).length < 2) {
+                            break;
+                        }
+                        // Skip separator lines like |---|---|
+                        if (/^[\s|:\-]+$/.test(tLine)) {
+                            tli++;
+                            continue;
+                        }
+                        var aCells = tLine.replace(/^\|/, "").replace(/\|$/, "").split("|").map(function (c) { return c.trim(); });
+                        if (aCells.length > 0) {
+                            aTableRows.push(aCells);
+                        }
+                        tli++;
+                    }
+                    if (aTableRows.length > 0) {
+                        sXml += makeTable(aTableRows);
+                        li = tli - 1; // advance loop counter
+                        continue;
+                    }
+                }
+
+                // Normal paragraph - justified
+                sXml += makePara(sTrimmed, "Normal", false, "both");
+            }
+
+            return sXml;
+        },
+
+        _textToWordDocFile: function (sTitle, sContent, sFileName) {
+            return new Promise(function (resolve, reject) {
+                try {
+                    console.log("RETRO: _textToWordDocFile started");
+
+                    if (!sContent || !String(sContent).trim()) {
+                        reject(new Error("No content available to create Word document."));
+                        return;
+                    }
+
+                    sFileName = String(sFileName || "Generated_Document.docx")
+                        .replace(/\.doc$/i, ".docx");
+
+                    if (!/\.docx$/i.test(sFileName)) {
+                        sFileName += ".docx";
+                    }
+
+                    function escapeHtml(sValue) {
+                        return String(sValue || "")
+                            .replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")
+                            .replace(/"/g, "&quot;")
+                            .replace(/'/g, "&#039;");
+                    }
+
+                    function applyInlineFormatting(sValue) {
+                        var sEscaped = escapeHtml(sValue || "");
+
+                        // Convert markdown bold: **text**
+                        sEscaped = sEscaped.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+
+                        return sEscaped;
+                    }
+
+                    function formatTableLikeLine(sText) {
+                        if (/^[\s|:\-]+$/.test(sText)) {
+                            return "";
+                        }
+
+                        var aCells = sText
+                            .replace(/^\|/, "")
+                            .replace(/\|$/, "")
+                            .split("|")
+                            .map(function (cell) {
+                                return cell.trim();
+                            })
+                            .filter(Boolean);
+
+                        if (!aCells.length) {
+                            return "";
+                        }
+
+                        return "<p class='table-line'>" +
+                            aCells.map(escapeHtml).join(" &nbsp; | &nbsp; ") +
+                            "</p>";
+                    }
+
+                    var _inCodeBlock = false;
+
+                    // Check if a line contains box-drawing characters (flowchart/ASCII art)
+                    function isBoxDrawingLine(sText) {
+                        return /[\u2500-\u257F\u250C\u2510\u2514\u2518\u251C\u2524\u252C\u2534\u253C\u2502\u2550-\u256C\u2554\u2557\u255A\u255D\u2560\u2563\u2566\u2569\u256C\u2551]/.test(sText);
+                    }
+
+                    function formatLine(sLine) {
+                        var sText = String(sLine || "");
+                        var sTrimmed = sText.trim();
+
+                        // Handle code block markers
+                        if (/^```/.test(sTrimmed)) {
+                            _inCodeBlock = !_inCodeBlock;
+                            return "";
+                        }
+
+                        // If inside a code block, render with monospace font, centered
+                        if (_inCodeBlock) {
+                            return "<pre style='font-family: Courier New, monospace; font-size: 9pt; margin: 0; padding: 0; text-align: center; white-space: pre; line-height: 1.2;'>" + escapeHtml(sText) + "</pre>";
+                        }
+
+                        // If line contains box-drawing characters, use monospace and center
+                        if (isBoxDrawingLine(sText)) {
+                            return "<pre style='font-family: Courier New, monospace; font-size: 9pt; margin: 0; padding: 0; text-align: center; white-space: pre; line-height: 1.2;'>" + escapeHtml(sText) + "</pre>";
+                        }
+
+                        if (!sTrimmed) {
+                            return "<p>&nbsp;</p>";
+                        }
+
+                        // Markdown headings: #, ##, ###, ####
+                        if (/^#{1,4}\s+/.test(sTrimmed)) {
+                            sTrimmed = sTrimmed.replace(/^#{1,4}\s+/, "");
+                            return "<h2>" + escapeHtml(sTrimmed) + "</h2>";
+                        }
+
+                        // Numbered heading: 1. OVERVIEW, 1.1 Details
+                        if (/^[0-9]+(\.[0-9]+)*\.?\s+/.test(sTrimmed)) {
+                            return "<h3>" + escapeHtml(sTrimmed) + "</h3>";
+                        }
+
+                        // All-caps heading
+                        if (/^[A-Z][A-Z0-9\s/&()_-]{4,}:?$/.test(sTrimmed)) {
+                            return "<h2>" + escapeHtml(sTrimmed.replace(/:$/, "")) + "</h2>";
+                        }
+
+                        // Bullets
+                        if (/^[-•●∙‣▸►▪]\s+/.test(sTrimmed)) {
+                            sTrimmed = sTrimmed.replace(/^[•●∙‣▸►▪]\s*/, "- ");
+                            return "<p class='bullet'>" + applyInlineFormatting(sTrimmed) + "</p>";
+                        }
+
+                        // Markdown table line fallback
+                        if (sTrimmed.indexOf("|") !== -1 && (sTrimmed.match(/\|/g) || []).length >= 2) {
+                            return formatTableLikeLine(sTrimmed);
+                        }
+
+                        return "<p>" + applyInlineFormatting(sTrimmed) + "</p>";
+                    }
+
+                    var sBody = String(sContent || "")
+                        .split(/\r?\n/)
+                        .map(formatLine)
+                        .join("");
+
+                    var sHtml =
+                        "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+                        "xmlns:w='urn:schemas-microsoft-com:office:word' " +
+                        "xmlns='http://www.w3.org/TR/REC-html40'>" +
+                        "<head>" +
+                        "<meta charset='utf-8'>" +
+                        "<title>" + escapeHtml(sTitle || "Generated Document") + "</title>" +
+                        "<style>" +
+                        "@page WordSection1 { size: 8.5in 11.0in; margin: 0.75in 0.75in 0.75in 0.75in; }" +
+                        "div.WordSection1 { page: WordSection1; }" +
+                        "body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1d2d3e; }" +
+                        "h1 { text-align: center; font-size: 18pt; color: #1F4E79; border-bottom: 3px solid #1F4E79; padding-bottom: 10px; }" +
+                        "h2 { font-size: 15pt; color: #1F4E79; margin-top: 18px; margin-bottom: 8px; }" +
+                        "h3 { font-size: 13pt; color: #1F4E79; margin-top: 14px; margin-bottom: 6px; }" +
+                        "p { margin: 6px 0; line-height: 1.35; }" +
+                        ".bullet { margin-left: 22px; }" +
+                        ".table-line { font-family: Calibri, Arial, sans-serif; background: #f7f7f7; padding: 4px; }" +
+                        "pre { font-family: Courier New, monospace; font-size: 9pt; margin: 0; text-align: center; white-space: pre; }" +
+                        "</style>" +
+                        "</head>" +
+                        "<body>" +
+                        "<div class='WordSection1'>" +
+                        "<h1>" + escapeHtml(sTitle || "Generated Document") + "</h1>" +
+                        sBody +
+                        "</div>" +
+                        "</body>" +
+                        "</html>";
+
+                    var oBlob = new Blob(
+                        ["\ufeff", sHtml],
+                        {
+                            type: "application/msword;charset=utf-8"
+                        }
+                    );
+
+                    var oFile;
+
+                    try {
+                        oFile = new window.File(
+                            [oBlob],
+                            sFileName,
+                            {
+                                type: "application/msword"
+                            }
+                        );
+                    } catch (fileError) {
+                        // Fallback for older browsers
+                        oFile = oBlob;
+                        oFile.name = sFileName;
+                        oFile.lastModified = new Date().getTime();
+                    }
+
+                    console.log("RETRO: _textToWordDocFile completed", oFile);
+
+                    resolve(oFile);
+                } catch (e) {
+                    console.error("RETRO: _textToWordDocFile failed", e);
+                    reject(e);
+                }
+            });
+        },
+        _buildRetroWordFileName: function (sObjectName, sObjectType, sDocKind) {
+            var sObjType = this._sanitizeRetroFilePart(
+                String(sObjectType || "PROG").split("/")[0]
+            );
+
+            var sObjName = this._sanitizeRetroFilePart(
+                sObjectName || "UNKNOWN"
+            );
+
+            var sDocName = sDocKind === "TS"
+                ? "technical_specification"
+                : "functional_specification";
+
+            return sObjType + "_" + sDocName + "_" + sObjName + ".docx";
+        },
+        _buildRetroObjectPath: function (sObjectName, sObjectType, sDocKind) {
+            var sObjType = this._sanitizeRetroFilePart(
+                String(sObjectType || "PROG").split("/")[0]
+            );
+
+            var sFileName = this._buildRetroWordFileName(
+                sObjectName,
+                sObjectType,
+                sDocKind
+            );
+
+            return "Retro/" + sObjType + "/" + sFileName;
+        },
+
+        _retroUploadDocuments: function (sObjectName, sObjectType, sTSContent, sFSContent) {
+            var that = this;
+            var aResults = [];
+
+            if (!sTSContent && !sFSContent) {
+                return Promise.reject(new Error("No FS or TS content available to upload"));
+            }
+
+            // Upload documents SEQUENTIALLY with a delay between them to avoid race
+            // conditions where the backend may not have fully committed the first
+            // document before the second upload arrives — causing the second file
+            // (FS) to be lost in the Object Store.
+            var pChain = Promise.resolve();
+
+            // Helper: retry an upload up to N times with a delay between attempts
+            var fnUploadWithRetry = function (sContent, sObjName, sObjType, sDocKind, iMaxRetries) {
+                iMaxRetries = iMaxRetries || 2;
+                var iAttempt = 0;
+
+                var fnAttempt = function () {
+                    iAttempt++;
+                    console.log("RETRO UPLOAD: Uploading " + sDocKind + " (attempt " + iAttempt + "/" + (iMaxRetries + 1) + ")");
+                    return that._uploadRetroWordDocumentToObjectStore(
+                        sContent, sObjName, sObjType, sDocKind
+                    ).then(function (oResult) {
+                        if (!oResult || (!oResult.response && !oResult.filename)) {
+                            throw new Error("Upload returned empty result for " + sDocKind);
+                        }
+                        console.log("RETRO UPLOAD: " + sDocKind + " uploaded successfully on attempt " + iAttempt);
+                        return oResult;
+                    }).catch(function (err) {
+                        if (iAttempt <= iMaxRetries) {
+                            console.warn("RETRO UPLOAD: " + sDocKind + " attempt " + iAttempt + " failed, retrying in 2s...", err);
+                            return new Promise(function (resolve) {
+                                setTimeout(resolve, 2000);
+                            }).then(fnAttempt);
+                        }
+                        console.error("RETRO UPLOAD: " + sDocKind + " failed after " + iAttempt + " attempts", err);
+                        throw err;
+                    });
+                };
+
+                return fnAttempt();
+            };
+
+            if (sTSContent) {
+                pChain = pChain.then(function () {
+                    return fnUploadWithRetry(
+                        sTSContent,
+                        sObjectName,
+                        sObjectType,
+                        "TS",
+                        2
+                    ).then(function (oResult) {
+                        aResults.push(oResult);
+                    });
+                });
+            }
+
+            // Add a 2-second delay between TS and FS uploads to allow the backend
+            // to fully persist the first document before receiving the second one
+            if (sTSContent && sFSContent) {
+                pChain = pChain.then(function () {
+                    console.log("RETRO UPLOAD: Waiting 2s before uploading FS to allow backend persistence...");
+                    return new Promise(function (resolve) {
+                        setTimeout(resolve, 2000);
+                    });
+                });
+            }
+
+            if (sFSContent) {
+                pChain = pChain.then(function () {
+                    return fnUploadWithRetry(
+                        sFSContent,
+                        sObjectName,
+                        sObjectType,
+                        "FS",
+                        2
+                    ).then(function (oResult) {
+                        aResults.push(oResult);
+                    });
+                });
+            }
+
+            // After all uploads, populate session cache so _checkExistingRetroDocuments
+            // can find documents even when getFiles pagination (IsTruncated=true) does
+            // not include newly uploaded files in the first page of results.
+            pChain = pChain.then(function () {
+                console.log("RETRO UPLOAD: All uploads complete. Populating session cache...");
+
+                var sCacheKey = that._sanitizeRetroFilePart(sObjectName || "").toUpperCase();
+                if (!that._retroUploadedDocCache) {
+                    that._retroUploadedDocCache = {};
+                }
+                var oCached = that._retroUploadedDocCache[sCacheKey] || {
+                    hasFS: false, hasTS: false,
+                    fsFileName: "", tsFileName: "",
+                    fsKey: "", tsKey: "",
+                    fsDownloadUrl: "", tsDownloadUrl: "",
+                    fsViewUrl: "", tsViewUrl: ""
+                };
+
+                aResults.forEach(function (r) {
+                    if (!r) return;
+                    var sDocKind = r.docKind || "";
+                    var sKey = (r.response && (r.response.objectStoreRefKey || r.response.ObjectStoreRefKey || (r.response.value && r.response.value.objectStoreRefKey))) || "";
+                    var sFName = r.filename || "";
+                    var sDlUrl = sKey ? "/cockpit/getFileDetails?key=" + encodeURIComponent(sKey) : "";
+
+                    if (sDocKind === "FS") {
+                        oCached.hasFS = true;
+                        oCached.fsFileName = sFName;
+                        oCached.fsKey = sKey;
+                        oCached.fsDownloadUrl = sDlUrl;
+                    } else if (sDocKind === "TS") {
+                        oCached.hasTS = true;
+                        oCached.tsFileName = sFName;
+                        oCached.tsKey = sKey;
+                        oCached.tsDownloadUrl = sDlUrl;
+                    }
+                });
+
+                that._retroUploadedDocCache[sCacheKey] = oCached;
+                var oRDM = that.getView().getModel("retroDocModel");
+                oRDM.setProperty("/hasExistingFS", !!oCached.hasFS);
+                oRDM.setProperty("/hasExistingTS", !!oCached.hasTS);
+                if (oCached.hasFS || oCached.hasTS) {
+                    oRDM.setProperty("/documentMode", "update");
+                    oRDM.setProperty("/updateFS", !!oCached.hasFS);
+                    oRDM.setProperty("/updateTS", !!oCached.hasTS);
+                }
+                console.log("RETRO UPLOAD: Session cache populated for key=" + sCacheKey, oCached);
+
+                return aResults;
+            });
+            return pChain;
+        },
+        _downloadRetroDocumentItem: function (oItem) {
+            if (!oItem) {
+                sap.m.MessageToast.show("No document selected.");
+                return;
+            }
+
+            var sFileName = oItem.filename || "Generated_Document.docx";
+            // Ensure .docx extension for template-based documents
+            sFileName = sFileName.replace(/\.doc$/i, ".docx");
+            if (!/\.docx$/i.test(sFileName)) {
+                sFileName += ".docx";
+            }
+
+            if (oItem.fileObject) {
+                var oUrl = URL.createObjectURL(oItem.fileObject);
+                var oLink = document.createElement("a");
+
+                oLink.href = oUrl;
+                oLink.download = sFileName;
+
+                document.body.appendChild(oLink);
+                oLink.click();
+                document.body.removeChild(oLink);
+
+                URL.revokeObjectURL(oUrl);
+                return;
+            }
+
+            if (oItem.generatedContent || oItem.content) {
+                var sDocContent = oItem.generatedContent || oItem.content;
+                var sTitle = oItem.name || oItem.title || "Generated Document";
+
+                // Use template-based generation for download
+                this._generateDocxFromTemplate(sTitle, sDocContent, sFileName)
+                    .then(function (oFile) {
+                        var oUrl = URL.createObjectURL(oFile);
+                        var oLink = document.createElement("a");
+
+                        oLink.href = oUrl;
+                        oLink.download = sFileName;
+
+                        document.body.appendChild(oLink);
+                        oLink.click();
+                        document.body.removeChild(oLink);
+
+                        URL.revokeObjectURL(oUrl);
+                    }).catch(function (err) {
+                        sap.m.MessageBox.error(err.message || "Download failed.");
+                    });
+
+                return;
+            }
+
+            sap.m.MessageToast.show("No file/content available for download.");
+        },
+        onViewLogItem: function (oEvent) {
+            var oContext = oEvent.getSource().getBindingContext();
+
+            if (!oContext) {
+                sap.m.MessageToast.show("No document data found for this log item.");
+                return;
+            }
+
+            var oItem = oContext.getObject();
+
+            if (!oItem || !oItem.generatedContent) {
+                sap.m.MessageToast.show("No generated content available to view.");
+                return;
+            }
+
+            this._openRetroDocumentPreview({
+                title: oItem.documentTitle || oItem.title || "Generated Document",
+                content: oItem.generatedContent,
+                filename: oItem.filename || "Generated_Document.docx",
+                fileObject: oItem.fileObject || null,
+                docKind: oItem.docKind || ""
+            });
+        },
+
+        onViewDocument: function (oEvent) {
+            var oContext = oEvent.getSource().getBindingContext();
+
+            if (!oContext) {
+                sap.m.MessageToast.show("No document selected.");
+                return;
+            }
+
+            var oItem = oContext.getObject();
+
+            this._openRetroDocumentPreview({
+                title: oItem.name || "Generated Document",
+                content: oItem.generatedContent || "",
+                filename: oItem.filename || "Generated_Document.docx",
+                fileObject: oItem.fileObject || null,
+                docKind: oItem.docKind || ""
+            });
+        },
+
+        onDownloadDocument: function (oEvent) {
+            var oContext = oEvent.getSource().getBindingContext();
+
+            if (!oContext) {
+                sap.m.MessageToast.show("No document selected.");
+                return;
+            }
+
+            var oItem = oContext.getObject();
+            this._downloadRetroDocumentItem(oItem);
+        },
+
+        onDownloadAll: function () {
+            var oDefaultModel = this.getView().getModel();
+            var aItems = oDefaultModel.getProperty("/downloadItems") || [];
+
+            if (!aItems.length) {
+                sap.m.MessageToast.show("No documents available to download.");
+                return;
+            }
+
+            var that = this;
+
+            aItems.forEach(function (oItem, iIndex) {
+                setTimeout(function () {
+                    that._downloadRetroDocumentItem(oItem);
+                }, iIndex * 500);
+            });
+        },
+
+        _openRetroDocumentPreview: function (oDoc) {
+            var that = this;
+
+            if (!oDoc || !oDoc.content) {
+                sap.m.MessageToast.show("No content available to preview.");
+                return;
+            }
+
+            var sHtml = this._buildRetroPreviewHtml(
+                oDoc.title || "Generated Document",
+                oDoc.content || ""
+            );
+
+            var oHtml = new sap.ui.core.HTML({
+                content: sHtml,
+                sanitizeContent: false
+            });
+
+            var oScroll = new sap.m.ScrollContainer({
+                height: "620px",
+                vertical: true,
+                horizontal: false,
+                content: [oHtml]
+            });
+
+            var oDialog = new sap.m.Dialog({
+                title: oDoc.title || "Generated Document",
+                contentWidth: "75%",
+                contentHeight: "75%",
+                resizable: true,
+                draggable: true,
+                content: [oScroll],
+                buttons: [
+                    new sap.m.Button({
+                        text: "Close",
+                        press: function () {
+                            oDialog.close();
+                            oDialog.destroy();
+                        }
+                    }),
+                    new sap.m.Button({
+                        text: "Download",
+                        icon: "sap-icon://download",
+                        type: "Emphasized",
+                        press: function () {
+                            that._downloadRetroDocumentItem(oDoc);
+                        }
+                    })
+                ]
+            });
+
+            this.getView().addDependent(oDialog);
+            oDialog.open();
+        },
+
+        /**
+         * Builds a richly-formatted HTML preview for the FS/TS content shown in
+         * the "view" dialog of the Retro Documentation process log.
+         *
+         * Previously the renderer worked line-by-line and was unable to group
+         * markdown structures (tables, bullet lists, code blocks) into proper
+         * HTML elements. As a result, tables generated by the AI (e.g.
+         * "Field | Data Type | Length | Description") rendered as flat text
+         * with pipe characters, and bullet lists looked like loose paragraphs.
+         *
+         * This implementation runs a small block-level parser that recognizes:
+         *   - Markdown headings (#, ##, ###, ####)
+         *   - Numbered section headings (e.g. "1.1 Purpose of the Program")
+         *   - Markdown tables ( | a | b | / |---|---| / | x | y | )
+         *   - Bullet lists (-, *, +, • etc.) with nesting via indentation
+         *   - Numbered lists (1. ..., 2. ...)
+         *   - Fenced code blocks (```...```)
+         *   - ASCII / box-drawing diagrams (rendered as monospace pre)
+         *   - Inline **bold**, *italic*, `code`
+         *   - Blank lines as paragraph separators
+         */
+        _buildRetroPreviewHtml: function (sTitle, sContent) {
+            function escapeHtml(sValue) {
+                return String(sValue == null ? "" : sValue)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            // Apply inline markdown (bold, italic, inline code) AFTER escaping.
+            function applyInlineMarkdown(sEscaped) {
+                // Inline code: `code`
+                sEscaped = sEscaped.replace(/`([^`]+)`/g, function (_m, p1) {
+                    return "<code style=\"background:#f4f6f8;padding:1px 5px;border-radius:3px;font-family:Consolas,Monaco,monospace;font-size:0.92em;\">" + p1 + "</code>";
+                });
+                // Bold: **text**
+                sEscaped = sEscaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+                // Italic: *text* (avoid matching ** which was already handled)
+                sEscaped = sEscaped.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+                return sEscaped;
+            }
+
+            function isBoxDrawingLine(sText) {
+                return /[\u2500-\u257F]/.test(sText);
+            }
+
+            function isTableSeparator(sText) {
+                // Matches markdown table separator like |---|---| or |:---|:---:|
+                var sT = sText.trim();
+                if (sT.indexOf("|") === -1) { return false; }
+                return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(sT);
+            }
+
+            function isTableRow(sText) {
+                var sT = sText.trim();
+                // At least two pipes, and not a separator row
+                if ((sT.match(/\|/g) || []).length < 2) { return false; }
+                return !isTableSeparator(sT);
+            }
+
+            function splitTableCells(sRow) {
+                var sT = sRow.trim().replace(/^\|/, "").replace(/\|$/, "");
+                return sT.split("|").map(function (s) { return s.trim(); });
+            }
+
+            function getIndentLevel(sLine) {
+                var m = sLine.match(/^(\s*)/);
+                var sIndent = m ? m[1] : "";
+                // Treat tab as 4 spaces; nest every 2 spaces of indent.
+                var sNorm = sIndent.replace(/\t/g, "    ");
+                return Math.floor(sNorm.length / 2);
+            }
+
+            var aLines = String(sContent || "").split(/\r?\n/);
+            var aOut = [];
+            var i = 0;
+
+            while (i < aLines.length) {
+                var sLine = aLines[i];
+                var sTrim = sLine.trim();
+
+                // ----- Fenced code block -----
+                if (/^```/.test(sTrim)) {
+                    var aCode = [];
+                    i++;
+                    while (i < aLines.length && !/^```/.test(aLines[i].trim())) {
+                        aCode.push(aLines[i]);
+                        i++;
+                    }
+                    i++; // skip closing ```
+                    aOut.push(
+                        "<pre style=\"background:#0b1f3a;color:#e6edf3;padding:12px 14px;border-radius:6px;overflow:auto;font-family:Consolas,Monaco,monospace;font-size:12.5px;line-height:1.45;margin:10px 0;\">" +
+                        escapeHtml(aCode.join("\n")) +
+                        "</pre>"
+                    );
+                    continue;
+                }
+
+                // ----- Box-drawing / ASCII diagram block -----
+                if (isBoxDrawingLine(sLine)) {
+                    var aBox = [];
+                    while (i < aLines.length && (isBoxDrawingLine(aLines[i]) || aLines[i].trim() === "")) {
+                        aBox.push(aLines[i]);
+                        i++;
+                        // Stop on consecutive blank lines
+                        if (aBox.length >= 2 &&
+                            aBox[aBox.length - 1].trim() === "" &&
+                            aBox[aBox.length - 2].trim() === "") {
+                            break;
+                        }
+                    }
+                    aOut.push(
+                        "<pre style=\"font-family:Consolas,Monaco,monospace;font-size:12px;line-height:1.3;margin:10px 0;white-space:pre;\">" +
+                        escapeHtml(aBox.join("\n").replace(/\s+$/, "")) +
+                        "</pre>"
+                    );
+                    continue;
+                }
+
+                // ----- Blank line -----
+                if (sTrim === "") {
+                    i++;
+                    continue;
+                }
+
+                // ----- Markdown heading (#, ##, ###, ####) -----
+                var mHead = sTrim.match(/^(#{1,4})\s+(.+?)\s*#*\s*$/);
+                if (mHead) {
+                    var iLevel = mHead[1].length;
+                    var sHeadText = applyInlineMarkdown(escapeHtml(mHead[2]));
+                    var aSizes = ["22px", "18px", "16px", "14px"];
+                    var aMargins = ["22px 0 12px", "20px 0 10px", "16px 0 8px", "14px 0 6px"];
+                    aOut.push(
+                        "<h" + (iLevel + 1) +
+                        " style=\"font-family:'Segoe UI',Arial,sans-serif;color:#1d2d3e;font-size:" +
+                        aSizes[iLevel - 1] + ";margin:" + aMargins[iLevel - 1] +
+                        ";font-weight:600;\">" + sHeadText + "</h" + (iLevel + 1) + ">"
+                    );
+                    i++;
+                    continue;
+                }
+
+                // ----- Numbered section heading (e.g. "1.1 Purpose of the Program") -----
+                // Only treat as heading when there's no trailing punctuation typical of sentences.
+                if (/^[0-9]+(\.[0-9]+){0,3}\.?\s+\S/.test(sTrim) && sTrim.length < 120 && !/[.:!?]$/.test(sTrim)) {
+                    // Distinguish from numbered list item: heading if next line is blank or another heading,
+                    // list if part of a sequence "1. ... \n 2. ...".
+                    var bIsHeading = true;
+                    // If line starts with simple "N. text" and previous/next are also "N. text" treat as numbered list.
+                    if (/^[0-9]+\.\s+/.test(sTrim)) {
+                        var sNext = (aLines[i + 1] || "").trim();
+                        var sPrev = (aLines[i - 1] || "").trim();
+                        if (/^[0-9]+\.\s+/.test(sNext) || /^[0-9]+\.\s+/.test(sPrev)) {
+                            bIsHeading = false;
+                        }
+                    }
+                    if (bIsHeading) {
+                        aOut.push(
+                            "<h3 style=\"font-family:'Segoe UI',Arial,sans-serif;color:#0a6ed1;font-size:17px;margin:18px 0 8px;font-weight:600;\">" +
+                            applyInlineMarkdown(escapeHtml(sTrim)) +
+                            "</h3>"
+                        );
+                        i++;
+                        continue;
+                    }
+                }
+
+                // ----- Markdown table -----
+                if (isTableRow(sLine)) {
+                    var aTableLines = [];
+                    while (i < aLines.length && (isTableRow(aLines[i]) || isTableSeparator(aLines[i]))) {
+                        aTableLines.push(aLines[i]);
+                        i++;
+                    }
+
+                    // Identify separator (if any) to split header/body.
+                    var iSepIdx = -1;
+                    for (var k = 0; k < aTableLines.length; k++) {
+                        if (isTableSeparator(aTableLines[k])) { iSepIdx = k; break; }
+                    }
+
+                    var aHeaderRows, aBodyRows;
+                    if (iSepIdx > 0) {
+                        aHeaderRows = aTableLines.slice(0, iSepIdx);
+                        aBodyRows = aTableLines.slice(iSepIdx + 1);
+                    } else {
+                        aHeaderRows = [aTableLines[0]];
+                        aBodyRows = aTableLines.slice(1);
+                    }
+
+                    var sTableHtml =
+                        "<table style=\"border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px;border:1px solid #d0d7de;\">";
+
+                    sTableHtml += "<thead>";
+                    aHeaderRows.forEach(function (sR) {
+                        var aC = splitTableCells(sR);
+                        sTableHtml += "<tr>";
+                        aC.forEach(function (sCell) {
+                            sTableHtml += "<th style=\"border:1px solid #d0d7de;padding:8px 12px;background:#eaf2fb;color:#1d2d3e;text-align:left;font-weight:600;\">" +
+                                applyInlineMarkdown(escapeHtml(sCell)) + "</th>";
+                        });
+                        sTableHtml += "</tr>";
+                    });
+                    sTableHtml += "</thead>";
+
+                    if (aBodyRows.length) {
+                        sTableHtml += "<tbody>";
+                        aBodyRows.forEach(function (sR, idx) {
+                            var aC = splitTableCells(sR);
+                            var sBg = idx % 2 === 0 ? "#ffffff" : "#f7f9fc";
+                            sTableHtml += "<tr style=\"background:" + sBg + ";\">";
+                            aC.forEach(function (sCell) {
+                                sTableHtml += "<td style=\"border:1px solid #d0d7de;padding:7px 12px;vertical-align:top;\">" +
+                                    applyInlineMarkdown(escapeHtml(sCell)) + "</td>";
+                            });
+                            sTableHtml += "</tr>";
+                        });
+                        sTableHtml += "</tbody>";
+                    }
+
+                    sTableHtml += "</table>";
+                    aOut.push(sTableHtml);
+                    continue;
+                }
+
+                // ----- Bullet list -----
+                if (/^\s*[-*+\u2022\u25CF\u2219\u2023\u25B8\u25BA\u25AA]\s+/.test(sLine)) {
+                    var aListItems = [];
+                    var iBaseIndent = getIndentLevel(sLine);
+                    while (i < aLines.length && /^\s*[-*+\u2022\u25CF\u2219\u2023\u25B8\u25BA\u25AA]\s+/.test(aLines[i])) {
+                        var iLvl = Math.max(0, getIndentLevel(aLines[i]) - iBaseIndent);
+                        var sItemText = aLines[i].replace(/^\s*[-*+\u2022\u25CF\u2219\u2023\u25B8\u25BA\u25AA]\s+/, "");
+                        aListItems.push({ level: iLvl, text: sItemText });
+                        i++;
+                    }
+
+                    // Render as nested <ul>
+                    var sListHtml = "";
+                    var iCurrentLevel = -1;
+                    aListItems.forEach(function (oItem) {
+                        while (iCurrentLevel < oItem.level) {
+                            sListHtml += "<ul style=\"margin:6px 0 6px 22px;padding-left:18px;\">";
+                            iCurrentLevel++;
+                        }
+                        while (iCurrentLevel > oItem.level) {
+                            sListHtml += "</ul>";
+                            iCurrentLevel--;
+                        }
+                        sListHtml += "<li style=\"margin:3px 0;\">" + applyInlineMarkdown(escapeHtml(oItem.text)) + "</li>";
+                    });
+                    while (iCurrentLevel >= 0) {
+                        sListHtml += "</ul>";
+                        iCurrentLevel--;
+                    }
+                    aOut.push(sListHtml);
+                    continue;
+                }
+
+                // ----- Numbered list -----
+                if (/^\s*[0-9]+\.\s+/.test(sLine)) {
+                    var aNumItems = [];
+                    while (i < aLines.length && /^\s*[0-9]+\.\s+/.test(aLines[i])) {
+                        aNumItems.push(aLines[i].replace(/^\s*[0-9]+\.\s+/, ""));
+                        i++;
+                    }
+                    var sOl = "<ol style=\"margin:6px 0 10px 22px;padding-left:18px;\">";
+                    aNumItems.forEach(function (s) {
+                        sOl += "<li style=\"margin:3px 0;\">" + applyInlineMarkdown(escapeHtml(s)) + "</li>";
+                    });
+                    sOl += "</ol>";
+                    aOut.push(sOl);
+                    continue;
+                }
+
+                // ----- ALL-CAPS short line treated as a section heading -----
+                if (/^[A-Z][A-Z0-9\s/&()_-]{4,}:?$/.test(sTrim) && sTrim.length < 80) {
+                    aOut.push(
+                        "<h3 style=\"font-family:'Segoe UI',Arial,sans-serif;color:#0a6ed1;font-size:16px;margin:16px 0 8px;font-weight:600;\">" +
+                        escapeHtml(sTrim.replace(/:$/, "")) +
+                        "</h3>"
+                    );
+                    i++;
+                    continue;
+                }
+
+                // ----- Plain paragraph (collect contiguous non-blank, non-block lines) -----
+                var aPara = [sTrim];
+                i++;
+                while (i < aLines.length) {
+                    var sNxt = aLines[i];
+                    var sNxtTrim = sNxt.trim();
+                    if (sNxtTrim === "") { break; }
+                    if (/^```/.test(sNxtTrim)) { break; }
+                    if (/^#{1,4}\s+/.test(sNxtTrim)) { break; }
+                    if (isTableRow(sNxt) || isTableSeparator(sNxt)) { break; }
+                    if (/^\s*[-*+\u2022\u25CF\u2219\u2023\u25B8\u25BA\u25AA]\s+/.test(sNxt)) { break; }
+                    if (/^\s*[0-9]+\.\s+/.test(sNxt)) { break; }
+                    if (isBoxDrawingLine(sNxt)) { break; }
+                    aPara.push(sNxtTrim);
+                    i++;
+                }
+                aOut.push(
+                    "<p style=\"margin:8px 0;line-height:1.6;\">" +
+                    applyInlineMarkdown(escapeHtml(aPara.join(" "))) +
+                    "</p>"
+                );
+            }
+
+            return ""
+                + "<div style=\"font-family:'Segoe UI',Arial,sans-serif;padding:24px 28px;color:#1d2d3e;background:#ffffff;\">"
+                + "<h1 style=\"color:#0a6ed1;border-bottom:3px solid #0a6ed1;padding-bottom:12px;margin:0 0 18px;font-size:24px;font-weight:600;\">"
+                + escapeHtml(sTitle || "Generated Document")
+                + "</h1>"
+                + "<div style=\"font-size:14px;line-height:1.6;\">"
+                + aOut.join("\n")
+                + "</div>"
+                + "</div>";
+        },
+
+        // checking object store
+        // ============================================================
+        // FIX: Retro Documentation - "Update Existing" mode detection
+        // ----------------------------------------------------------------
+        // Issue: After generating FS/TS for a program (e.g. ZBC100_01_FORMAT)
+        // and saving them under the "Retro" prefix in Object Store, when
+        // the user searched for the same pattern again, "Update Existing"
+        // mode was not enabled. Sometimes the FS link was also not shown
+        // even though the file existed.
+        //
+        // Root causes addressed by this fix:
+        //   1. Response parsing was too strict – the backend can return
+        //      Contents using different property casings ("Contents",
+        //      "contents", "Items", etc.) and per-item filename keys
+        //      (Key/key, Name/name/fileName/file_name, etc.). The previous
+        //      implementation missed several of these and ended up with an
+        //      empty list, so hasFS/hasTS stayed false.
+        //   2. Filename matching was strict-equal only and depended on the
+        //      Key always ending in "<expected>.doc"/".docx". For PostgreSQL
+        //      backed object stores the Key may be a UUID, a partial path,
+        //      or include sub-folders like "FunctionalSpec/...". Falling
+        //      back to "contains" matching on the sanitized parts makes the
+        //      detection robust without false positives.
+        //   3. The success handler had no try/catch. Any unexpected payload
+        //      could silently throw, leaving the Promise unresolved so the
+        //      .then in onRetroSearchResultSelectionChange never ran and
+        //      the Update Existing button stayed disabled.
+        //   4. The download/view URLs were only read from a fixed set of
+        //      property names. We now also synthesize a download URL from
+        //      the file key (consistent with onRetroDownloadExistingFS/TS)
+        //      so the Link in update mode always has a valid target.
+        // ============================================================
+        _checkExistingRetroDocuments: function (sObjectName, sObjectType) {
+            var that = this;
+
+            return new Promise(function (resolve) {
+                var oEmptyResult = {
+                    hasFS: false,
+                    hasTS: false,
+                    fsFileName: "",
+                    tsFileName: "",
+                    fsKey: "",
+                    tsKey: "",
+                    fsDownloadUrl: "",
+                    tsDownloadUrl: "",
+                    fsViewUrl: "",
+                    tsViewUrl: ""
+                };
+
+                var sProject = that._ProjectDetail || "";
+                var sUrl = that._sBasePath + "/cockpit/getFiles?Category=Retro&Project=" + encodeURIComponent(sProject) + "&MaxKeys=1000";
+
+                var sObjType = that._sanitizeRetroFilePart(
+                    String(sObjectType || "PROG").split("/")[0]
+                );
+
+                var sObjName = that._sanitizeRetroFilePart(sObjectName || "");
+
+                var sExpectedFSBase =
+                    (sObjType + "_functional_specification_" + sObjName).toUpperCase();
+
+                var sExpectedTSBase =
+                    (sObjType + "_technical_specification_" + sObjName).toUpperCase();
+
+                // Sanitized object name used as a contains-fallback so we
+                // tolerate Key/Name formats that don't end in the exact
+                // "<TYPE>_<KIND>_<NAME>.docx" pattern (e.g. when the server
+                // uses sub-folders like FunctionalSpec/ or stores a UUID).
+                var sObjNameUpper = String(sObjName || "").toUpperCase();
+
+                console.log("RETRO CHECK: Looking for FS='" + sExpectedFSBase + "', TS='" + sExpectedTSBase + "'");
+
+                $.ajax({
+                    url: sUrl,
+                    type: "GET",
+                    headers: that.defaultHeaders,
+                    success: function (data) {
+                        // Wrap the entire success-side processing in a try/catch
+                        // so any unexpected payload still resolves the Promise
+                        // (otherwise the caller's .then never runs and the UI
+                        // stays stuck in Create-only mode).
+                        try {
+                            try {
+                                console.log(
+                                    "RETRO CHECK: Raw API response:",
+                                    JSON.stringify(data || {}).substring(0, 500)
+                                );
+                            } catch (eLog) {
+                                console.log("RETRO CHECK: Raw API response (unstringifiable)", data);
+                            }
+
+                            // Try multiple response structures - the server
+                            // may wrap data differently across categories /
+                            // backends (S3-style vs PostgreSQL-style).
+                            var aContents = [];
+                            if (data?.value?.data?.Contents && Array.isArray(data.value.data.Contents)) {
+                                aContents = data.value.data.Contents;
+                            } else if (data?.value?.data?.contents && Array.isArray(data.value.data.contents)) {
+                                aContents = data.value.data.contents;
+                            } else if (data?.value?.data?.Items && Array.isArray(data.value.data.Items)) {
+                                aContents = data.value.data.Items;
+                            } else if (data?.value?.data?.items && Array.isArray(data.value.data.items)) {
+                                aContents = data.value.data.items;
+                            } else if (data?.value?.Contents && Array.isArray(data.value.Contents)) {
+                                aContents = data.value.Contents;
+                            } else if (data?.value && Array.isArray(data.value)) {
+                                aContents = data.value;
+                            } else if (data?.Contents && Array.isArray(data.Contents)) {
+                                aContents = data.Contents;
+                            } else if (data?.contents && Array.isArray(data.contents)) {
+                                aContents = data.contents;
+                            } else if (data?.files && Array.isArray(data.files)) {
+                                aContents = data.files;
+                            } else if (data?.value?.data && Array.isArray(data.value.data)) {
+                                aContents = data.value.data;
+                            } else if (Array.isArray(data?.data)) {
+                                aContents = data.data;
+                            } else if (Array.isArray(data)) {
+                                aContents = data;
+                            }
+
+                            console.log("RETRO CHECK: Total files in response =" + aContents.length);
+                            if (aContents.length > 0) {
+                                console.log("RETRO CHECK: First few files:", aContents.slice(0, 5).map(function (f) {
+                                    return (
+                                        f.Key || f.key ||
+                                        f.full_path || f.fullPath ||
+                                        f.s3_key ||
+                                        f.Name || f.name ||
+                                        f.fileName || f.filename || f.file_name ||
+                                        "(no key)"
+                                    );
+                                }));
+                            }
+
+                            var oResult = {
+                                hasFS: false,
+                                hasTS: false,
+                                fsFileName: "",
+                                tsFileName: "",
+                                fsKey: "",
+                                tsKey: "",
+                                fsDownloadUrl: "",
+                                tsDownloadUrl: "",
+                                fsViewUrl: "",
+                                tsViewUrl: ""
+                            };
+
+                            // Helper: read a value from an item using several
+                            // possible property names (case / casing variants).
+                            var readProp = function (oItem, aNames) {
+                                for (var i = 0; i < aNames.length; i++) {
+                                    var v = oItem ? oItem[aNames[i]] : undefined;
+                                    if (v !== undefined && v !== null && v !== "") {
+                                        return v;
+                                    }
+                                }
+                                return "";
+                            };
+
+                            aContents.forEach(function (oFile) {
+                                if (!oFile || typeof oFile !== "object") {
+                                    return;
+                                }
+
+                                // Extract key (full path / id used to download
+                                // the file) and a display filename from any of
+                                // the common property name variants.
+                                var sKey = String(readProp(oFile, [
+                                    "Key", "key",
+                                    "full_path", "fullPath",
+                                    "s3_key", "s3Key",
+                                    "objectStoreRefKey", "ObjectStoreRefKey",
+                                    "path", "Path"
+                                ]) || "");
+
+                                var sFileName = String(readProp(oFile, [
+                                    "Name", "name",
+                                    "fileName", "FileName",
+                                    "filename", "file_name",
+                                    "displayName", "DisplayName"
+                                ]) || "");
+
+                                // If we still don't have a filename, derive it
+                                // from the key (last path segment).
+                                if (!sFileName && sKey) {
+                                    var aParts = sKey.split("/");
+                                    sFileName = aParts[aParts.length - 1] || "";
+                                }
+
+                                if (!sFileName && !sKey) {
+                                    return; // nothing usable on this row
+                                }
+
+                                // Optional category check – only filter OUT
+                                // items that explicitly belong to a different
+                                // category. Items without a category field are
+                                // kept (the URL filter already restricted them
+                                // server-side).
+                                var sCatRaw = String(readProp(oFile, ["category", "Category"]) || "");
+                                if (sCatRaw && sCatRaw.toUpperCase() !== "RETRO") {
+                                    return;
+                                }
+
+                                var sFileBase = String(sFileName)
+                                    .replace(/\.docx$/i, "")
+                                    .replace(/\.doc$/i, "")
+                                    .toUpperCase();
+
+                                var sKeyTail = "";
+                                if (sKey) {
+                                    var aKeyParts = String(sKey).split("/");
+                                    sKeyTail = (aKeyParts[aKeyParts.length - 1] || "")
+                                        .replace(/\.docx$/i, "")
+                                        .replace(/\.doc$/i, "")
+                                        .toUpperCase();
+                                }
+                                // Also keep the full uppercased key for sub-folder
+                                // patterns like "Retro/PROJ/FunctionalSpec/<file>".
+                                var sKeyUpper = String(sKey || "")
+                                    .replace(/\.docx$/i, "")
+                                    .replace(/\.doc$/i, "")
+                                    .toUpperCase();
+
+                                // Strict: filename matches the exact expected base.
+                                var bExactFS =
+                                    sFileBase === sExpectedFSBase ||
+                                    sKeyTail === sExpectedFSBase;
+                                var bExactTS =
+                                    sFileBase === sExpectedTSBase ||
+                                    sKeyTail === sExpectedTSBase;
+
+                                // Fallback: sub-folder layouts like
+                                //   FunctionalSpec/PROG_functional_specification_<NAME>.docx
+                                // or any path that contains both the doc kind
+                                // marker and the (sanitized) object name.
+                                var bContainsName = !!sObjNameUpper && (
+                                    sFileBase.indexOf(sObjNameUpper) !== -1 ||
+                                    sKeyUpper.indexOf(sObjNameUpper) !== -1
+                                );
+
+                                var bLooseFS = !bExactFS && bContainsName && (
+                                    /FUNCTIONAL[_\s-]*SPEC/i.test(sFileBase) ||
+                                    /FUNCTIONAL[_\s-]*SPEC/i.test(sKeyUpper) ||
+                                    /\bFS\b/.test(sFileBase) ||
+                                    /\/FUNCTIONALSPEC\//i.test(sKeyUpper)
+                                );
+
+                                var bLooseTS = !bExactTS && bContainsName && (
+                                    /TECHNICAL[_\s-]*SPEC/i.test(sFileBase) ||
+                                    /TECHNICAL[_\s-]*SPEC/i.test(sKeyUpper) ||
+                                    /\bTS\b/.test(sFileBase) ||
+                                    /\/TECHNICALSPEC\//i.test(sKeyUpper)
+                                );
+
+                                var sDownloadUrl = String(readProp(oFile, [
+                                    "download_url", "downloadUrl", "downloadURL",
+                                    "url", "URL"
+                                ]) || "");
+                                var sViewUrl = String(readProp(oFile, [
+                                    "view_url", "viewUrl", "viewURL"
+                                ]) || "");
+
+                                // If the server didn't provide a direct download
+                                // URL, build one from the key so the Link in
+                                // update mode still has a valid target. This is
+                                // the same endpoint used by
+                                // _downloadExistingRetroDocument.
+                                if (!sDownloadUrl && sKey) {
+                                    sDownloadUrl =
+                                        "/cockpit/getFileDetails?key=" +
+                                        encodeURIComponent(sKey);
+                                }
+
+                                if ((bExactFS || bLooseFS) && !oResult.hasFS) {
+                                    oResult.hasFS = true;
+                                    oResult.fsFileName = sFileName ||
+                                        (sKey ? sKey.split("/").pop() : "");
+                                    oResult.fsKey = sKey;
+                                    oResult.fsDownloadUrl = sDownloadUrl;
+                                    oResult.fsViewUrl = sViewUrl;
+                                }
+
+                                if ((bExactTS || bLooseTS) && !oResult.hasTS) {
+                                    oResult.hasTS = true;
+                                    oResult.tsFileName = sFileName ||
+                                        (sKey ? sKey.split("/").pop() : "");
+                                    oResult.tsKey = sKey;
+                                    oResult.tsDownloadUrl = sDownloadUrl;
+                                    oResult.tsViewUrl = sViewUrl;
+                                }
+                            });
+
+                            console.log("RETRO CHECK: Matched existing retro documents:", oResult);
+
+                            // ============================================================
+                            // FIX: Session cache fallback for pagination (IsTruncated=true)
+                            // If the API returned files but we could not find a match for
+                            // the target program (due to pagination returning only a subset
+                            // of files), check the session cache which is populated after
+                            // every successful upload in _retroUploadDocuments.
+                            // ============================================================
+                            var sCacheKey = sObjNameUpper;
+                            var oCache = that._retroUploadedDocCache || {};
+                            var oCachedEntry = oCache[sCacheKey];
+                            if (oCachedEntry && (oCachedEntry.hasFS || oCachedEntry.hasTS)) {
+                                // Merge cache data - cache takes priority for missing values
+                                if (!oResult.hasFS && oCachedEntry.hasFS) {
+                                    oResult.hasFS = true;
+                                    oResult.fsFileName = oCachedEntry.fsFileName || "";
+                                    oResult.fsKey = oCachedEntry.fsKey || "";
+                                    oResult.fsDownloadUrl = oCachedEntry.fsDownloadUrl || "";
+                                    oResult.fsViewUrl = oCachedEntry.fsViewUrl || "";
+                                }
+                                if (!oResult.hasTS && oCachedEntry.hasTS) {
+                                    oResult.hasTS = true;
+                                    oResult.tsFileName = oCachedEntry.tsFileName || "";
+                                    oResult.tsKey = oCachedEntry.tsKey || "";
+                                    oResult.tsDownloadUrl = oCachedEntry.tsDownloadUrl || "";
+                                    oResult.tsViewUrl = oCachedEntry.tsViewUrl || "";
+                                }
+                                console.log("RETRO CHECK: Session cache merged. Final result:", oResult);
+                            } else if (!oResult.hasFS && !oResult.hasTS) {
+                                console.log("RETRO CHECK: No match found in API response or session cache.");
+                            }
+
+                            resolve(oResult);
+                        } catch (eProc) {
+                            console.error(
+                                "RETRO CHECK: Failed to process getFiles response",
+                                eProc
+                            );
+                            resolve(oEmptyResult);
+                        }
+                    },
+                    error: function (jqXhr, textStatus, errorMessage) {
+                        console.error(
+                            "RETRO CHECK: getFiles call failed",
+                            textStatus,
+                            errorMessage,
+                            jqXhr && jqXhr.status
+                        );
+                        resolve(oEmptyResult);
+                    }
+                });
+            });
+        },
+
+        onRetroDownloadExistingFS: function () {
+            this._downloadExistingRetroDocument("FS");
+        },
+
+        onRetroDownloadExistingTS: function () {
+            this._downloadExistingRetroDocument("TS");
+        },
+
+        _downloadExistingRetroDocument: function (sDocKind) {
+            var that = this;
+            //var oModel = this.getView().getModel("retroDocModel");
+            var oModel = this.getView().getModel("retroDocModel");
+
+            var sKey = sDocKind === "FS"
+                ? oModel.getProperty("/existingFSFileKey")
+                : oModel.getProperty("/existingTSFileKey");
+
+            var sFileName = sDocKind === "FS"
+                ? oModel.getProperty("/existingFSFileName")
+                : oModel.getProperty("/existingTSFileName");
+
+            if (!sKey) {
+                sap.m.MessageBox.error("File key is not available for download.");
+                return;
+            }
+
+            if (!sFileName) {
+                sFileName = sDocKind === "FS"
+                    ? "Functional_Specification.docx"
+                    : "Technical_Specification.docx";
+            }
+
+            sFileName = String(sFileName).replace(/\.doc$/i, ".docx");
+
+            var sUrl = that._sBasePath + "/cockpit/getFileDetails?key=" + encodeURIComponent(sKey);
+
+
+            // keep your existing sKey, sFileName, sUrl logic...
+
+            $.ajax({
+                url: sUrl,
+                type: "GET",
+                success: function (oResponse) {
+                    var sContent = "";
+
+                    if (typeof oResponse === "string") {
+                        try {
+                            var oParsed = JSON.parse(oResponse);
+                            sContent = oParsed.value || oParsed.content || oParsed.data || "";
+                        } catch (e) {
+                            sContent = oResponse;
+                        }
+                    } else {
+                        sContent =
+                            oResponse?.value ||
+                            oResponse?.content ||
+                            oResponse?.data ||
+                            oResponse?.fileContent ||
+                            "";
+                    }
+
+                    if (!sContent) {
+                        console.log("getFileDetails response:", oResponse);
+                        sap.m.MessageBox.error("File content not found in getFileDetails response.");
+                        return;
+                    }
+
+                    // Use the same template-based DOCX generator that the
+                    // regular "Download" button uses, so that existing FS / TS
+                    // documents are downloaded with proper formatting (real
+                    // Word headings, bullets and tables based on the
+                    // Capgemini standard template) instead of plain text.
+                    var sTitle = sDocKind === "FS"
+                        ? "Functional Specification"
+                        : "Technical Specification";
+
+                    that._generateDocxFromTemplate(sTitle, sContent, sFileName)
+                        .then(function (oFile) {
+                            var oBlob = oFile;
+                            var sBlobUrl = URL.createObjectURL(oBlob);
+                            var oLink = document.createElement("a");
+
+                            oLink.href = sBlobUrl;
+                            oLink.download = sFileName;
+
+                            document.body.appendChild(oLink);
+                            oLink.click();
+                            document.body.removeChild(oLink);
+
+                            setTimeout(function () {
+                                URL.revokeObjectURL(sBlobUrl);
+                            }, 1000);
+                        })
+                        .catch(function (oError) {
+                            console.error("DOCX generation failed:", oError);
+                            sap.m.MessageBox.error("Failed to generate formatted Word document.");
+                        });
+                },
+                error: function (xhr) {
+                    sap.m.MessageBox.error("File download failed. Status: " + xhr.status);
+                }
+            });
+        },
+
+        _createFormattedRetroDocxBlob: function (sContent, sFileName) {
+            var docxLib = window.docx || indexUmd;
+
+            function cleanLine(sLine) {
+                return String(sLine || "")
+                    .replace(/\\n/g, "")
+                    .replace(/\r/g, "")
+                    .trim();
+            }
+
+            function makeTextRuns(sText, bDefaultBold) {
+                var aRuns = [];
+                var aParts = String(sText || "").split(/(\*\*[^*]+\*\*)/g);
+
+                aParts.forEach(function (sPart) {
+                    if (!sPart) {
+                        return;
+                    }
+
+                    var bBold = bDefaultBold;
+
+                    if (sPart.startsWith("**") && sPart.endsWith("**")) {
+                        sPart = sPart.substring(2, sPart.length - 2);
+                        bBold = true;
+                    }
+
+                    aRuns.push(new docxLib.TextRun({
+                        text: sPart,
+                        bold: bBold,
+                        size: 22,
+                        font: "Calibri"
+                    }));
+                });
+
+                return aRuns;
+            }
+
+            function createHeading(sText, sLevel) {
+                var nSize = sLevel === "H1" ? 32 : sLevel === "H2" ? 28 : 24;
+
+                return new docxLib.Paragraph({
+                    spacing: {
+                        before: 240,
+                        after: 120
+                    },
+                    children: [
+                        new docxLib.TextRun({
+                            text: sText,
+                            bold: true,
+                            size: nSize,
+                            color: "1F4E79",
+                            font: "Calibri"
+                        })
+                    ]
+                });
+            }
+
+            function createNormalParagraph(sText) {
+                return new docxLib.Paragraph({
+                    spacing: {
+                        after: 100
+                    },
+                    children: makeTextRuns(sText, false)
+                });
+            }
+
+            function createBulletParagraph(sText) {
+                return new docxLib.Paragraph({
+                    bullet: {
+                        level: 0
+                    },
+                    spacing: {
+                        after: 80
+                    },
+                    children: makeTextRuns(sText.replace(/^[-•]\s*/, ""), false)
+                });
+            }
+
+            function createNumberedLikeParagraph(sText) {
+                return new docxLib.Paragraph({
+                    spacing: {
+                        before: 120,
+                        after: 80
+                    },
+                    children: makeTextRuns(sText, true)
+                });
+            }
+
+            function createCodeParagraph(sText) {
+                return new docxLib.Paragraph({
+                    shading: {
+                        type: docxLib.ShadingType.CLEAR,
+                        color: "auto",
+                        fill: "F2F2F2"
+                    },
+                    spacing: {
+                        after: 60
+                    },
+                    children: [
+                        new docxLib.TextRun({
+                            text: sText || " ",
+                            font: "Courier New",
+                            size: 18
+                        })
+                    ]
+                });
+            }
+
+            var aChildren = [];
+
+            // Cover/title section
+            aChildren.push(
+                new docxLib.Paragraph({
+                    alignment: docxLib.AlignmentType.CENTER,
+                    spacing: {
+                        after: 300
+                    },
+                    children: [
+                        new docxLib.TextRun({
+                            text: sFileName ? sFileName.replace(/\.docx$/i, "") : "Retro Documentation",
+                            bold: true,
+                            size: 36,
+                            color: "1F4E79",
+                            font: "Calibri"
+                        })
+                    ]
+                })
+            );
+
+            var aLines = String(sContent || "")
+                .replace(/\\n/g, "\n")
+                .split(/\r?\n/);
+
+            aLines.forEach(function (sRawLine) {
+                var sLine = cleanLine(sRawLine);
+
+                if (!sLine) {
+                    aChildren.push(new docxLib.Paragraph({ text: "" }));
+                    return;
+                }
+
+                // Markdown-style headings
+                if (/^#{1}\s+/.test(sLine)) {
+                    aChildren.push(createHeading(sLine.replace(/^#{1}\s+/, ""), "H1"));
+                    return;
+                }
+
+                if (/^#{2}\s+/.test(sLine)) {
+                    aChildren.push(createHeading(sLine.replace(/^#{2}\s+/, ""), "H2"));
+                    return;
+                }
+
+                if (/^#{3,}\s+/.test(sLine)) {
+                    aChildren.push(createHeading(sLine.replace(/^#{3,}\s+/, ""), "H3"));
+                    return;
+                }
+
+                // Lines like "**PROGRAM DETAILS**"
+                if (/^\*\*.*\*\*$/.test(sLine)) {
+                    aChildren.push(createHeading(sLine.replace(/\*\*/g, ""), "H2"));
+                    return;
+                }
+
+                // Numbered section headings like "1. OVERVIEW", "4.1 Report Output"
+                if (/^\d+(\.\d+)*\s+/.test(sLine)) {
+                    aChildren.push(createNumberedLikeParagraph(sLine));
+                    return;
+                }
+
+                // Bullet points
+                if (/^[-•]\s+/.test(sLine)) {
+                    aChildren.push(createBulletParagraph(sLine));
+                    return;
+                }
+
+                // ASCII diagrams / table-like lines
+                if (
+                    sLine.indexOf("|") !== -1 ||
+                    sLine.indexOf("+---") !== -1 ||
+                    sLine.indexOf("----") !== -1
+                ) {
+                    aChildren.push(createCodeParagraph(sLine));
+                    return;
+                }
+
+                aChildren.push(createNormalParagraph(sLine));
+            });
+
+            var oDoc = new docxLib.Document({
+                sections: [{
+                    properties: {
+                        page: {
+                            margin: {
+                                top: 720,
+                                right: 720,
+                                bottom: 720,
+                                left: 720
+                            }
+                        }
+                    },
+                    children: aChildren
+                }]
+            });
+
+            return docxLib.Packer.toBlob(oDoc);
+        },
+
+       // ========== ABAP MCP SERVER INTEGRATION ==========
+        onMCPToggle: function (oEvent) {
+            var bSelected = oEvent.getParameter("selected");
+            this.getView().getModel("viewModel").setProperty("/useMCP", bSelected);
+            if (bSelected) {
+                this._loadMCPTools();
+                this.getView().getModel("viewModel").setProperty("/selectedMCPCategory", "ABAP");
+                this._filterMCPToolsByCategory("ABAP");
+                MessageToast.show("MCP enabled - ABAP tools loaded");
+            } else {
+                this.getView().getModel("viewModel").setProperty("/selectedMCPCategory", "");
+                this.getView().getModel("viewModel").setProperty("/selectedMCPTool", "");
+                MessageToast.show("MCP disabled - using default AI models");
+            }
+            // Persist MCP state per-tab immediately
+            this._saveTabState(this.byId("navigationList").getSelectedKey());
+        },
+        onMCPCategoryChange: function (oEvent) {
+            var sCategory = oEvent.getParameter("selectedItem") ? oEvent.getParameter("selectedItem").getKey() : "";
+            this.getView().getModel("viewModel").setProperty("/selectedMCPCategory", sCategory);
+            this.getView().getModel("viewModel").setProperty("/selectedMCPTool", "");
+            if (sCategory) {
+                this._filterMCPToolsByCategory(sCategory);
+                MessageToast.show("Category: " + sCategory + " selected");
+            }
+        },
+        onMCPToolSelectionChange: function (oEvent) {
+            var oSelectedItem = oEvent.getParameter("selectedItem");
+            if (oSelectedItem) {
+                var sToolName = oSelectedItem.getKey();
+                this.getView().getModel("viewModel").setProperty("/selectedMCPTool", sToolName);
+                MessageToast.show("Selected MCP Tool: " + sToolName);
+                if (sToolName === "SAPSearch") {
+                    this._openSapSearchDialog();
+                } else if (sToolName === "SAPWrite") {
+                    this._openAbapCreateDialog();
+                }
+            }
+            // Persist MCP state per-tab immediately
+            this._saveTabState(this.byId("navigationList").getSelectedKey());
+        },
+        _filterMCPToolsByCategory: function (sCategory) {
+            var oMcpToolsModel = this.getView().getModel("mcpToolsModel");
+            var aAllTools = oMcpToolsModel.getProperty("/tools") || [];
+            var aFilteredTools = [];
+            if (sCategory === "ABAP") {
+                aFilteredTools = [
+                    { name: "SAPRead", description: "Read ABAP source, table data, CDS views, metadata extensions" },
+                    { name: "SAPSearch", description: "Object search + full-text source code search across the system" },
+                    { name: "SAPWrite", description: "Create/update/delete ABAP source and DDIC metadata" }
+                ];
+            } else {
+                var sCategoryPrefix = sCategory === "UI5" ? "ui5__" : sCategory === "CAPM" ? "capm__" : "";
+                aFilteredTools = aAllTools.filter(function (oTool) {
+                    return (oTool.name || "").toLowerCase().startsWith(sCategoryPrefix);
+                });
+            }
+            oMcpToolsModel.setProperty("/filteredTools", aFilteredTools);
+        },
+        _loadMCPTools: function () {
+            var oMcpToolsModel = this.getView().getModel("mcpToolsModel");
+            if (!oMcpToolsModel) {
+                oMcpToolsModel = new JSONModel({ tools: [], filteredTools: [] });
+                this.getView().setModel(oMcpToolsModel, "mcpToolsModel");
+            }
+            var aFallbackTools = [
+                { name: "ui5__get_guidelines", description: "Get UI5 guidelines" },
+                { name: "ui5__run_ui5_linter", description: "Run UI5 linter" },
+                { name: "ui5__get_api_reference", description: "Search UI5 API reference" },
+                { name: "ui5__get_project_info", description: "Get UI5 project info" },
+                { name: "capm__search_model", description: "Search CDS model definitions" },
+                { name: "capm__search_docs", description: "Search CAP documentation" }
+            ];
+            oMcpToolsModel.setProperty("/tools", aFallbackTools);
+        },
+        isAbapRelatedContent: function () {
+            // If an ABAP object was selected via MCP search, it's always ABAP-related
+            var oSelObj = this.getView().getModel("viewModel").getProperty("/selectedAbapObject") || {};
+            if (oSelObj.name) { return true; }
+            var sSystemMsg = (this.byId("descTxtArea").getValue() || "").toLowerCase();
+            var sPrompt = (this.byId("descTxtAreaPrompt").getValue() || "").toLowerCase();
+            var sCombined = sSystemMsg + " " + sPrompt;
+            var aAbapKeywords = ["abap", "sap", "bapi", "rfc", "idoc", "smartform", "alv", "dynpro", "bdc", "lsmw", "cds", "amdp", "rap", "fiori", "se38", "se80", "se24", "se37", "se11", "data dictionary", "function module", "internal table", "work area", "transparent table", "report", "include", "enhancement", "badi", "user exit", "odata", "segw", "gateway"];
+            for (var i = 0; i < aAbapKeywords.length; i++) {
+                if (sCombined.indexOf(aAbapKeywords[i]) !== -1) { return true; }
+            }
+            return false;
+        },
+        callAbapMCPCodeGen: async function () {
+            var that = this;
+            var oBundle = this.getView().getModel("i18n").getResourceBundle();
+            var busyDialog = new BusyDialog();
+            var oModel = this.getView().getModel("appmodel");
+            var sContent = oModel.getProperty("/BSContent");
+            var promptMsgData = this.byId("descTxtAreaPrompt").getValue();
+            var aMsgContentSystemDesc = this.byId("descTxtArea").getValue();
+            busyDialog.open();
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
+            this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc);
+            var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
+            var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+            this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+            try {
+                var fetchedCode = sContent || "";
+                // Priority 1: Use object selected via SAPSearch
+                var oSelObj = this.getView().getModel("viewModel").getProperty("/selectedAbapObject") || {};
+                var abapObjectInfo = null;
+                if (oSelObj.name) {
+                    abapObjectInfo = { objectType: oSelObj.type || "PROG", objectName: oSelObj.name };
+                } else {
+                    // Priority 2: Parse object name from prompt
+                    abapObjectInfo = this._parseAbapObjectFromPrompt(promptMsgData, aMsgContentSystemDesc);
+                }
+                if (abapObjectInfo && abapObjectInfo.objectName) {
+                    var mcpResponse = await this._fetchAbapCodeViaMCP(abapObjectInfo);
+                    if (mcpResponse && mcpResponse.success && mcpResponse.data) {
+                        fetchedCode = mcpResponse.data.source || JSON.stringify(mcpResponse.data, null, 2);
+                        console.log("Fetched ABAP code via MCP:", fetchedCode.substring(0, 200) + "...");
+                    }
+                }
+                this.getView().getModel("appmodel").setProperty("/BSContent", fetchedCode);
+                this.executedOnce = false;
+                busyDialog.close();
+                await this.handleUploadContentPress();
+                // Post-process: split response into code blocks for coderem/codesum tabs (same as cdGen)
+                var sScenario = this.selectedKeyFunct();
+                if (sScenario === "coderem" || sScenario === "codesum") {
+                    var oAiResp = this.getOwnerComponent().getModel("airesponseDetailModel");
+                    var sResp = oAiResp ? oAiResp.getProperty("/resp") : "";
+                    if (sResp && sResp.indexOf("```") !== -1) {
+                        var ceArr = [];
+                        var resArr = sResp.split("```");
+                        for (var h = 0; h < resArr.length; h++) {
+                            if (resArr[h + 1] !== undefined) {
+                                var lang = resArr[h + 1].split("\n")[0];
+                                ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: lang });
+                                h++;
+                            } else {
+                                ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
+                            }
+                        }
+                        oAiResp.setProperty("/multiCE", ceArr);
+                        oAiResp.refresh(true);
+                        // Show code editor VBox and hide TextArea (same as Code Generation)
+                        var oDetailView = that.getOwnerComponent().getRootControl().byId("app").getPages ? null : null;
+                        try {
+                            var oMultiCEBox = sap.ui.getCore().byId("application-Zsemobj-display-component---DetailDetail--multipleCodeEd") ||
+                                that.getOwnerComponent().getRootControl().getController ? null : null;
+                            // Use the component to find the DetailDetail view
+                            var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfeq.view.DetailDetail"];
+                            if (!oDetailCtrl) {
+                                // Alternative: find via router targets
+                                var aPages = sap.ui.getCore().byId("__component0---app") ? sap.ui.getCore().byId("__component0---app").getPages() : [];
+                            }
+                        } catch(e) {}
+                        // Simpler approach: set a flag in the model that DetailDetail view binds to
+                        oAiResp.setProperty("/codeEdVis", true);
+                        oAiResp.refresh(true);
+                    }
+                }
+            } catch (error) {
+                MessageBox.error(oBundle.getText("openAIErrorMsg") + " " + error.message);
+                console.error("ABAP MCP call failed:", error);
+            } finally {
+                busyDialog.close();
+            }
+        },
+        _runAbapMcpTool: async function (toolName, toolArgs) {
+            try {
+                var args = toolArgs && typeof toolArgs === "object" ? toolArgs : {};
+                var payload = { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: toolName, arguments: args } };
+                var response = await fetch(this._sBasePath + "/abap-mcp/mcp", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" }, body: JSON.stringify(payload) });
+                if (!response.ok) { throw new Error("MCP " + toolName + " call failed with status " + response.status); }
+                var responseText = await response.text();
+                var parse = this._parseArc1McpResponse(responseText);
+                if (parse.isError) { throw new Error(parse.message || "MCP " + toolName + " returned an error"); }
+                var oAppModel = this.getView().getModel("appmodel");
+                if (oAppModel) { oAppModel.setProperty("/BSContent", parse.message || ""); }
+                this.executedOnce = false;
+                MessageToast.show(toolName + " executed");
+                return parse;
+            } catch (err) {
+                MessageBox.error("MCP " + toolName + " error: " + (err && err.message ? err.message : String(err)));
+                return { isError: true, message: String(err) };
+            }
+        },
+        _fetchAbapCodeViaMCP: async function (abapObjectInfo) {
+            try {
+                // Normalize ADT type suffix ("PROG/P" → "PROG", "CLAS/OC" → "CLAS")
+                var objectType = ((abapObjectInfo.objectType || "PROG").split("/")[0]).toUpperCase();
+                var objectName = (abapObjectInfo.objectName || "").toUpperCase();
+                console.log("[MCP] _fetchAbapCodeViaMCP type:", objectType, "name:", objectName);
+                // Step 1: SYSTEM probe to warm up ADT connection and avoid 304 errors
+                var probePayload = { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: "SAPRead", arguments: { type: "SYSTEM", name: "" } } };
+                try { await fetch(this._sBasePath + "/abap-mcp/mcp", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" }, body: JSON.stringify(probePayload) }); } catch (e) { /* probe optional */ }
+                // Step 2: Actual SAPRead for the object
+                var jsonRpcPayload = { jsonrpc: "2.0", id: Date.now() + 1, method: "tools/call", params: { name: "SAPRead", arguments: { type: objectType, name: objectName } } };
+                var response = await fetch(this._sBasePath + "/abap-mcp/mcp", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" }, body: JSON.stringify(jsonRpcPayload) });
+                if (!response.ok) { console.error("[MCP] HTTP error:", response.status); return null; }
+                var responseText = await response.text();
+                console.log("[MCP] raw response (500 chars):", responseText.substring(0, 500));
+                var parseResult = this._parseArc1McpResponse(responseText);
+                console.log("[MCP] parsed isError:", parseResult.isError, "msg length:", (parseResult.message || "").length);
+                if (parseResult.isError) { return null; }
+                return { success: true, data: { source: parseResult.message || "", metadata: { type: objectType, name: objectName } } };
+            } catch (error) { console.error("[MCP] _fetchAbapCodeViaMCP error:", error); return null; }
+        },
+        _parseArc1McpResponse: function (responseText) {
+            try {
+                var self = this;
+                var _extractText = function (resultObj) {
+                    if (!resultObj) return "";
+                    var content = resultObj.content;
+                    if (Array.isArray(content) && content.length > 0) {
+                        return content[0].text || "";
+                    }
+                    return "";
+                };
+
+                // Step 1: Try plain JSON first (non-SSE)
+                try {
+                    var direct = JSON.parse(responseText);
+                    if (direct.result) {
+                        if (direct.result.isError) { return { isError: true, message: _extractText(direct.result) || "Unknown error" }; }
+                        return { isError: false, message: _extractText(direct.result) };
+                    }
+                } catch (e) { /* not plain JSON, continue to SSE parsing */ }
+
+                // Step 2: SSE format - process each "data: {...}" line individually
+                // This avoids the greedy regex bug that captures multiple events as one string
+                var lines = responseText.split("\n");
+                var lastResult = null;
+                for (var i = 0; i < lines.length; i++) {
+                    var line = (lines[i] || "").trim();
+                    if (!line.startsWith("data:")) continue;
+                    var jsonStr = line.slice(5).trim();
+                    if (!jsonStr || jsonStr === "[DONE]") continue;
+                    try {
+                        var evt = JSON.parse(jsonStr);
+                        if (evt && evt.result !== undefined) {
+                            lastResult = evt;
+                        }
+                    } catch (e) { /* skip malformed line */ }
+                }
+
+                if (lastResult) {
+                    if (lastResult.result && lastResult.result.isError) {
+                        return { isError: true, message: _extractText(lastResult.result) || "Unknown error" };
+                    }
+                    return { isError: false, message: _extractText(lastResult.result) };
+                }
+
+                // Step 3: Fallback - try multiline JSON after "data: " prefix
+                var multiMatch = responseText.match(/data:\s*(\{[\s\S]*)/);
+                if (multiMatch) {
+                    // Find the balanced closing brace
+                    var raw = multiMatch[1];
+                    var depth = 0, endIdx = -1;
+                    for (var j = 0; j < raw.length; j++) {
+                        if (raw[j] === "{") depth++;
+                        else if (raw[j] === "}") { depth--; if (depth === 0) { endIdx = j; break; } }
+                    }
+                    if (endIdx > 0) {
+                        try {
+                            var fb = JSON.parse(raw.substring(0, endIdx + 1));
+                            if (fb && fb.result !== undefined) {
+                                if (fb.result.isError) { return { isError: true, message: _extractText(fb.result) || "Unknown error" }; }
+                                return { isError: false, message: _extractText(fb.result) };
+                            }
+                        } catch (e) { /* ignore */ }
+                    }
+                }
+
+                return { isError: true, message: "No valid JSON-RPC result found in MCP response. Raw (200 chars): " + responseText.substring(0, 200) };
+            } catch (e) {
+                return { isError: true, message: "Failed to parse MCP response: " + e.message };
+            }
+        },
+        _parseAbapObjectFromPrompt: function (promptMsg, systemMsg) {
+            var combinedText = ((promptMsg || "") + " " + (systemMsg || "")).toUpperCase();
+            var patterns = [
+                { regex: /\bCLASS\s+([A-Z][A-Z0-9_\/]+)/i, type: "CLAS" },
+                { regex: /\bPROGRAM\s+([A-Z][A-Z0-9_]+)/i, type: "PROG" },
+                { regex: /\bREPORT\s+([A-Z][A-Z0-9_]+)/i, type: "PROG" },
+                { regex: /\bFUNCTION\s+MODULE\s+([A-Z][A-Z0-9_]+)/i, type: "FUGR" },
+                { regex: /\bFUNCTION\s+([A-Z][A-Z0-9_]+)/i, type: "FUGR" },
+                { regex: /\bINTERFACE\s+([A-Z][A-Z0-9_\/]+)/i, type: "INTF" },
+                { regex: /\bCDS\s+VIEW\s+([A-Z][A-Z0-9_]+)/i, type: "DDLS" },
+                { regex: /\bZ[A-Z0-9_]{2,}CL[A-Z0-9_]*/i, type: "CLAS" },
+                { regex: /\bZ[A-Z0-9_]{2,}/i, type: "PROG" }
+            ];
+            for (var i = 0; i < patterns.length; i++) {
+                var match = combinedText.match(patterns[i].regex);
+                if (match && match[1]) { return { objectName: match[1].trim(), objectType: patterns[i].type }; }
+            }
+            return null;
+        },
+        // SAPSearch dialog helpers
+        _openSapSearchDialog: async function () {
+            var oModel = this.getView().getModel("sapSearchModel");
+            if (!oModel) {
+                oModel = new JSONModel({ objectType: "PROG", sapSystem: "DEV", pattern: "", results: [] });
+                this.getView().setModel(oModel, "sapSearchModel");
+            } else {
+                oModel.setProperty("/results", []);
+            }
+            if (!this._sapSearchDlg || this._sapSearchDlg.bIsDestroyed) {
+                this._sapSearchDlg = await this.loadFragment({ name: "aicockpitfeq.fragment.SapSearch" });
+                this.getView().addDependent(this._sapSearchDlg);
+            }
+            this._sapSearchDlg.open();
+        },
+        onSapSearchExecute: async function () {
+            try {
+                var oModel = this.getView().getModel("sapSearchModel");
+                var type = oModel.getProperty("/objectType");
+                var pattern = oModel.getProperty("/pattern") || "*";
+                var busyDialog = new BusyDialog({ text: "Searching..." });
+                busyDialog.open();
+                var res = await this._runAbapMcpTool("SAPSearch", { type: type, query: pattern });
+                busyDialog.close();
+                var results = [];
+                if (res && !res.isError && res.message) {
+                    results = this._extractSapSearchResults(res.message);
+                }
+                oModel.setProperty("/results", results);
+            } catch (err) {
+                MessageBox.error("SAPSearch error: " + (err.message || String(err)));
+            }
+        },
+        onSapSearchReset: function () {
+            var oModel = this.getView().getModel("sapSearchModel");
+            oModel.setProperty("/pattern", "");
+            oModel.setProperty("/results", []);
+        },
+        onSapSearchClose: function () {
+            if (this._sapSearchDlg) { this._sapSearchDlg.close(); }
+        },
+        onSapSearchUseSelected: function () {
+            try {
+                var oTable = this.byId("sapSearchResultsTable");
+                var oItem = oTable && oTable.getSelectedItem();
+                if (!oItem) { MessageToast.show("Please select a result first"); return; }
+                var oObj = oItem.getBindingContext("sapSearchModel").getObject();
+                // Normalize ADT type: "PROG/P" → "PROG", "CLAS/OC" → "CLAS", etc.
+                var sRawType = (oObj.type || "PROG").toUpperCase();
+                var sNormType = sRawType.split("/")[0];
+                // Store selected object in viewModel for later use by callAbapMCPCodeGen
+                this.getView().getModel("viewModel").setProperty("/selectedAbapObject", {
+                    type: sNormType,
+                    rawType: sRawType,
+                    name: (oObj.name || "").toUpperCase(),
+                    desc: oObj.desc || ""
+                });
+                MessageToast.show("Selected: " + sRawType + " " + (oObj.name || "") + " - click the program name to view code");
+                this.getView().getModel("viewModel").setProperty("/selectedMCPTool", "SAPRead");
+                this.onSapSearchClose();
+                // Persist MCP state per-tab immediately
+                this._saveTabState(this.byId("navigationList").getSelectedKey());
+            } catch (e) {
+                MessageBox.error("Error using selected object: " + e.message);
+            }
+        },
+        onSelectedAbapObjectPress: async function () {
+            var that = this;
+            var oViewModel = this.getView().getModel("viewModel");
+            var oSelObj = oViewModel.getProperty("/selectedAbapObject") || {};
+            if (!oSelObj.name) {
+                MessageToast.show("No ABAP object selected");
+                return;
+            }
+            // Normalize type: "PROG/P" → "PROG", "CLAS/OC" → "CLAS"
+            var sNormType = ((oSelObj.type || "PROG").split("/")[0]).toUpperCase();
+            var sDisplayType = oSelObj.rawType || sNormType;
+            var busyDialog = new BusyDialog({ title: "Loading Source Code", text: "Reading " + sDisplayType + " " + oSelObj.name + "..." });
+            busyDialog.open();
+            try {
+                // Use _runAbapMcpTool directly (same path as SAPSearch) to avoid SSE parsing edge-cases
+                var mcpResponse = await this._runAbapMcpTool("SAPRead", { type: sNormType, name: oSelObj.name });
+                busyDialog.close();
+                var sSourceCode = "";
+                if (mcpResponse && !mcpResponse.isError && mcpResponse.message) {
+                    sSourceCode = mcpResponse.message;
+                } else if (mcpResponse && mcpResponse.isError) {
+                    sSourceCode = "* ERROR reading " + sDisplayType + " " + oSelObj.name + "\n* " + (mcpResponse.message || "Unknown error");
+                } else {
+                    sSourceCode = "* Source code is empty for " + sDisplayType + " " + oSelObj.name + "\n* Check that the object exists in the connected SAP system.";
+                }
+                // Show the code in a dialog
+                if (that._abapCodeViewDialog) {
+                    that._abapCodeViewDialog.destroy();
+                    that._abapCodeViewDialog = null;
+                }
+                // Use a dedicated JSONModel for code display - most reliable rendering
+                var oCodeDisplayModel = new JSONModel({ code: sSourceCode || "(empty)" });
+                var oCodeArea = new sap.m.TextArea({
+                    value: "{codeDisplay>/code}",
+                    editable: false,
+                    rows: 28,
+                    width: "100%",
+                    wrapping: "Soft"
+                });
+                oCodeArea.setModel(oCodeDisplayModel, "codeDisplay");
+
+                // Store references so the Lint button handler can access them
+                that._abapCodeDisplayModel = oCodeDisplayModel;
+                that._abapCodeViewObj = { type: sNormType, rawType: sDisplayType, name: oSelObj.name };
+
+                // Message strip to display lint/diagnose results summary
+                var oLintMsgStrip = new sap.m.MessageStrip({
+                    text: "",
+                    showIcon: true,
+                    showCloseButton: false,
+                    visible: false,
+                    width: "100%"
+                });
+
+                that._abapCodeViewDialog = new sap.m.Dialog({
+                    title: sDisplayType + " - " + oSelObj.name,
+                    contentWidth: "860px",
+                    contentHeight: "620px",
+                    resizable: true,
+                    draggable: true,
+                    verticalScrolling: true,
+                    content: [oLintMsgStrip, oCodeArea],
+                    beginButton: new sap.m.Button({
+                        text: "Lint",
+                        type: "Emphasized",
+                        icon: "sap-icon://syntax",
+                        press: function () { that._onLintAbapCode(oLintMsgStrip); }
+                    }),
+                    endButton: new sap.m.Button({
+                        text: "Close",
+                        press: function () { that._abapCodeViewDialog.close(); }
+                    })
+                });
+                that.getView().addDependent(that._abapCodeViewDialog);
+                that._abapCodeViewDialog.open();
+            } catch (err) {
+                busyDialog.close();
+                MessageBox.error("Failed to load source code: " + (err.message || err));
+            }
+        },
+        // ── Lint handler: runs SAPLint (format) + SAPDiagnose (quality) on the viewed object ──
+        _onLintAbapCode: async function (oMsgStrip) {
+            var that = this;
+            var oObj = that._abapCodeViewObj;
+            if (!oObj || !oObj.name) {
+                MessageToast.show("No ABAP object loaded.");
+                return;
+            }
+
+            // Show busy state on the dialog
+            var oBusyDlg = new BusyDialog({
+                title: "Analyzing Code",
+                text: "Running SAPLint + SAPDiagnose on " + oObj.name + "..."
+            });
+            oBusyDlg.open();
+
+            try {
+                // ── Step 1: SAPLint – lint_and_fix (auto-fix lint issues + format) ──
+                var lintResult = null;
+                try {
+                    var sCurrentSource = that._abapCodeDisplayModel.getProperty("/code") || "";
+                    lintResult = await that._runAbapMcpTool("SAPLint", {
+                        type: oObj.type,
+                        name: oObj.name,
+                        action: "lint_and_fix",
+                        source: sCurrentSource
+                    });
+                } catch (eLint) {
+                    console.warn("[Lint] SAPLint call failed:", eLint);
+                }
+
+                // ── Step 2: SAPDiagnose – syntax check ──
+                var diagnoseSyntax = null;
+                try {
+                    diagnoseSyntax = await that._runAbapMcpTool("SAPDiagnose", {
+                        type: oObj.type,
+                        name: oObj.name,
+                        action: "syntax"
+                    });
+                } catch (eDiag) {
+                    console.warn("[Lint] SAPDiagnose syntax call failed:", eDiag);
+                }
+
+                // ── Step 3: SAPDiagnose – ATC check ──
+                var diagnoseAtc = null;
+                try {
+                    diagnoseAtc = await that._runAbapMcpTool("SAPDiagnose", {
+                        type: oObj.type,
+                        name: oObj.name,
+                        action: "atc"
+                    });
+                } catch (eAtc) {
+                    console.warn("[Lint] SAPDiagnose ATC call failed:", eAtc);
+                }
+
+                // Combine diagnose results
+                var diagnoseResult = { isError: false, message: "" };
+                if (diagnoseSyntax && !diagnoseSyntax.isError) {
+                    diagnoseResult.message += (diagnoseSyntax.message || "");
+                } else if (diagnoseSyntax && diagnoseSyntax.isError) {
+                    diagnoseResult.isError = true;
+                    diagnoseResult.message += "Syntax: " + (diagnoseSyntax.message || "Error") + " ";
+                }
+                if (diagnoseAtc && !diagnoseAtc.isError) {
+                    diagnoseResult.message += "\n" + (diagnoseAtc.message || "");
+                } else if (diagnoseAtc && diagnoseAtc.isError) {
+                    diagnoseResult.isError = true;
+                    diagnoseResult.message += "ATC: " + (diagnoseAtc.message || "Error") + " ";
+                }
+                if (!diagnoseSyntax && !diagnoseAtc) {
+                    diagnoseResult = null;
+                }
+
+                oBusyDlg.close();
+
+                // ── Step 3: Update code area if SAPLint returned formatted/fixed code ──
+                var sFormattedCode = "";
+                if (lintResult && !lintResult.isError && lintResult.message) {
+                    // lint_and_fix returns JSON with fixedSource field
+                    try {
+                        var oLintJson = JSON.parse(lintResult.message);
+                        if (oLintJson.fixedSource) {
+                            sFormattedCode = oLintJson.fixedSource;
+                        } else if (oLintJson.source) {
+                            sFormattedCode = oLintJson.source;
+                        } else {
+                            sFormattedCode = lintResult.message;
+                        }
+                    } catch (eParse) {
+                        // Not JSON - use raw text as source code
+                        sFormattedCode = lintResult.message;
+                    }
+                }
+                if (sFormattedCode && sFormattedCode.trim().length > 0) {
+                    that._abapCodeDisplayModel.setProperty("/code", sFormattedCode);
+                }
+
+                // ── Step 4: Build summary message ──
+                var sSummary = "";
+                var sMsgType = "Success";
+
+                if (sFormattedCode && sFormattedCode.trim().length > 0) {
+                    sSummary += "✓ Code formatted by SAPLint. ";
+                } else if (lintResult && lintResult.isError) {
+                    sSummary += "⚠ SAPLint: " + (lintResult.message || "Error during formatting") + " ";
+                } else {
+                    sSummary += "ℹ SAPLint: No formatting changes. ";
+                }
+
+                if (diagnoseResult && !diagnoseResult.isError) {
+                    var sDiagMsg = diagnoseResult.message || "";
+                    // Count findings by looking for error/warning keywords in response
+                    var nErrors = (sDiagMsg.match(/\berror\b/gi) || []).length;
+                    var nWarnings = (sDiagMsg.match(/\bwarning\b/gi) || []).length;
+                    if (nErrors > 0) {
+                        sMsgType = "Error";
+                        sSummary += "✗ SAPDiagnose: " + nErrors + " error(s), " + nWarnings + " warning(s) found.";
+                    } else if (nWarnings > 0) {
+                        sMsgType = "Warning";
+                        sSummary += "⚠ SAPDiagnose: " + nWarnings + " warning(s) found.";
+                    } else {
+                        sSummary += "✓ SAPDiagnose: No issues detected.";
+                    }
+                    // Log full diagnose output to console for details
+                    console.log("[SAPDiagnose] Full output for " + oObj.name + ":\n" + sDiagMsg);
+                } else if (diagnoseResult && diagnoseResult.isError) {
+                    sMsgType = "Warning";
+                    sSummary += "⚠ SAPDiagnose: " + (diagnoseResult.message || "Could not complete analysis.");
+                } else {
+                    sMsgType = "Warning";
+                    sSummary += "⚠ SAPDiagnose: No response received.";
+                }
+
+                // ── Step 5: Show the message strip ──
+                oMsgStrip.setType(sMsgType);
+                oMsgStrip.setText(sSummary);
+                oMsgStrip.setVisible(true);
+
+            } catch (err) {
+                oBusyDlg.close();
+                MessageBox.error("Lint analysis failed: " + (err.message || err));
+            }
+        },
+
+        _extractSapSearchResults: function (text) {
+            var out = [];
+            if (!text) return out;
+            try {
+                var parsed = JSON.parse(text);
+                var arr = Array.isArray(parsed) ? parsed : (parsed.results || parsed.items || parsed.objects || []);
+                if (Array.isArray(arr) && arr.length > 0) {
+                    arr.forEach(function (it) {
+                        out.push({
+                            type: (it.type || it.objectType || it.object_type || it.kind || "").toString(),
+                            name: (it.name || it.objectName || it.object_name || it.id || "").toString(),
+                            desc: (it.description || it.desc || it.path || it.package || it.devclass || "").toString()
+                        });
+                    });
+                    return out;
+                }
+            } catch (e) { /* not JSON */ }
+            var lines = (text || "").split("\n");
+            lines.forEach(function (line) {
+                var s = (line || "").trim();
+                if (!s) return;
+                var parts = s.split(/\s+/);
+                if (parts.length >= 2) {
+                    out.push({ type: parts[0], name: parts[1], desc: parts.slice(2).join(" ") });
+                }
+            });
+            return out;
+        },
+        // AbapCreate (SAPWrite) dialog helpers
+        _openAbapCreateDialog: async function () {
+            try {
+                var oModel = this.getView().getModel("abapCreateModel");
+                if (!oModel) {
+                    oModel = new JSONModel({
+                        objectType: "PROG", objectName: "", package: "$TMP", transport: "",
+                        description: "", overwrite: false, activate: true, sourceIndex: 0,
+                        sourcePreview: "", transports: []
+                    });
+                    this.getView().setModel(oModel, "abapCreateModel");
+                } else {
+                    oModel.setProperty("/transport", "");
+                    oModel.setProperty("/transports", []);
+                    oModel.setProperty("/sourceIndex", 0);
+                    oModel.setProperty("/sourcePreview", "");
+                }
+                if (!this._abapCreateDlg || this._abapCreateDlg.bIsDestroyed) {
+                    this._abapCreateDlg = await this.loadFragment({ name: "aicockpitfeq.fragment.AbapCreate" });
+                    this.getView().addDependent(this._abapCreateDlg);
+                }
+                this._abapCreateUpdatePreview();
+                this._abapCreateDlg.open();
+            } catch (err) {
+                MessageBox.error("Failed to open Create ABAP Object dialog: " + (err.message || String(err)));
+            }
+        },
+        onAbapCreateSourceChange: function () {
+            this._abapCreateUpdatePreview();
+        },
+        _abapCreateUpdatePreview: function () {
+            var oM = this.getView().getModel("abapCreateModel");
+            if (!oM) return;
+            var idx = oM.getProperty("/sourceIndex");
+            var preview = "";
+            if (idx === 1) {
+                preview = this.getOwnerComponent().getModel("airesponseDetailModel")?.getProperty("/resp") || "(No AI response yet)";
+            } else if (idx === 2) {
+                preview = this.getView().getModel("appmodel")?.getProperty("/BSContent") || "(No editor content)";
+            }
+            oM.setProperty("/sourcePreview", preview);
+        },
+        onFetchTransports: async function () {
+            try {
+                var parse = await this._runAbapMcpTool("SAPTransport", { action: "list" });
+                var aList = [];
+                if (parse && !parse.isError && parse.message) {
+                    try {
+                        var arr = JSON.parse(parse.message);
+                       if (Array.isArray(arr)) { aList = arr.map(function (t) { var id = t.id || t.trkorr || t.name || (typeof t === "string" ? t : ""); var desc = t.description || t.desc || ""; return { key: id, text: id + (desc ? " - " + desc : "") }; }); } else if (arr && Array.isArray(arr.transports)) { aList = arr.transports.map(function (t) { var id = t.id || t.trkorr || t.name || ""; var desc = t.description || t.desc || ""; return { key: id, text: id + (desc ? " - " + desc : "") }; }); }
+                    } catch (e) { /* plain text */ }
+                }
+                var oM = this.getView().getModel("abapCreateModel");
+                if (oM) oM.setProperty("/transports", aList);
+            } catch (err) {
+                console.error("Fetch transports failed", err);
+            }
+        },
+        onConfirmAbapCreate: async function () {
+            var oM = this.getView().getModel("abapCreateModel");
+            var type = oM.getProperty("/objectType");
+            var name = oM.getProperty("/objectName");
+            var pkg = oM.getProperty("/package") || "$TMP";
+            var transport = oM.getProperty("/transport") || "";
+            var overwrite = oM.getProperty("/overwrite");
+            var activate = oM.getProperty("/activate");
+            var sourceIdx = oM.getProperty("/sourceIndex");
+            var source = "";
+            if (sourceIdx === 1) { source = this.getOwnerComponent().getModel("airesponseDetailModel")?.getProperty("/resp") || ""; }
+            else if (sourceIdx === 2) { source = this.getView().getModel("appmodel")?.getProperty("/BSContent") || ""; }
+            if (!name) { MessageBox.error("Object name is required"); return; }
+            var busyDialog = new BusyDialog({ text: "Creating " + name + "..." });
+            busyDialog.open();
+            try {
+                var args = { action: "create", type: type, name: name, package: pkg, source: source };
+                if (transport) args.transport = transport;
+                if (overwrite) args.overwrite = true;
+                var resWrite = await this._runAbapMcpTool("SAPWrite", args);
+                if (resWrite && resWrite.isError) { throw new Error(resWrite.message); }
+                if (activate) {
+                    var resAct = await this._runAbapMcpTool("SAPActivate", { objects: [{ type: type, name: name }] });
+                    if (resAct && resAct.isError) { MessageToast.show("Created but activation failed: " + resAct.message); }
+                    else { MessageToast.show(name + " created and activated successfully"); }
+                } else {
+                    MessageToast.show(name + " created successfully (not activated)");
+                }
+                busyDialog.close();
+                this.onCancelAbapCreate();
+            } catch (err) {
+                busyDialog.close();
+                MessageBox.error("ABAP MCP error: " + (err && err.message ? err.message : String(err)));
+            }
+        },
+        onCancelAbapCreate: function () {
+            if (this._abapCreateDlg) { this._abapCreateDlg.close(); }
         }
+        // ========== END ABAP MCP SERVER INTEGRATION ==========
+
     });
 });

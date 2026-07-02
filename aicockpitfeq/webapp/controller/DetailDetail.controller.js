@@ -31,6 +31,19 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
 
         _onPatternMatch: function (oEvent) {
             this.keytobeSet = oEvent.getParameter("arguments").dispKey;
+             // Propagate viewModel from View1 so bindings like viewModel>/useMCP work here
+            try {
+                var oAppView = this.getOwnerComponent().byId("App");
+                var oFCL = oAppView.byId("flexibleColumnLayout");
+                var oView1 = oFCL.getBeginColumnPages()[0];
+                if (oView1) {
+                    var oVM = oView1.getModel("viewModel");
+                    if (oVM) {
+                        this.getView().setModel(oVM, "viewModel");
+                    }
+                }
+            } catch (e) { /* viewModel propagation best-effort */ }
+            this.keytobeSet = oEvent.getParameter("arguments").dispKey;
             this.getView().byId("cdGenInitText").setVisible(false);
             this.getView().byId("codeGenCitation").setVisible(false);
             //total height of screen
@@ -198,11 +211,10 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                 lines.push(""); // blank separator
             }
 
-            if (PdfUtil && PdfUtil.isAvailable()) {
+           
                 PdfUtil.createSimplePdf("History.pdf", lines);
-            } else {
-                sap.m.MessageToast.show("jsPDF not loaded. Ensure lib/jspdf.umd.min.js is included.");
-            }
+            
+            
         },
 
          onDownloadPDF: function () {
@@ -230,11 +242,9 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             }
 
             var fileName = "Gen AI " + this.selectedTab() + ".pdf";
-            if (PdfUtil && PdfUtil.isAvailable()) {
+            
                 PdfUtil.createSimplePdf(fileName, lines);
-            } else {
-                sap.m.MessageToast.show("jsPDF not loaded. Ensure lib/jspdf.umd.min.js is included.");
-            }
+    
         },
         selectedTab: function () {
             var name = "";
@@ -1415,6 +1425,369 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 );
             });
+        },
+        /**
+         * Push remediated code back to S/4HANA via ARC-1 MCP Server (JSON-RPC format)
+         * Performs: SAPWrite (creates inactive draft) -> SAPActivate (activates it)
+         * Adds a small dialog to capture ABAP object type/name
+         */
+        onPushToS4T: function () {
+            var that = this;
+
+            // Read code fresh each time (not cached in closure)
+            var codeText = (this.byId("aiRespTxtArea") && this.byId("aiRespTxtArea").getValue()) || "";
+            // Also check multiCE code blocks if TextArea is hidden
+            if ((!codeText || codeText.trim().length === 0)) {
+                var oAiResp = this.getOwnerComponent().getModel("airesponseDetailModel");
+                codeText = oAiResp ? (oAiResp.getProperty("/resp") || "") : "";
+            }
+            if (!codeText || codeText.trim().length === 0) {
+                MessageBox.error("No AI response found to push. Generate or paste the remediated code first.");
+                return;
+            }
+            // Store on instance so press handler always gets latest
+            this._pushSourceCode = codeText;
+
+            // Lazy-create dialog
+            if (!this._pushDialog) {
+                var oTypeSelect = new sap.m.Select({
+                    width: "100%",
+                    items: [
+                        new sap.ui.core.Item({ key: "PROG", text: "Program (Report)" }),
+                        new sap.ui.core.Item({ key: "CLAS", text: "Class" }),
+                        new sap.ui.core.Item({ key: "INTF", text: "Interface" }),
+                        new sap.ui.core.Item({ key: "FUGR", text: "Function Group" })
+                    ]
+                });
+
+                // default to Program for Code Remediation tab
+                if (this.keytobeSet === "cdRem" || this.keytobeSet === "cdGen") {
+                    oTypeSelect.setSelectedKey("PROG");
+                }
+
+                var oNameInput = new sap.m.Input({
+                    width: "100%",
+                    placeholder: "Enter ABAP object name e.g. ZABAP_MCP_TEST or ZCL_MY_CLASS",
+                    value: ""
+                });
+
+                var oActivateCheckbox = new sap.m.CheckBox({
+                    text: "Activate after push",
+                    selected: true
+                });
+                var oLintCheckbox = new sap.m.CheckBox({
+                    text: "Auto-fix before write (SAPLint)",
+                    selected: true
+                });
+
+                this._pushDialog = new sap.m.Dialog({
+                    title: "Push to S/4HANA (ARC-1 MCP)",
+                    contentWidth: "480px",
+                    content: [
+                        new sap.m.Label({ text: "ABAP Object Type", labelFor: oTypeSelect, class: "sapUiSmallMarginBottom" }),
+                        oTypeSelect,
+                        new sap.m.Label({ text: "ABAP Object Name", labelFor: oNameInput, class: "sapUiSmallMarginTop sapUiSmallMarginBottom" }),
+                        oNameInput,
+                        new sap.m.VBox({ class: "sapUiSmallMarginTop", items: [oActivateCheckbox, oLintCheckbox] })
+                    ],
+                    beginButton: new sap.m.Button({
+                        text: "Push",
+                        type: "Emphasized",
+                        press: async function () {
+                            var typeKey = oTypeSelect.getSelectedKey();
+                            var objName = (oNameInput.getValue() || "").trim().toUpperCase();
+                            var shouldActivate = oActivateCheckbox.getSelected();
+
+                            if (!objName) {
+                                MessageBox.error("Please enter an ABAP object name.");
+                                return;
+                            }
+
+                            // Prepare code - strip markdown code fences if present (use fresh value)
+                            var cleaned = that._stripMarkdownCodeFences(that._pushSourceCode);
+
+                            // Validate ABAP source for selected type
+                            try {
+                                var cleanedForCheck = cleaned.replace(/^(?:\s*(?:\*|").*\r?\n)+/g, "").trim();
+
+                                if (typeKey === "PROG") {
+                                    var isAbapProg = /^(REPORT|PROGRAM|INCLUDE)\b/i.test(cleanedForCheck);
+                                    if (!isAbapProg) {
+                                        MessageBox.error("Selected type PROG expects ABAP program source starting with 'REPORT', 'PROGRAM' or 'INCLUDE'. The current content does not look like ABAP code.");
+                                        return;
+                                    }
+                                } else if (typeKey === "CLAS") {
+                                    var isAbapClass = /CLASS\s+\w+\s+DEFINITION/i.test(cleanedForCheck);
+                                    if (!isAbapClass) {
+                                        MessageBox.error("Selected type CLAS expects ABAP class source containing 'CLASS <name> DEFINITION'.");
+                                        return;
+                                    }
+                                } else if (typeKey === "INTF") {
+                                    var isAbapIntf = /INTERFACE\s+\w+/i.test(cleanedForCheck);
+                                    if (!isAbapIntf) {
+                                        MessageBox.error("Selected type INTF expects ABAP interface source containing 'INTERFACE <name>'.");
+                                        return;
+                                    }
+                                }
+                            } catch (vErr) {
+                                MessageBox.error("Validation failed: " + (vErr.message || vErr.toString()));
+                                return;
+                            }
+
+                            // Pre-activation quick fix
+                            if (oLintCheckbox.getSelected()) {
+                                var fixRes = that._clientPreflightFixAbap(cleaned);
+                                if (fixRes && fixRes.fixed) {
+                                    cleaned = fixRes.code;
+                                    MessageToast.show("Preflight: fixed untyped RETURNING parameter(s)");
+                                }
+                            }
+
+                            var busy = new sap.m.BusyDialog({ title: "Pushing to S/4HANA...", text: "Writing code (Step 1/2)" });
+                            busy.open();
+
+                            try {
+                                // Step 1: SAPWrite - Creates an inactive draft
+                                var writeAction = "update";
+                                var writeArgs = {
+                                    type: typeKey,
+                                    name: objName,
+                                    action: writeAction,
+                                    source: cleaned
+                                };
+                                if (writeAction === "update") {
+                                    writeArgs.lintBeforeWrite = false;
+                                }
+
+                                var writePayload = {
+                                    jsonrpc: "2.0",
+                                    id: Date.now(),
+                                    method: "tools/call",
+                                    params: {
+                                        name: "SAPWrite",
+                                        arguments: writeArgs
+                                    }
+                                };
+
+                                var writeRes = await fetch(this._sBasePath + "/abap-mcp/mcp", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Accept": "application/json, text/event-stream"
+                                    },
+                                    body: JSON.stringify(writePayload)
+                                });
+
+                                var writeText = await writeRes.text();
+                                var writeResult = that._parseArc1Response(writeText);
+
+                                if (writeResult.isError) {
+                                    throw new Error("Write failed: " + writeResult.message);
+                                }
+
+                                // Step 2: SAPActivate - Activates the inactive draft
+                                if (shouldActivate) {
+                                    busy.setText("Activating code (Step 2/2)");
+
+                                    var activatePayload = {
+                                        jsonrpc: "2.0",
+                                        id: Date.now() + 1,
+                                        method: "tools/call",
+                                        params: {
+                                            name: "SAPActivate",
+                                            arguments: {
+                                                type: typeKey,
+                                                name: objName
+                                            }
+                                        }
+                                    };
+
+                                    var activateRes = await fetch(this._sBasePath + "/abap-mcp/mcp", {
+                                        method: "POST",
+                                        headers: {
+                                            "Content-Type": "application/json",
+                                            "Accept": "application/json, text/event-stream"
+                                        },
+                                        body: JSON.stringify(activatePayload)
+                                    });
+
+                                    var activateText = await activateRes.text();
+                                    var activateResult = that._parseArc1Response(activateText);
+
+                                    if (activateResult.isError) {
+                                        MessageBox.warning(
+                                            "Code was written but activation failed:\n" + activateResult.message +
+                                            "\n\nThe code exists as an inactive draft. Please activate manually in SAP GUI."
+                                        );
+                                        busy.close();
+                                        that._pushDialog.close();
+                                        return;
+                                    }
+
+                                    MessageToast.show("Successfully pushed and activated " + typeKey + " " + objName);
+                                } else {
+                                    MessageToast.show("Successfully pushed " + typeKey + " " + objName + " (inactive draft)");
+                                }
+
+                                that._pushDialog.close();
+
+                            } catch (err) {
+                                MessageBox.error("Push failed: " + (err.message || err.toString()));
+                            } finally {
+                                busy.close();
+                            }
+                        }.bind(this)
+                    }),
+                    endButton: new sap.m.Button({
+                        text: "Cancel",
+                        press: function () { this._pushDialog.close(); }.bind(this)
+                    }),
+                    afterClose: function () {
+                        // Optional: clear fields on close
+                    }.bind(this)
+                });
+
+                this._pushDialog.addStyleClass("sapUiSizeCompact");
+            }
+
+            // Open dialog
+            this._pushDialog.open();
+        },
+
+        /**
+         * Remove Markdown code fences and extract raw ABAP text.
+         */
+        _stripMarkdownCodeFences: function (text) {
+            if (!text || typeof text !== "string") return text || "";
+            var t = text.trim();
+
+            // Find all code blocks in the response
+            var codeBlockRegex = /```([a-zA-Z]*)\s*\n?([\s\S]*?)```/g;
+            var allCodeBlocks = [];
+            var match;
+
+            while ((match = codeBlockRegex.exec(t)) !== null) {
+                var lang = (match[1] || "").toLowerCase();
+                var code = (match[2] || "").trim();
+                if (code) {
+                    allCodeBlocks.push({ lang: lang, code: code });
+                }
+            }
+
+            if (allCodeBlocks.length > 0) {
+                // First, look for explicitly marked ABAP code blocks
+                for (var i = 0; i < allCodeBlocks.length; i++) {
+                    var block = allCodeBlocks[i];
+                    if (block.lang === "abap" || block.lang === "sap") {
+                        return block.code;
+                    }
+                }
+
+                // Second, look for code blocks that look like ABAP
+                var abapKeywords = /^(REPORT|PROGRAM|INCLUDE|CLASS|INTERFACE|FUNCTION|FORM|METHOD|DATA|TYPES|CONSTANTS)\b/im;
+                for (var j = 0; j < allCodeBlocks.length; j++) {
+                    if (abapKeywords.test(allCodeBlocks[j].code)) {
+                        return allCodeBlocks[j].code;
+                    }
+                }
+
+                // If no ABAP-specific block found, return the first code block
+                return allCodeBlocks[0].code;
+            }
+
+            // No code fences found - try to extract code-like content
+            var lines = t.split("\n");
+            var codeLines = [];
+            var inCodeSection = false;
+
+            for (var k = 0; k < lines.length; k++) {
+                var line = lines[k];
+                var trimmedLine = line.trim();
+
+                // Skip markdown headers
+                if (/^#+\s/.test(trimmedLine)) continue;
+
+                // Skip list items that are explanatory text
+                if (/^[-*]\s+[A-Z][^:]*:/.test(trimmedLine)) continue;
+
+                // Check if line looks like ABAP code
+                var looksLikeAbap = /^(REPORT|PROGRAM|INCLUDE|CLASS|INTERFACE|FUNCTION|FORM|METHOD|DATA|TYPES|CONSTANTS|WRITE|IF|ENDIF|LOOP|ENDLOOP|SELECT|ENDSELECT|TRY|ENDTRY|CATCH|DO|ENDDO|WHILE|ENDWHILE|CASE|ENDCASE|AT|ENDAT|\*|")/i.test(trimmedLine);
+
+                if (looksLikeAbap) {
+                    inCodeSection = true;
+                }
+
+                if (inCodeSection) {
+                    codeLines.push(line);
+                }
+            }
+
+            if (codeLines.length > 0) {
+                return codeLines.join("\n").trim();
+            }
+
+            // Fallback: just remove backticks lines
+            t = t.replace(/^```.*$/gm, "").trim();
+            return t;
+        },
+
+        /**
+         * Parse ARC-1 MCP Server response (Server-Sent Events format)
+         */
+        _parseArc1Response: function (responseText) {
+            try {
+                var jsonMatch = responseText.match(/data:\s*(\{[\s\S]*\})/);
+                if (!jsonMatch) {
+                    var parsed = JSON.parse(responseText);
+                    if (parsed.result && parsed.result.isError) {
+                        return {
+                            isError: true,
+                            message: (parsed.result.content && parsed.result.content[0] && parsed.result.content[0].text) || "Unknown error"
+                        };
+                    }
+                    return {
+                        isError: false,
+                        message: (parsed.result && parsed.result.content && parsed.result.content[0] && parsed.result.content[0].text) || "Success"
+                    };
+                }
+
+                var json = JSON.parse(jsonMatch[1]);
+
+                if (json.result && json.result.isError) {
+                    var errorText = (json.result.content && json.result.content[0] && json.result.content[0].text) || "Unknown error";
+                    return { isError: true, message: errorText };
+                }
+
+                var successText = (json.result && json.result.content && json.result.content[0] && json.result.content[0].text) || "Success";
+                return { isError: false, message: successText };
+
+            } catch (e) {
+                return { isError: true, message: "Failed to parse response: " + e.message };
+            }
+        },
+
+        /**
+         * Client-side quick fix for common activation issue:
+         * ABAP method signatures with 'RETURNING VALUE(...) TYPE p' must fully type packed numbers.
+         */
+        _clientPreflightFixAbap: function (code) {
+            try {
+                if (!code || typeof code !== "string") {
+                    return { code: code || "", fixed: false };
+                }
+                var fixed = false;
+                var reFull = /(RETURNING\s+VALUE\(\s*\w+\s*\))\s+TYPE\s+p([^.\n]*)\./gi;
+                var newCode = code.replace(reFull, function (full, valPart, rest) {
+                    if (/\bLENGTH\b/i.test(rest)) {
+                        return full;
+                    }
+                    fixed = true;
+                    return valPart + " TYPE p LENGTH 5 DECIMALS 1.";
+                });
+                return { code: newCode, fixed: fixed };
+            } catch (e) {
+                return { code: code, fixed: false };
+            }
         }
 
        

@@ -53,6 +53,7 @@
                     width="100%"
                     height="100%"
                     class="sapUiResponsiveContentPadding panelClassDet"
+                    visible="{= !${airesponseDetailModel>/codeEdVis} }"
                 >
                     <VBox>
                         <HBox
@@ -122,7 +123,9 @@
                 <!-- <ce:CodeEditor height="200px" editable="false" type="{airesponseDetailModel>/codeType}" value="{airesponseDetailModel>/codeResult}" id="codeEditor"  visible="false" />
                  <Text id="afterText" visible="false" text="{airesponseDetailModel>/afterResult}" /> -->
                 <Text text="AI Response:" id="cdGenInitText"/>
-                  <VBox id="multipleCodeEd" visible="false" items="{airesponseDetailModel>/multiCE}">
+                  <!-- <VBox id="multipleCodeEd" visible="false" items="{airesponseDetailModel>/multiCE}"> -->
+                  <VBox id="multipleCodeEd" visible="{airesponseDetailModel>/codeEdVis}" items="{airesponseDetailModel>/multiCE}">
+
                   <items>
                   <VBox>
                   <!-- <Text text="{airesponseDetailModel>textData}" visible="true"/> -->
@@ -171,6 +174,14 @@
                         type="Emphasized"
                         class="sapUiTinyMarginTop"
                         visible="false"
+                    />
+                    <Button
+                        tooltip="Push to S/4HANA"
+                        icon="sap-icon://upload-to-cloud"
+                        press=".onPushToS4T"
+                        class="sapUiTinyMarginTop"
+                        enabled="{airesponseDetailModel>/downloadVis}"
+                        visible="{airesponseDetailModel>/downloadVis}"
                     />
                     <Button
                         text="{i18n>history}"

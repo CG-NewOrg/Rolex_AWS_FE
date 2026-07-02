@@ -9,6 +9,21 @@
     }
   ],
   "routes": [
+    {
+      "source": "^/abap-mcp/(.*)$",
+      "destination": "arc1-mcp",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1"
+    },
+    {
+      "source": "^/api/objectstore/(.*)$",
+      "destination": "object-store-dest",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1",
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
      {
       "source": "^/kb-integration/(.*)$",
       "destination": "KB_integration_ragpostgres",

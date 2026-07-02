@@ -275,7 +275,7 @@ sap.ui.define([
 
                     const tabs = [
                         "BS", "User", "fstoconf", "fstots", "tstocode", "tstocodeGit",
-                        "coderem", "codesum", "TUT", "BPM", "TCG", "PCT", "DocGen"
+                        "coderem", "codesum", "TUT", "BPM", "TCG", "PCT", "DocGen", "RetroDoc"
                     ];
 
                     const tokenConfigByTab = {};

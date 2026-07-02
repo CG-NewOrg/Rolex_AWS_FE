@@ -9,6 +9,7 @@
     <Dialog
         resizable="true"
         title="{i18n>fbTitle}"
+        contentWidth="500px"
     >
         <VBox class="sapUiSmallMargin">
             <Label text="{i18n>subtitle}" />
@@ -115,6 +116,13 @@
         </VBox>
         <footer>
             <Toolbar>
+            <Button
+                    text="View All Feedback"
+                    icon="sap-icon://list"
+                    press=".onViewAllFeedback"
+                    type="Transparent"
+                    visible="{vFlagMod>/isSuperAdmin}"
+                />
                 <ToolbarSpacer />
                 <HBox>
                     <Button

@@ -394,3 +394,126 @@ z-index: 10 !important;
     border-top: 1px solid #e0e0e0;
     margin: 1em 0;
 }
+
+/* ============================================================
+ * Retro Documentation - Template Buttons
+ * Suppress the default focus / pressed border highlight so the
+ * Technical / Functional Specification Template buttons render
+ * cleanly without the blue rectangle around the active one.
+ * ============================================================ */
+.retroTemplateBtn .sapMBtnInner,
+.retroTemplateBtn .sapMBtnHoverable,
+.retroTemplateBtn:focus .sapMBtnInner,
+.retroTemplateBtn:focus-within .sapMBtnInner,
+.retroTemplateBtn .sapMBtnInner:focus,
+.retroTemplateBtn .sapMBtnInner.sapMBtnActive {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background-color: transparent !important;
+}
+ 
+.retroTemplateBtn .sapMBtnInner::after,
+.retroTemplateBtn:focus .sapMBtnInner::after {
+    border: none !important;
+    outline: none !important;
+}
+
+/* ✅ Main markdown container */
+.aiRespMd {
+    font-family: SAP72, Arial, sans-serif;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: #2f3c48;
+    letter-spacing: 0.2px;
+    word-spacing: 0.5px;
+}
+
+/* Paragraph spacing */
+.aiRespMd p {
+    margin: 8px 0 14px;
+}
+
+/* Headings */
+.aiRespMd h1,
+.aiRespMd h2,
+.aiRespMd h3 {
+    margin-top: 22px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    color: #2a4d76;
+}
+
+.aiRespMd h2 {
+    font-size: 20px;
+    border-bottom: 1px solid #dcdcdc;
+    padding-bottom: 6px;
+}
+
+.aiRespMd h3 {
+    font-size: 18px;
+}
+
+/* Lists */
+.aiRespMd ul {
+    margin: 8px 0 16px 20px;
+    padding-left: 15px;
+}
+
+.aiRespMd li {
+    margin-bottom: 6px;
+}
+
+/* Bold */
+.aiRespMd strong {
+    font-weight: 700;
+}
+
+/* Tables */
+.aiRespMd table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 12px;
+}
+
+.aiRespMd th,
+.aiRespMd td {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    text-align: left;
+}
+
+/* Code blocks */
+.aiRespMd pre {
+    background: #f5f5f5;
+    padding: 10px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.aiRespMd code {
+    font-family: Consolas, monospace;
+}
+
+/* ✅ Section wrapper */
+.pdfSection {
+    margin-bottom: 22px;
+}
+
+/* ✅ Section title (System Message / AI Response) */
+.pdfSectionTitle {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 6px;
+    color: #2a4d76;
+}
+
+/* ✅ Outer PDF container */
+.pdfContainer {
+    width: 800px;
+    padding: 24px;
+    background: #ffffff;
+    color: #2f3c48;
+}
