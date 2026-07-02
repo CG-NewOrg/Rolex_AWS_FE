@@ -1,0 +1,121 @@
+<core:FragmentDefinition
+  xmlns="sap.m"
+  xmlns:core="sap.ui.core"
+  xmlns:f="sap.ui.layout.form"
+  xmlns:l="sap.ui.layout">
+
+  <Dialog
+    id="sapSearchDialog"
+    title="Object Selection"
+    contentWidth="720px"
+    resizable="true"
+    draggable="true">
+
+    <VBox class="sapUiMediumMargin">
+      <f:SimpleForm
+        editable="true"
+        layout="ResponsiveGridLayout"
+        labelSpanXL="4"
+        labelSpanL="4"
+        labelSpanM="4"
+        labelSpanS="12"
+        adjustLabelSpan="false"
+        emptySpanXL="0"
+        emptySpanL="0"
+        emptySpanM="0"
+        emptySpanS="0"
+        columnsXL="1"
+        columnsL="1"
+        columnsM="1"
+        singleContainerFullSize="false">
+
+        <f:content>
+          <Label text="Object Type" required="true"/>
+          <Select
+            selectedKey="{sapSearchModel>/objectType}"
+            width="100%">
+            <core:Item key="PROG" text="Program (PROG)"/>
+            <core:Item key="CLAS" text="Class (CLAS)"/>
+            <core:Item key="INTF" text="Interface (INTF)"/>
+            <core:Item key="FUGR" text="Function Group (FUGR)"/>
+            <core:Item key="INCL" text="Include (INCL)"/>
+            <core:Item key="TABL" text="Table (TABL)"/>
+            <core:Item key="DDLS" text="CDS View (DDLS)"/>
+            <core:Item key="BDEF" text="Behavior Definition (BDEF)"/>
+            <core:Item key="SRVD" text="Service Definition (SRVD)"/>
+            <core:Item key="MSAG" text="Message Class (MSAG)"/>
+            <core:Item key="DTEL" text="Data Element (DTEL)"/>
+            <core:Item key="DOMA" text="Domain (DOMA)"/>
+          </Select>
+
+          <Label text="SAP System" required="true"/>
+          <Select
+            selectedKey="{sapSearchModel>/sapSystem}"
+            width="100%">
+            <core:Item key="DEV" text="DEV — Development"/>
+            <core:Item key="QAS" text="QAS — Quality"/>
+            <core:Item key="PRD" text="PRD — Production"/>
+          </Select>
+
+          <Label text="Search Pattern" required="true"/>
+          <HBox alignItems="Center" justifyContent="Start">
+            <SearchField
+              id="sapSearchPattern"
+              width="100%"
+              value="{sapSearchModel>/pattern}"
+              placeholder="e.g. ZABAP_MCP_TEST or Z*"
+              search=".onSapSearchExecute"
+              class="sapUiTinyMarginEnd"/>
+            <Button icon="sap-icon://decline" type="Transparent" press=".onSapSearchReset" tooltip="Clear"/>
+          </HBox>
+
+          <Text
+            text="Tip: Wildcards are supported by the backend search. Use Z* to search all Z-objects of the selected type."
+            class="sapUiTinyMarginTop sapUiContentPadding"
+            wrapping="true"/>
+        </f:content>
+      </f:SimpleForm>
+
+      <Table
+        id="sapSearchResultsTable"
+        mode="SingleSelectMaster"
+        width="100%"
+        items="{sapSearchModel>/results}">
+
+        <headerToolbar>
+          <Toolbar>
+            <Title text="Results"/>
+            <ToolbarSpacer/>
+            <Text text="{= (${sapSearchModel>/results}.length || 0) + ' item(s)'}"/>
+          </Toolbar>
+        </headerToolbar>
+
+        <columns>
+          <Column><Text text="Object Type"/></Column>
+          <Column><Text text="Name"/></Column>
+          <Column><Text text="Description"/></Column>
+        </columns>
+
+        <items>
+          <ColumnListItem>
+            <cells>
+              <Text text="{sapSearchModel>type}"/>
+              <Text text="{sapSearchModel>name}"/>
+              <Text text="{sapSearchModel>desc}"/>
+            </cells>
+          </ColumnListItem>
+        </items>
+      </Table>
+
+      <HBox justifyContent="End" class="sapUiSmallMarginTop">
+        <Button text="Use Selected" type="Emphasized" press=".onSapSearchUseSelected"/>
+        <Button text="Close" type="Transparent" press=".onSapSearchClose" class="sapUiTinyMarginBegin"/>
+      </HBox>
+    </VBox>
+
+    <beginButton>
+      <Button text="Search" type="Emphasized" press=".onSapSearchExecute"/>
+    </beginButton>
+  </Dialog>
+
+</core:FragmentDefinition>

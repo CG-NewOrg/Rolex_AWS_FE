@@ -1,0 +1,95 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified">
+
+    <Dialog
+        id="idUserManagementDialog"
+        title="User Management"
+        contentWidth="70%"
+        contentHeight="70%"
+        draggable="true"
+        resizable="true"
+        afterClose=".onUserManagementDialogClose">
+        <content>
+            <VBox id="userMgmtMainVBox" class="sapUiSmallMargin">
+                <Panel id="userMgmtTablePanel">
+                    <content>
+                        <Table
+                            id="idUserMgmtTable"
+                            items="{userMgmtModel>/users}"
+                            mode="SingleSelectMaster"
+                            selectionChange=".onUserMgmtTableSelectionChange"
+                            noDataText="No users found"
+                            growing="true"
+                            growingThreshold="20"
+                            sticky="ColumnHeaders">
+                            <headerToolbar>
+                                <Toolbar id="userMgmtTableHeaderToolbar">
+                                    <Title id="userMgmtTableTitle" text="Registered Users" level="H2"/>
+                                    <ToolbarSpacer id="userMgmtTableToolbarSpacer"/>
+                                    <SearchField
+                                        id="idUserMgmtSearchField"
+                                        width="25%"
+                                        placeholder="Search users..."
+                                        search=".onUserMgmtSearch"
+                                        liveChange=".onUserMgmtLiveSearch"/>
+                                    <unified:FileUploader
+                                        id="idUserMgmtExcelUploader"
+                                        buttonOnly="true"
+                                        iconOnly="true"
+                                        icon="sap-icon://upload-to-cloud"
+                                        tooltip="{i18n>userMgmtUploadTooltip}"
+                                        fileType="xlsx,xls"
+                                        style="Emphasized"
+                                        change=".onUserMgmtUploadExcel"/>
+                                    <Button
+                                        id="idUserMgmtDetailsButton"
+                                        text="User Details"
+                                        type="Emphasized"
+                                        icon="sap-icon://customer"
+                                        press=".onUserMgmtDetailsPress"/>
+                                    <Button
+                                        id="idUserMgmtRefreshButton"
+                                        icon="sap-icon://refresh"
+                                        tooltip="Refresh Users"
+                                        press=".onUserMgmtRefresh"/>
+                                </Toolbar>
+                            </headerToolbar>
+                            <columns>
+                                <Column id="userMgmtUserNameColumn">
+                                    <Text id="userMgmtUserNameColumnText" text="User Name"/>
+                                </Column>
+                                <Column id="userMgmtEmailColumn">
+                                    <Text id="userMgmtEmailColumnText" text="Email"/>
+                                </Column>
+                                <Column id="userMgmtProjectColumn">
+                                    <Text id="userMgmtProjectColumnText" text="Project"/>
+                                </Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem id="userMgmtColumnListItemTemplate" type="Active" press=".onUserMgmtRowPress">
+                                    <cells>
+                                        <Text id="userMgmtCellUserName" text="{userMgmtModel>userName}"/>
+                                        <Text id="userMgmtCellEmail" text="{userMgmtModel>email}"/>
+                                        <Text id="userMgmtCellProject" text="{userMgmtModel>project}"/>
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </content>
+                </Panel>
+            </VBox>
+        </content>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer/>
+                <Button
+                    id="idUserMgmtCloseButton"
+                    text="Close"
+                    type="Emphasized"
+                    press=".onUserManagementDialogClose"/>
+            </Toolbar>
+        </footer>
+    </Dialog>
+</core:FragmentDefinition>

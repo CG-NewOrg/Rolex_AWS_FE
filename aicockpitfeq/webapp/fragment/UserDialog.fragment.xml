@@ -1,0 +1,144 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:f="sap.ui.layout.form">
+
+    <Dialog
+        id="idUserEditDialog"
+        title="User Details"
+        contentWidth="550px"
+        draggable="true"
+        resizable="true">
+        <content>
+            <VBox id="userEditDialogContent" class="sapUiSmallMargin">
+                <f:Form id="userEditDialogForm" editable="true">
+                    <f:layout>
+                        <f:ResponsiveGridLayout
+                            id="userEditDialogFormLayout"
+                            labelSpanXL="3"
+                            labelSpanL="3"
+                            labelSpanM="3"
+                            labelSpanS="12"
+                            adjustLabelSpan="false"
+                            emptySpanXL="0"
+                            emptySpanL="0"
+                            emptySpanM="0"
+                            emptySpanS="0"
+                            columnsXL="1"
+                            columnsL="1"
+                            columnsM="1"
+                            singleContainerFullSize="false"/>
+                    </f:layout>
+                    <f:formContainers>
+                        <f:FormContainer id="userEditDialogFormContainer">
+                            <f:formElements>
+                                <f:FormElement id="userEditDialogUserNameElement" label="User Name">
+                                    <f:fields>
+                                        <Input
+                                            id="idUserEditUserNameInput"
+                                            value="{userMgmtModel>/formData/userName}"
+                                            placeholder="Enter user name"
+                                            editable="{userMgmtModel>/formEditable}"/>
+                                    </f:fields>
+                                </f:FormElement>
+                                <f:FormElement id="userEditDialogEmailElement" label="Email">
+                                    <f:fields>
+                                        <Input
+                                            id="idUserEditEmailInput"
+                                            value="{userMgmtModel>/formData/email}"
+                                            placeholder="Enter email address"
+                                            type="Email"
+                                            editable="{userMgmtModel>/formEditable}"/>
+                                    </f:fields>
+                                </f:FormElement>
+                                <f:FormElement id="userEditDialogProjectElement" label="Projects">
+                                    <f:fields>
+                                        <MultiComboBox
+                                            id="idUserEditProjectMultiCombo"
+                                            selectedKeys="{userMgmtModel>/formData/projects}"
+                                            items="{userMgmtModel>/availableProjects}"
+                                            enabled="{userMgmtModel>/formEditable}"
+                                            placeholder="Select one or more projects"
+                                            width="100%">
+                                            <core:Item id="userEditProjectMultiItem" key="{userMgmtModel>key}" text="{userMgmtModel>text}"/>
+                                        </MultiComboBox>
+                                        <HBox id="userEditAddProjectActionBox" visible="{userMgmtModel>/formEditable}" width="100%" alignItems="Center" justifyContent="End" class="sapUiTinyMarginTop">
+                                            <Button
+                                                id="idUserEditShowCreateProjectBtn"
+                                                text="➕ Add New Project"
+                                                type="Transparent"
+                                                press=".onUserMgmtShowCreateProject"
+                                                visible="{= !${userMgmtModel>/isCreateProjectMode} }"/>
+                                        </HBox>
+                                        <HBox id="userEditCreateProjectBox" visible="{userMgmtModel>/isCreateProjectMode}" width="100%" alignItems="Center" class="sapUiTinyMarginTop">
+                                            <Input
+                                                id="idUserEditProjectInput"
+                                                value="{userMgmtModel>/newProjectName}"
+                                                placeholder="Enter new project name"
+                                                editable="{userMgmtModel>/formEditable}"
+                                                submit=".onUserMgmtConfirmCreateProject">
+                                                <layoutData>
+                                                    <FlexItemData id="userEditProjectInputFlex" growFactor="1"/>
+                                                </layoutData>
+                                            </Input>
+                                            <Button
+                                                id="idUserEditConfirmCreateProjectBtn"
+                                                icon="sap-icon://accept"
+                                                type="Transparent"
+                                                tooltip="Add this project"
+                                                press=".onUserMgmtConfirmCreateProject"
+                                                visible="{userMgmtModel>/formEditable}"
+                                                class="sapUiTinyMarginBegin"/>
+                                            <Button
+                                                id="idUserEditCancelCreateProjectBtn"
+                                                icon="sap-icon://decline"
+                                                type="Transparent"
+                                                tooltip="Cancel"
+                                                press=".onUserMgmtCancelCreateProject"
+                                                visible="{userMgmtModel>/formEditable}"
+                                                class="sapUiTinyMarginBegin"/>
+                                        </HBox>
+                                    </f:fields>
+                                </f:FormElement>
+                            </f:formElements>
+                        </f:FormContainer>
+                    </f:formContainers>
+                </f:Form>
+            </VBox>
+        </content>
+        <buttons>
+            <Button
+                id="idUserEditAddButton"
+                text="Add"
+                type="Emphasized"
+                icon="sap-icon://add"
+                press=".onUserMgmtDialogAddPress"
+                enabled="{= !${userMgmtModel>/isEditMode} &amp;&amp; !${userMgmtModel>/isAddMode} }" />
+            <Button
+                id="idUserEditDeleteButton"
+                text="Delete"
+                type="Reject"
+                icon="sap-icon://delete"
+                press=".onUserMgmtDialogDeletePress"
+                enabled="{= ${userMgmtModel>/selectedIndex} >= 0 &amp;&amp; !${userMgmtModel>/isAddMode} &amp;&amp; !${userMgmtModel>/isEditMode} }"/>
+            <Button
+                id="idUserEditUpdateButton"
+                text="Update"
+                type="Accept"
+                icon="sap-icon://edit"
+                press=".onUserMgmtDialogUpdatePress"
+                enabled="{= ${userMgmtModel>/selectedIndex} >= 0 &amp;&amp; !${userMgmtModel>/isAddMode} &amp;&amp; !${userMgmtModel>/isEditMode} }"/>
+            <Button
+                id="idUserEditSubmitButton"
+                text="Submit"
+                type="Emphasized"
+                icon="sap-icon://paper-plane"
+                press=".onUserMgmtDialogSubmitPress"
+                enabled="{userMgmtModel>/formEditable}"/>
+            <Button
+                id="idUserEditCloseButton"
+                text="Close"
+                press=".onUserMgmtDialogCancelPress"/>
+        </buttons>
+    </Dialog>
+</core:FragmentDefinition>

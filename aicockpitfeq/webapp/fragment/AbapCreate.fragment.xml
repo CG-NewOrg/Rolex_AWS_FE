@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<core:FragmentDefinition
+  xmlns="sap.m"
+  xmlns:core="sap.ui.core"
+  xmlns:l="sap.ui.layout"
+  xmlns:f="sap.ui.layout.form">
+  <Dialog
+    id="abapCreateDialog"
+    title="Create ABAP Object"
+    horizontalScrolling="false"
+    verticalScrolling="true"
+    contentHeight="auto"
+    contentWidth="600px"
+    stretchOnPhone="true"
+    afterOpen=".onFetchTransports">
+    <content>
+      <f:SimpleForm
+        editable="true"
+        layout="ResponsiveGridLayout"
+        width="100%"
+        ariaLabelledBy="abapCreateTitle"
+        labelSpanXL="4"
+        labelSpanL="4"
+        labelSpanM="12"
+        labelSpanS="12"
+        adjustLabelSpan="false"
+        emptySpanXL="0"
+        emptySpanL="0"
+        emptySpanM="0"
+        emptySpanS="0"
+        columnsXL="1"
+        columnsL="1"
+        columnsM="1"
+        singleContainerFullSize="false">
+        <f:content>
+          <Title id="abapCreateTitle" text="Object Details" level="H5" />
+          <Label text="Object Type" />
+          <Select selectedKey="{abapCreateModel>/objectType}" change=".onAbapCreateSourceChange">
+            <core:Item key="PROG" text="Program (PROG)" />
+            <core:Item key="CLAS" text="Class (CLAS)" />
+            <core:Item key="INTF" text="Interface (INTF)" />
+            <core:Item key="DDLS" text="CDS View (DDLS)" />
+            <core:Item key="DDLX" text="Metadata Extension (DDLX)" />
+            <core:Item key="BDEF" text="Behavior Definition (BDEF)" />
+            <core:Item key="SRVD" text="Service Definition (SRVD)" />
+          </Select>
+
+          <Label text="Object Name" />
+          <Input value="{abapCreateModel>/objectName}" liveChange=".onAbapCreateSourceChange" placeholder="e.g. ZABAP_MCP_TEST or ZCL_MY_CLASS" />
+
+          <Label text="Package" />
+          <Input value="{abapCreateModel>/package}" placeholder="e.g. ZPKG or $TMP" />
+
+          <Label text="Transport" />
+          <HBox renderType="Bare">
+            <ComboBox width="100%" selectedKey="{abapCreateModel>/transport}" items="{abapCreateModel>/transports}">
+              <items>
+                <core:ListItem key="{abapCreateModel>key}" text="{abapCreateModel>text}" />
+              </items>
+            </ComboBox>
+            <Button
+              icon="sap-icon://synchronize"
+              type="Transparent"
+              tooltip="Refresh transports"
+              press=".onFetchTransports"
+              width="2.5rem" />
+          </HBox>
+
+          <Label text="Description" />
+          <Input value="{abapCreateModel>/description}" placeholder="Optional" />
+
+          <Label text="Options" />
+          <HBox renderType="Bare" justifyContent="SpaceBetween">
+            <CheckBox text="Overwrite if exists" selected="{abapCreateModel>/overwrite}" />
+            <CheckBox text="Activate after create" selected="{abapCreateModel>/activate}" />
+          </HBox>
+
+          <Title text="Source" level="H5" />
+          <RadioButtonGroup
+            columns="3"
+            selectedIndex="{abapCreateModel>/sourceIndex}"
+            select=".onAbapCreateSourceChange">
+            <buttons>
+              <RadioButton text="None" />
+              <RadioButton text="AI Response" />
+              <RadioButton text="Editor Content" />
+            </buttons>
+          </RadioButtonGroup>
+
+          <Label text="Preview" />
+          <TextArea
+            rows="8"
+            width="100%"
+            editable="false"
+            value="{abapCreateModel>/sourcePreview}" />
+        </f:content>
+      </f:SimpleForm>
+    </content>
+    <beginButton>
+      <Button text="Create" type="Emphasized" press=".onConfirmAbapCreate" />
+    </beginButton>
+    <endButton>
+      <Button text="Cancel" press=".onCancelAbapCreate" />
+    </endButton>
+  </Dialog>
+</core:FragmentDefinition>

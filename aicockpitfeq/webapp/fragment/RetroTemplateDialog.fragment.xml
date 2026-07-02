@@ -1,0 +1,123 @@
+<!--
+    RetroTemplateDialog.fragment.xml
+    Added for Retro Documentation feature - Template Selection Dialog
+    This fragment is reused for both Technical Specification and Functional Specification templates
+    Opens when user clicks on either template option in the Retro Documentation section
+-->
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified"
+    xmlns:l="sap.ui.layout"
+>
+    <!-- Template Selection Dialog - Added for Retro Documentation feature -->
+    <Dialog
+        id="retroTemplateDialog"
+        title="{retroTemplateModel>/dialogTitle}"
+        contentWidth="500px"
+        contentHeight="auto"
+        draggable="true"
+        resizable="true"
+    >
+        <content>
+            <VBox class="sapUiSmallMargin">
+                <!-- Selected Template Section - Added for template selection dropdown -->
+                <VBox class="sapUiSmallMarginBottom">
+                    <Label
+                        text="{i18n>retroSelectedTemplate}"
+                        class="sapUiSmallMarginBottom"
+                    />
+                    <!-- Template dropdown selector - Dynamically bound to templates array -->
+                    <Select
+                        id="retroTemplateSelect"
+                        width="100%"
+                        selectedKey="{retroTemplateModel>/selectedTemplateKey}"
+                        change=".onRetroTemplateSelectChange"
+                        items="{retroTemplateModel>/templates}"
+                    >
+                        <core:Item
+                            key="{retroTemplateModel>key}"
+                            text="{retroTemplateModel>text}"
+                        />
+                    </Select>
+                </VBox>
+ 
+                <!-- View and Download Actions - Added for template preview and download -->
+                <HBox class="sapUiSmallMarginBottom sapUiSmallMarginTop">
+                    <Button
+                        id="retroViewTemplateBtn"
+                        icon="sap-icon://show"
+                        text="{i18n>retroView}"
+                        type="Transparent"
+                        press=".onRetroViewTemplate"
+                        class="sapUiSmallMarginEnd"
+                    />
+                    <Button
+                        id="retroDownloadTemplateBtn"
+                        icon="sap-icon://download"
+                        text="{i18n>retroDownloadBtn}"
+                        type="Transparent"
+                        press=".onRetroDownloadTemplate"
+                    />
+                </HBox>
+ 
+                <!-- Upload New Template Section - Added for custom template upload -->
+                <VBox class="sapUiMediumMarginTop">
+                    <Label
+                        text="{i18n>retroUploadNewTemplate}"
+                        class="sapUiSmallMarginBottom"
+                    />
+                    <HBox alignItems="Center">
+                        <!-- FileUploader with Choose File text and search icon - Fixed for Retro Documentation -->
+                        <unified:FileUploader
+                            id="retroTemplateUploader"
+                            placeholder="{i18n>retroChooseFile}"
+                            width="250px"
+                            fileType="docx"
+                            change=".onRetroTemplateFileChange"
+                            class="sapUiSmallMarginEnd"
+                            buttonText=""
+                            buttonOnly="false"
+                            icon="sap-icon://search"
+                            iconOnly="false"
+                        />
+                        <!-- Upload button - Added for template upload action -->
+                        <Button
+                            id="retroUploadBtn"
+                            icon="sap-icon://upload"
+                            text="{i18n>retroUpload}"
+                            type="Emphasized"
+                            press=".onRetroUploadTemplate"
+                            enabled="{retroTemplateModel>/uploadEnabled}"
+                        />
+                    </HBox>
+                </VBox>
+ 
+                <!-- Default Template Info Message - Added to show current default template -->
+                <HBox
+                    class="sapUiMediumMarginTop"
+                    alignItems="Center"
+                >
+                    <core:Icon
+                        src="sap-icon://message-information"
+                        color="#0854a0"
+                        class="sapUiSmallMarginEnd"
+                    />
+                    <Text
+                        text="{= ${retroTemplateModel>/selectedTemplateKey} === 'uploaded' &amp;&amp; ${retroTemplateModel>/hasUploadedTemplate} ? 'Using uploaded template: ' + ${retroTemplateModel>/uploadedTemplateFile} : 'Using default template: ' + ${retroTemplateModel>/defaultTemplateFile}}"
+                        class="sapUiTinyMarginBegin"
+                    />
+                </HBox>
+            </VBox>
+        </content>
+        <!-- Dialog Footer with Close button - Added for Retro Documentation -->
+        <endButton>
+            <Button
+                id="retroTemplateCloseBtn"
+                text="{i18n>retroClose}"
+                type="Emphasized"
+                press=".onRetroTemplateDialogClose"
+            />
+        </endButton>
+    </Dialog>
+</core:FragmentDefinition>
