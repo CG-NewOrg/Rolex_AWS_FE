@@ -50,6 +50,14 @@ background: #ffffff !important;
     margin: 5px;
     max-width: 80%;
 }
+.AIChatHistory {
+    background-color: #b4d2f1;
+    color: #000;
+    padding: 10px;
+    border-radius: 10px;
+    margin: 5px;
+    max-width: 80%;
+}
 .linkText {
     color:#0064d9;
     text-decoration-line: underline;
@@ -516,4 +524,41 @@ z-index: 10 !important;
     padding: 24px;
     background: #ffffff;
     color: #2f3c48;
+}
+
+/* ── Process Log horizontal row styles ── */
+.logItem {
+    min-height: 36px;
+    box-sizing: border-box;
+}
+
+.logSeq {
+    color: #6a6d70;
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.logTitle {
+    font-weight: 600;
+    color: #32363a;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logDetails {
+    color: #32363a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.logTime {
+    color: #32363a;
+    font-size: 0.75rem;
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
 }

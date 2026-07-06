@@ -3607,6 +3607,10 @@ sap.ui.define([
                 if (oDialog.isOpen && oDialog.isOpen()) {
                     return;
                 }
+                let oFileName = this.getView().getModel("fileViewModel").getProperty("/Name") || "";
+                let sFileExt = oFileName.split('.').pop().toLowerCase();
+                let bIsImage = ["png", "jpg", "jpeg"].includes(sFileExt);
+                oDialog.setVerticalScrolling(bIsImage);
                 oDialog.open();
             } finally {
                 this._bViewDocOpening = false;
@@ -9417,6 +9421,26 @@ sap.ui.define([
             oState.BSContent = oAppModel.getProperty("/BSContent") ?? "";
             oState.fileViewData = oFileVM.getData() ?? {};
 
+            // ── Retro Documentation: save full model snapshot ──
+            if (sKey === "retroDocKey") {
+                var oRetroDocModelSave = this.getView().getModel("retroDocModel");
+                if (oRetroDocModelSave) {
+                    oState.retroDocData = JSON.parse(JSON.stringify(oRetroDocModelSave.getData()));
+                }
+                var oDefModelSave = this.getView().getModel();
+                if (oDefModelSave) {
+                    oState.retroLogEntries       = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/logEntries")       || []));
+                    oState.retroDownloadItems    = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/downloadItems")    || []));
+                    oState.retroLogPanelVisible  = oDefModelSave.getProperty("/logPanelVisible")  !== undefined ? oDefModelSave.getProperty("/logPanelVisible")  : true;
+                    oState.retroDlPanelVisible   = !!oDefModelSave.getProperty("/downloadPanelVisible");
+                    oState.retroPipelineVisible  = !!oDefModelSave.getProperty("/agentPipelineVisible");
+                    oState.retroPipelineStatus   = oDefModelSave.getProperty("/agentPipelineStatus")   || "In Progress";
+                    oState.retroPipelineComplete = !!oDefModelSave.getProperty("/agentPipelineComplete");
+                    oState.retroAgentSteps       = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentSteps")       || []));
+                    oState.retroAgentConnectors  = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentConnectors")  || []));
+                }
+            }
+
             oTabs[sKey] = oState;
             oStateModel.setProperty("/tabs", oTabs);
         },
@@ -9429,6 +9453,33 @@ sap.ui.define([
             var oViewModel = this.getView().getModel("viewModel");
             var oDetailModel = this.getOwnerComponent().getModel("airesponseDetailModel");
             var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+
+            // ── Retro Documentation: restore full model snapshot and exit early ──
+            if (sKey === "retroDocKey") {
+                if (oState && oState.retroDocData) {
+                    var oRetroDocModelR = this.getView().getModel("retroDocModel");
+                    if (oRetroDocModelR) {
+                        var oRD = oState.retroDocData;
+                        oRD.isRetroDocVisible = true; // always visible when on this tab
+                        oRetroDocModelR.setData(oRD);
+                        oRetroDocModelR.refresh(true);
+                    }
+                    var oDefModelR = this.getView().getModel();
+                    if (oDefModelR) {
+                        oDefModelR.setProperty("/logEntries",          oState.retroLogEntries       || []);
+                        oDefModelR.setProperty("/downloadItems",       oState.retroDownloadItems    || []);
+                        oDefModelR.setProperty("/logPanelVisible",     oState.retroLogPanelVisible  !== undefined ? oState.retroLogPanelVisible : true);
+                        oDefModelR.setProperty("/downloadPanelVisible",!!oState.retroDlPanelVisible);
+                        oDefModelR.setProperty("/agentPipelineVisible",!!oState.retroPipelineVisible);
+                        oDefModelR.setProperty("/agentPipelineStatus", oState.retroPipelineStatus   || "In Progress");
+                        oDefModelR.setProperty("/agentPipelineComplete",!!oState.retroPipelineComplete);
+                        oDefModelR.setProperty("/agentSteps",          oState.retroAgentSteps       || []);
+                        oDefModelR.setProperty("/agentConnectors",     oState.retroAgentConnectors  || []);
+                        oDefModelR.refresh(true);
+                    }
+                }
+                return; // skip regular form-field restore for retro tab
+            }
 
             if (!oState || !oState.hasDetail) {
                 oDetailModel.setProperty("/resp", "");
@@ -11768,7 +11819,7 @@ sap.ui.define([
                     }
                 }
                 this.getView().byId("pctSysMsgBtn").setVisible(true);
-                this.onPctStepOutput(kbPayload.messages);
+                //this.onPctStepOutput(kbPayload.messages);
                 this.getView().byId("nextBtn").setVisible(true);
                 MessageBox.information(oBundle.getText("nextMsg"));
 
@@ -11976,7 +12027,7 @@ sap.ui.define([
                     }
                 }
                 this.getView().byId("pctSysMsgBtn").setVisible(true);
-                this.onPctStepOutput(kbPayload.messages);
+                //this.onPctStepOutput(kbPayload.messages);
                 this.getView().byId("nextBtn").setVisible(true);
                 MessageBox.information(oBundle.getText("nextMsg"));
 
@@ -13166,6 +13217,7 @@ sap.ui.define([
                 content: content || "",
                 type: type || "info",
                 time: this._getCurrentTimestamp(),
+                seq: aLog.length + 1,
                 hasViewButton: !!hasViewButton
             });
             oDefaultModel.setProperty("/logEntries", aLog);
@@ -15700,6 +15752,7 @@ sap.ui.define([
                 content: content || "",
                 type: type || "info",
                 time: sTime,
+                seq: aLog.length + 1,
                 hasViewButton: !!hasViewButton
             });
             oDefaultModel.setProperty("/logEntries", aLog);
@@ -15740,6 +15793,7 @@ sap.ui.define([
             if (iIndex >= 0) {
                 aLog[iIndex] = Object.assign({}, aLog[iIndex], oEntry);
             } else {
+                oEntry.seq = aLog.length + 1;
                 aLog.push(oEntry);
             }
 

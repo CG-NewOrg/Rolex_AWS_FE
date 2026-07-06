@@ -572,7 +572,7 @@
                             <!-- Agent Pipeline Visual - Shows icons with arrows -->
                         <Panel
                             id="agentPipelineSection"
-                            visible="{/agentPipelineVisible}"
+                            visible="false"
                             headerText="{i18n>agentPipeline}"
                             class="sapUiSmallMarginBottom">
                             <headerToolbar>
@@ -634,6 +634,8 @@
                                 id="logPanel"
                                 visible="{/logPanelVisible}"
                                 headerText="{i18n>processLog}"
+                                expandable="true"
+                                expanded="true"
                                 class="sapUiSmallMarginBottom">
                                 <headerToolbar>
                                     <OverflowToolbar>
@@ -650,22 +652,29 @@
                                         showSeparators="Inner"
                                         class="processLogBody">
                                         <CustomListItem>
-                                            <HBox alignItems="Start" class="sapUiSmallMargin logItem">
+                                            <HBox alignItems="Center" width="100%" class="sapUiTinyMarginBeginEnd sapUiTinyMarginTopBottom logItem">
+                                            <Text text="#{seq}" class="logSeq sapUiTinyMarginEnd" wrapping="false" width="32px" />
                                                 <core:Icon
                                                     src="{= ${type} === 'success' ? 'sap-icon://accept' : (${type} === 'error' ? 'sap-icon://error' : (${type} === 'processing' ? 'sap-icon://synchronize' : 'sap-icon://hint'))}"
                                                     color="{= ${type} === 'success' ? '#107E3E' : (${type} === 'error' ? '#BB0000' : (${type} === 'processing' ? '#E9730C' : '#0A6ED1'))}"
-                                                    class="sapUiSmallMarginEnd" />
-                                                <VBox class="sapUiSmallMarginEnd" width="100%">
-                                                    <Text text="{title}" class="logTitle" />
-                                                    <Text text="{content}" class="logDetails" />
-                                                </VBox>
-                                                <Text text="{time}" class="logTime" />
+                                                    class="sapUiTinyMarginEnd" />
+                                                <Text text="{title}" class="logTitle sapUiTinyMarginEnd" wrapping="false" width="85px" />
+                                                <Text text="{content}" class="logDetails sapUiTinyMarginEnd" wrapping="false">
+                                                    <layoutData><FlexItemData growFactor="1" shrinkFactor="1" /></layoutData>
+                                                </Text>
+                                                <Text text="{time}" class="logTime sapUiTinyMarginBegin" wrapping="false" width="110px">
+                                                    <layoutData><FlexItemData shrinkFactor="0" /></layoutData>
+                                                </Text>
+                                                <!-- Fixed-width placeholder keeps timestamp column aligned on ALL rows -->
+                                                <HBox width="36px" alignItems="Center" justifyContent="Center">
+                                                    <layoutData><FlexItemData shrinkFactor="0" /></layoutData>
                                                 <Button
                                                     visible="{hasViewButton}"
-                                                    text="{i18n>view}"
+                                                    icon="sap-icon://display"
                                                     type="Transparent"
-                                                    press=".onViewLogItem"
-                                                    class="sapUiTinyMarginBegin" />
+                                                    tooltip="View Document"
+                                                    press=".onViewLogItem" />
+                                                </HBox>
                                             </HBox>
                                         </CustomListItem>
                                     </List>
@@ -697,11 +706,11 @@
                                                     <Text text="{filename}" class="downloadFile" />
                                                 </VBox>
                                                 <Button
-                                                    text="{i18n>view}"
+                                                    text="View"
                                                     type="Transparent"
                                                     press=".onViewDocument" />
                                                 <Button
-                                                    text="{i18n>download}"
+                                                    text="Download"
                                                     icon="sap-icon://download"
                                                     type="Emphasized"
                                                     press=".onDownloadDocument"

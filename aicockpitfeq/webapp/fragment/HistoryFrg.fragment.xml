@@ -7,23 +7,35 @@
     xmlns:layout="sap.ui.layout"
 >
     <Dialog
-        resizable="false"
+        resizable="true"
         stretch="false"
-        contentWidth="83%"
+        contentWidth="65%"
+        contentHeight="70%"
         title="{i18n>history}"
+        verticalScrolling="true"
     >
-        <VBox class="sapUiTinyMargin">           
-                    <List items="{histM>/historyData}">
-                        <items>
-                            <StandardListItem
-                                title="Prompt: {histM>promptHistory}"
-                                description="AI Response: {path:'histM>aiResponseHistory'}"
-                                wrapping="true"
-                                wrapCharLimit="800"
-                            />
-                        </items>
-                    </List>
-
+        <VBox class="sapUiTinyMargin">
+            <List items="{histM>/historyData}" showSeparators="None" backgroundDesign="Transparent">
+                <items>
+                    <CustomListItem>
+                        <VBox class="sapUiSmallMargin">
+                            <VBox justifyContent="End" alignItems="End" class="sapUiSmallMarginEnd">
+                                <Label text="Prompt:" design="Bold" class="sapUiTinyMarginBottom"/>
+                                <Text text="{= ${histM>promptHistory} ? ${histM>promptHistory} : 'No Prompt'}" class="Human sapUiTinyMargin"/>
+                            </VBox>
+                            <VBox class="sapUiTinyMarginTop">
+                                <Label text="AI Response:" design="Bold" class="sapUiTinyMarginBottom"/>
+                                <VBox class="AIChatHistory">
+                                    <core:HTML
+                                        sanitizeContent="false"
+                                        content="{ path: 'histM>aiResponseHistory', formatter: '.formatter.mdToHTML' }"
+                                    />
+                                </VBox>
+                            </VBox>
+                        </VBox>
+                    </CustomListItem>
+                </items>
+            </List>
         </VBox>
         <footer>
             <Toolbar>
