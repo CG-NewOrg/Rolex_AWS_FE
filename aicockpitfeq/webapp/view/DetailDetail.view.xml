@@ -180,8 +180,8 @@
                         icon="sap-icon://upload-to-cloud"
                         press=".onPushToS4T"
                         class="sapUiTinyMarginTop"
-                        enabled="{airesponseDetailModel>/downloadVis}"
-                        visible="{airesponseDetailModel>/downloadVis}"
+                        enabled="{= ${airesponseDetailModel>/downloadVis} &amp;&amp; ${viewModel>/useMCP} }"
+                        visible="{= ${airesponseDetailModel>/downloadVis} &amp;&amp; ${viewModel>/useMCP} }"
                     />
                     <Button
                         text="{i18n>history}"

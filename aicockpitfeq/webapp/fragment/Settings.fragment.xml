@@ -9,51 +9,81 @@
      	<VBox class="sapUiSmallMargin">
   		<Title text="Temperature" class="sapUiSmallMarginBegin" />
             <HBox>
-                <Slider value="{path:'viewModel>/comnPopUpModelParamTemp', type:'sap.ui.model.type.Float'}"
+                <!-- <Slider value="{path:'viewModel>/comnPopUpModelParamTemp', type:'sap.ui.model.type.Float'}"
                         class="sapUiSmallMarginBegin" width="100%" min="0" max="1" step="0.01"
                         showAdvancedTooltip="true" showHandleTooltip="false" inputsAsTooltips="true"
                         change=".onSliderChangeTempartre" />
                 <Input type="Number" value="{path:'viewModel>/comnPopUpModelParamTemp', type:'sap.ui.model.type.Float'}"
-                       class="sapUiSmallMarginBegin" width="40%" />
+                       class="sapUiSmallMarginBegin" width="40%" /> -->
+                         <Slider value="{path:'settingsModel>/comnPopUpModelParamTemp', type:'sap.ui.model.type.Float'}"
+                        class="sapUiSmallMarginBegin" width="100%" min="0" max="{path:'settingsModel>/comnPopUpModelParamTemp', type:'sap.ui.model.type.Float'}" step="0.01"
+                        showAdvancedTooltip="true" showHandleTooltip="false" inputsAsTooltips="true"
+                        change=".onSliderChangeTempartre" visible="{settingsModel>/tempVis}"/>
+                <Input type="Number" value="{path:'settingsModel>/comnPopUpModelParamTemp', type:'sap.ui.model.type.Float'}"
+                       class="sapUiSmallMarginBegin" width="40%" visible="{settingsModel>/tempVis}"/>
             </HBox>
 			<Title text="Top Probabilities" class="sapUiSmallMarginBegin" />
             <HBox>
-                <Slider value="{path:'viewModel>/comnPopUpModelParamTopP', type:'sap.ui.model.type.Float'}"
+                <!-- <Slider value="{path:'viewModel>/comnPopUpModelParamTopP', type:'sap.ui.model.type.Float'}"
                         width="100%" min="0" max="1" step="0.01" showAdvancedTooltip="true"
                         showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
                         change=".onSliderChangeTopProblity" />
                 <Input type="Number" value="{path:'viewModel>/comnPopUpModelParamTopP', type:'sap.ui.model.type.Float'}"
-                       class="sapUiSmallMarginBegin" width="40%" />
+                        class="sapUiSmallMarginBegin" width="40%" /> -->
+                         <Slider value="{path:'settingsModel>/comnPopUpModelParamTopP', type:'sap.ui.model.type.Float'}"
+                        width="100%" min="0" max="{path:'settingsModel>/comnPopUpModelParamTopP', type:'sap.ui.model.type.Float'}" step="0.01" showAdvancedTooltip="true"
+                        showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
+                        change=".onSliderChangeTopProblity" visible="{settingsModel>/topPVis}"/>
+                <Input type="Number" value="{path:'settingsModel>/comnPopUpModelParamTopP', type:'sap.ui.model.type.Float'}"
+                       class="sapUiSmallMarginBegin" width="40%" visible="{settingsModel>/topPVis}"/>
             </HBox>
  
             <Title text="Max Response (Tokens)" class="sapUiSmallMarginBegin" visible="{= ${appModel>/bAiAssistant} === false}" />
             <HBox visible="{= ${appModel>/bAiAssistant} === false}">
-                <Slider value="{path:'viewModel>/comnPopUpModelParamMaxLength', type:'sap.ui.model.type.Integer'}"
+                <!-- <Slider value="{path:'viewModel>/comnPopUpModelParamMaxLength', type:'sap.ui.model.type.Integer'}"
                         width="100%" min="0" max="32000" step="1" showAdvancedTooltip="true"
                         showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
                         change=".onSliderChangeParamMaxLength" />
                 <Input type="Number" value="{path:'viewModel>/comnPopUpModelParamMaxLength', type:'sap.ui.model.type.Integer'}"
-                       class="sapUiSmallMarginBegin" width="40%" />
+                       class="sapUiSmallMarginBegin" width="40%" /> -->
+                           <Slider value="{path:'settingsModel>/comnPopUpModelParamMaxLength', type:'sap.ui.model.type.Integer'}"
+                        width="100%" min="0" max="{path:'settingsModel>/maxValue', type:'sap.ui.model.type.Integer'}" step="1" showAdvancedTooltip="true"
+                        showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
+                        change=".onSliderChangeParamMaxLength" visible="{settingsModel>/maxLengthVis}" />
+                <Input type="Number" value="{path:'settingsModel>/comnPopUpModelParamMaxLength', type:'sap.ui.model.type.Integer'}"
+                       class="sapUiSmallMarginBegin" width="40%" visible="{settingsModel>/maxLengthVis}"/>
             </HBox>
  
             <Title text="Frequency Penalty" class="sapUiSmallMarginBegin" visible="{= ${appModel>/bAiAssistant} === false}" />
             <HBox visible="{= ${appModel>/bAiAssistant} === false}">
-                <Slider value="{path:'viewModel>/comnPopUpModelParamFreqP', type:'sap.ui.model.type.Float'}"
+                <!-- <Slider value="{path:'viewModel>/comnPopUpModelParamFreqP', type:'sap.ui.model.type.Float'}"
                         width="100%" min="0" max="2" step="0.01" showAdvancedTooltip="true"
                         showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
                         change=".onSliderChangeParamFreqP" />
                 <Input type="Number" value="{path:'viewModel>/comnPopUpModelParamFreqP', type:'sap.ui.model.type.Float'}"
-                       class="sapUiSmallMarginBegin" width="40%" />
+                       class="sapUiSmallMarginBegin" width="40%" /> -->
+                        <Slider value="{path:'settingsModel>/comnPopUpModelParamFreqP', type:'sap.ui.model.type.Float'}"
+                        width="100%" min="0" max="{path:'settingsModel>/comnPopUpModelParamFreqP', type:'sap.ui.model.type.Float'}" step="0.01" showAdvancedTooltip="true"
+                        showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
+                        change=".onSliderChangeParamFreqP" visible="{settingsModel>/freqPVis}"  />
+                <Input type="Number" value="{path:'settingsModel>/comnPopUpModelParamFreqP', type:'sap.ui.model.type.Float'}"
+                       class="sapUiSmallMarginBegin" width="40%" visible="{settingsModel>/freqPVis}" />
             </HBox>
  
             <Title text="Presence Penalty" class="sapUiSmallMarginBegin" visible="{= ${appModel>/bAiAssistant} === false}" />
             <HBox visible="{= ${appModel>/bAiAssistant} === false}">
-                <Slider value="{path:'viewModel>/comnPopUpModelParamPresenceP', type:'sap.ui.model.type.Float'}"
+                <!-- <Slider value="{path:'viewModel>/comnPopUpModelParamPresenceP', type:'sap.ui.model.type.Float'}"
                         width="100%" min="0" max="2" step="0.01" showAdvancedTooltip="true"
                         showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
                         change=".onSliderChangeParamPresenceP" />
                 <Input type="Number" value="{path:'viewModel>/comnPopUpModelParamPresenceP', type:'sap.ui.model.type.Float'}"
-                       class="sapUiSmallMarginBegin" width="40%" />
+                       class="sapUiSmallMarginBegin" width="40%" /> -->
+                       <Slider value="{path:'settingsModel>/comnPopUpModelParamPresenceP', type:'sap.ui.model.type.Float'}"
+                        width="100%" min="0" max="{path:'settingsModel>/comnPopUpModelParamPresenceP', type:'sap.ui.model.type.Float'}" step="0.01" showAdvancedTooltip="true"
+                        showHandleTooltip="false" inputsAsTooltips="true" class="sapUiSmallMarginBegin"
+                        change=".onSliderChangeParamPresenceP" visible="{settingsModel>/presPVis}" />
+                <Input type="Number" value="{path:'settingsModel>/comnPopUpModelParamPresenceP', type:'sap.ui.model.type.Float'}"
+                       class="sapUiSmallMarginBegin" width="40%" visible="{settingsModel>/presPVis}" />
             </HBox>
  
             <Title text="Context History" class="sapUiSmallMarginBegin" visible="{= ${appModel>/bAiAssistant} === false}" />

@@ -17,7 +17,9 @@ sap.ui.define([
             ]
         },
         defaultHeaders: {
-            "AI-Resource-Group": "default"
+            "AI-Resource-Group": "default",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         },
         init() {
             // call the base component's init function
@@ -114,6 +116,9 @@ sap.ui.define([
             this.getFoundationModels();
             this.checkRoles();
             this.getUserinfo();
+            const sComponentName = this.getManifestObject().getComponentName();
+            const sInitBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
+            models.getOrchestrationDeploymentId(sInitBasePath);
         },
 
         _onBeforeRouteMatched: function (oEvent) {
@@ -273,29 +278,125 @@ sap.ui.define([
                         });
                     }
 
-                    const tabs = [
+                    const allModels = data?.resources || data?.models || data || [];
+                    let orchestrationModels = [];
+                    if (Array.isArray(allModels)) {
+                        orchestrationModels = allModels
+                            .filter(function (model) {
+                                const modelName = (model.model || model.name || "").toLowerCase();
+                                const isEmbeddingModel = modelName.includes("embed") || modelName.includes("embedding");
+
+                                const versions = Array.isArray(model.versions) ? model.versions : [];
+                                const hasNonDeprecatedVersion = versions.some(function (v) {
+                                    return v && (v.deprecated === false || v.deprecated === "false");
+                                });
+
+                                const allowed = Array.isArray(model.allowedScenarios) ? model.allowedScenarios : [];
+                                const isOrchestrationAllowed = allowed.some(function (s) {
+                                    if (!s) { return false; }
+                                    if (typeof s === "string") {
+                                        return s.toLowerCase() === "orchestration";
+                                    }
+                                    const sid = (s.scenarioId || s.id || "").toLowerCase();
+                                    return sid === "orchestration";
+                                });
+
+                                return !isEmbeddingModel && hasNonDeprecatedVersion && isOrchestrationAllowed;
+                            })
+                            .map(function (model) {
+                                const nonDeprecatedVersions = (Array.isArray(model.versions) ? model.versions : []).filter(function (v) {
+                                    return v && (v.deprecated === false || v.deprecated === "false");
+                                });
+
+                                const firstVer = nonDeprecatedVersions && nonDeprecatedVersions[0] ? (nonDeprecatedVersions[0].name || nonDeprecatedVersions[0].version || "") : "";
+                                const sModelName = model.model || model.name || model.modelName || "";
+                                const key = sModelName;
+                                const label = sModelName;
+
+                                const sModelNameLower = sModelName.toLowerCase();
+                                const sExecIdLower = (model.executableId || "").toLowerCase();
+                                let aiType = "Others";
+                                if (sModelNameLower.includes("gpt") || sModelNameLower.includes("o3") || sModelNameLower.includes("o4")) {
+                                    aiType = "GPT";
+                                } else if (sModelNameLower.includes("mistral")) {
+                                    aiType = "Mistral";
+                                } else if (sModelNameLower.includes("claude") || sModelNameLower.includes("anthropic")) {
+                                    aiType = "Anthropic";
+                                } else if (sModelNameLower.includes("amazon") || sModelNameLower.includes("nova")) {
+                                    aiType = "Amazon";
+                                } else if (sModelNameLower.includes("gemini")) {
+                                    aiType = "Google";
+                                } else if (sModelNameLower.includes("sonar") || sExecIdLower.includes("perplexity")) {
+                                    aiType = "Perplexity";
+                                } else if (sModelNameLower.includes("cohere")) {
+                                    aiType = "Cohere";
+                                } else if (sModelNameLower.includes("sap")) {
+                                    aiType = "SAP";
+                                }
+
+                                return {
+                                    key: key,
+                                    text: label,
+                                    label: label,
+                                    aiType: aiType,
+                                    name: sModelName,
+                                    executableId: model.executableId,
+                                    description: model.description,
+                                    versions: nonDeprecatedVersions,
+                                    provider: model.provider,
+                                    displayName: model.displayName,
+                                    isOrchestrationCompatible: true,
+                                    contextLength: nonDeprecatedVersions[0] ? nonDeprecatedVersions[0].contextLength : 0,
+                                    streamingSupported: nonDeprecatedVersions[0] ? !!nonDeprecatedVersions[0].streamingSupported : false
+                                };
+                            })
+                            .filter(function (m) { return m.name; });
+                    }
+
+                    let sDefaultKey = "";
+                    if (orchestrationModels.length > 0) {
+                        let gpt4oModel = orchestrationModels.find(function (m) {
+                            return (m.key || "").toLowerCase() === "gpt-4o";
+                        });
+                        sDefaultKey = gpt4oModel ? gpt4oModel.key : orchestrationModels[0].key;
+                    }
+
+                    that.setModel(new sap.ui.model.json.JSONModel({ items: orchestrationModels, selectedKey: sDefaultKey }), "OrchestrationModels");
+
+                    const apiVersion = (data && data.sqlResponse && data.sqlResponse.APIVERSION) || data?.APIVERSION || "";
+                    that.setModel(new sap.ui.model.json.JSONModel({ apiVersion: apiVersion }), "LMApiInfo");
+
+                    that.foundationModelTabs(tokenData,data);
+                    
+                })
+                .catch(function (error) {
+                    console.error("API Error:", error);
+                    throw error;
+                });
+        },
+         foundationModelTabs: function(tokenData,data){
+            let that=this;
+                const tabs = [
                         "BS", "User", "fstoconf", "fstots", "tstocode", "tstocodeGit",
                         "coderem", "codesum", "TUT", "BPM", "TCG", "PCT", "DocGen", "RetroDoc"
                     ];
-
+ 
                     const tokenConfigByTab = {};
                     tabs.forEach(tab => {
                         tokenConfigByTab[tab] = { ...tokenData };
                     });
-
+ 
                     tokenConfigByTab.tokenVis = false;
                     tokenConfigByTab.usedToken = "";
-
+ 
                     let oTokenModel = new sap.ui.model.json.JSONModel();
                     oTokenModel.setData(tokenConfigByTab);
                     that.setModel(oTokenModel, "TokenLimit");
                     that.getModel("TokenLimit").refresh();
-
+ 
                     // Bind full foundation models response for UI consumption
                     let fmRaw = new sap.ui.model.json.JSONModel(data);
                     that.setModel(fmRaw, "FoundationModelsRaw");
-
-                    // Flatten for simple list/table/dropdown bindings
                     let fmList = (Array.isArray(data.resources) ? data.resources : []).map(function (r) {
                         let v = (r.versions && r.versions[0]) || {};
                         return {
@@ -314,15 +415,6 @@ sap.ui.define([
                         };
                     });
                     that.setModel(new sap.ui.model.json.JSONModel({ items: fmList }), "FoundationModels");
-
-                    // eslint-disable-next-line no-console
-                    console.log("Token Data:", tokenConfigByTab);
-                })
-                .catch(function (error) {
-                    // eslint-disable-next-line no-console
-                    console.error("API Error:", error);
-                    throw error;
-                });
         },
 
     });

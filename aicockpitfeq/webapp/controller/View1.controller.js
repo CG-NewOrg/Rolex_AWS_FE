@@ -89,7 +89,10 @@ sap.ui.define([
             var vFlagMod = this.getOwnerComponent().getModel("flagModel");
             this.getView().setModel(vFlagMod, "vFlagMod");
 
-          //  this.getView().byId("selModel").setSelectedKey("M1");
+
+            this.getView().byId("selModel").setSelectedKey("gpt-4o");
+            let settingsModel = models.aiModelDefaultPayload("gpt-4o");
+            this.getView().setModel(settingsModel, "settingsModel");
             ///for select list
             ////models
             var scenarioEn = models.createJSONModel(this, "addPrmOpen");
@@ -333,21 +336,21 @@ sap.ui.define([
             };
             if (popUpSel == "" || popUpSel == "knowlBAdmin") {
                 BusyIndicator.show();
- 
+
                 let sSelectedIconTab = ""
                 if (selDLTab && selDLTab !== "") {
                     sSelectedIconTab = selDLTab;
                 } else {
                     sSelectedIconTab = this.selectedKeyFunct();
                 }
- 
+
                 let bRagEnabled = this.getView().byId("RagSwitch").getSelected()
                 if (bRagEnabled) {
                     this.KBGetFiles(sSelectedIconTab);  //RAG function call
                 } else {
- 
+
                     let listObjectsUrl = this._sBasePath + "/cockpit/getFiles?Category=" + sSelectedIconTab + "&Project=" + this._ProjectDetail;
- 
+
                     let that = this;
                     $.ajax({
                         url: listObjectsUrl,
@@ -367,7 +370,7 @@ sap.ui.define([
                                     }));
                                 }
                             }
- 
+
                             ObjectStorageFile.setData(fileNames);
                             that.getView().setModel(ObjectStorageFile, "ObjectFileList");
                             BusyIndicator.hide();
@@ -552,151 +555,151 @@ sap.ui.define([
             var that = this;
             this.onRefresh();
             // Load deployments
-            that.callChatGPTModel();
+            // that.callChatGPTModel();
             ///for switching between system and prompt fragment
             var switchTempModel = models.createJSONModel(this, "switchTemp");
             this.getView().setModel(switchTempModel, "switchTempModel");
 
         },
-        callChatGPTModel: async function () {
-            BusyIndicator.show();
-            var that = this;
-            var oPayload = {
-                User_Email_Id: this._loggedInUser,
-                userName: this._loggedInUserName
-            };
-            var payload = { payload: oPayload };
-            var sUrl = this._sBasePath + "/cockpit/getDeployments";
+        // callChatGPTModel: async function () {
+        //     BusyIndicator.show();
+        //     var that = this;
+        //     var oPayload = {
+        //         User_Email_Id: this._loggedInUser,
+        //         userName: this._loggedInUserName
+        //     };
+        //     var payload = { payload: oPayload };
+        //     var sUrl = this._sBasePath + "/cockpit/getDeployments";
 
-            $.ajax({
-                url: sUrl,
-                method: "POST",
-                contentType: "application/json",
-                data: JSON.stringify(payload),
-                success: async function (data, status, xhr) {
-                    if (data.value.status && data.value.status == 400) {
-                        if (!that.prjUserNotFound) {
-                            that.prjUserNotFound = await that.loadFragment({
-                                name: "aicockpitfeq.fragment.ProjectList"
-                            }).then(function (oDialog) {
-                                that.prjUserNotFound = oDialog;
-                                this.prjUserNotFound.attachBrowserEvent("keydown", function (oEvent) {
-                                    if (oEvent.key === "Escape") {
-                                        oEvent.stopPropagation();
-                                        oEvent.preventDefault();
-                                    }
-                                });
-                                //  that.getView().byId("projectList").setVisible(false);
-                                that.getView().getModel("prjModel").setProperty("/userDBnotAddedVis", true);
-                                that.getView().getModel("prjModel").setProperty("/userDBnotAddedTxt", data.value.message);
-                                // that.getView().byId("userDBnotAddedTxt").setVisible(true);
-                                // that.getView().byId("userDBnotAddedTxt").setText(data.value.message);
-                                oDialog.open();
-                                BusyIndicator.hide();
-                            }.bind(that));
-                        } else {
-                            BusyIndicator.hide();
-                        }
-                    } else {
-                        var oPrjModel = that.getView().getModel("prjModel");
-                        var aProjects = oPrjModel ? oPrjModel.getProperty("/projects") : [];
-                        if (aProjects && aProjects.length > 0) {
-                            oPrjModel.setProperty("/userDBnotAddedVis", false);
-                            oPrjModel.setProperty("/userDBnotAddedTxt", "");
-                        }
-                        var aresult = data.value.result;
-                        that.sApiUrl = aresult.sqlResponse.APIVERSION;
-                        var allowedModels = [
-                            "gpt-5",
-                            "gpt-4o",
-                            "anthropic--claude-3.5-sonnet",
-                            "mistralai--mistral-small-instruct",
-                            "mistralai--mistral-large-instruct",
-                            "anthropic--claude-4.5-opus"
-                        ];
+        //     $.ajax({
+        //         url: sUrl,
+        //         method: "POST",
+        //         contentType: "application/json",
+        //         data: JSON.stringify(payload),
+        //         success: async function (data, status, xhr) {
+        //             if (data.value.status && data.value.status == 400) {
+        //                 if (!that.prjUserNotFound) {
+        //                     that.prjUserNotFound = await that.loadFragment({
+        //                         name: "aicockpitfeq.fragment.ProjectList"
+        //                     }).then(function (oDialog) {
+        //                         that.prjUserNotFound = oDialog;
+        //                         this.prjUserNotFound.attachBrowserEvent("keydown", function (oEvent) {
+        //                             if (oEvent.key === "Escape") {
+        //                                 oEvent.stopPropagation();
+        //                                 oEvent.preventDefault();
+        //                             }
+        //                         });
+        //                         //  that.getView().byId("projectList").setVisible(false);
+        //                         that.getView().getModel("prjModel").setProperty("/userDBnotAddedVis", true);
+        //                         that.getView().getModel("prjModel").setProperty("/userDBnotAddedTxt", data.value.message);
+        //                         // that.getView().byId("userDBnotAddedTxt").setVisible(true);
+        //                         // that.getView().byId("userDBnotAddedTxt").setText(data.value.message);
+        //                         oDialog.open();
+        //                         BusyIndicator.hide();
+        //                     }.bind(that));
+        //                 } else {
+        //                     BusyIndicator.hide();
+        //                 }
+        //             } else {
+        //                 var oPrjModel = that.getView().getModel("prjModel");
+        //                 var aProjects = oPrjModel ? oPrjModel.getProperty("/projects") : [];
+        //                 if (aProjects && aProjects.length > 0) {
+        //                     oPrjModel.setProperty("/userDBnotAddedVis", false);
+        //                     oPrjModel.setProperty("/userDBnotAddedTxt", "");
+        //                 }
+        //                 var aresult = data.value.result;
+        //                 that.sApiUrl = aresult.sqlResponse.APIVERSION;
+        //                 var allowedModels = [
+        //                     "gpt-5",
+        //                     "gpt-4o",
+        //                     "anthropic--claude-3.5-sonnet",
+        //                     "mistralai--mistral-small-instruct",
+        //                     "mistralai--mistral-large-instruct",
+        //                     "anthropic--claude-4.5-opus"
+        //                 ];
 
-                        var updatedGptModels = data.value.result.deployments.map(function (modelName) {
-                            var modelType = "";
-                            var sModelName =
-                                modelName?.details?.resources?.backendDetails?.model?.name ||
-                                modelName?.details?.resources?.backend_details?.model?.name ||
-                                modelName?.configurationName ||
-                                modelName?.scenarioId ||
-                                modelName?.id;
-                            var sConfigName = modelName?.configurationName?.toLowerCase() || "";
-                            if (sConfigName.includes("gpt")) {
-                                modelType = "GPT";
-                            } else if (sConfigName.includes("mistral")) {
-                                modelType = "Mistral";
-                            } else if (sConfigName.includes("claude") || sConfigName.includes("sonnet")) {
-                                modelType = "Anthropic";
-                            }
-                            else if (sConfigName.includes("amazon")) {
-                                modelType = "Amazon";
-                            } else {
-                                modelType = "Others";
-                            }
-                            return {
-                                key: modelName.id,
-                                text: sModelName,
-                                aiType: modelType
-                            };
-                        });
-                        that.SelectedModel = updatedGptModels[0].text.configurationName;
-                        var oViewModel = that.getView().getModel("viewModel");
-                        oViewModel.setProperty("/gptModels", updatedGptModels);
-                        that.allAIModels = updatedGptModels;
-                        that.getView().byId("selModel").setSelectedKey("d5c02aa14db581a4");
-                        that.getView().byId("selModelRetro").setSelectedKey(updatedGptModels[0].key);
-                        var apiUrl = this._sBasePath + "/deployments/" + updatedGptModels[0].key + "/chat/completions?api-version=" + that.sApiUrl;
+        //                 var updatedGptModels = data.value.result.deployments.map(function (modelName) {
+        //                     var modelType = "";
+        //                     var sModelName =
+        //                         modelName?.details?.resources?.backendDetails?.model?.name ||
+        //                         modelName?.details?.resources?.backend_details?.model?.name ||
+        //                         modelName?.configurationName ||
+        //                         modelName?.scenarioId ||
+        //                         modelName?.id;
+        //                     var sConfigName = modelName?.configurationName?.toLowerCase() || "";
+        //                     if (sConfigName.includes("gpt")) {
+        //                         modelType = "GPT";
+        //                     } else if (sConfigName.includes("mistral")) {
+        //                         modelType = "Mistral";
+        //                     } else if (sConfigName.includes("claude") || sConfigName.includes("sonnet")) {
+        //                         modelType = "Anthropic";
+        //                     }
+        //                     else if (sConfigName.includes("amazon")) {
+        //                         modelType = "Amazon";
+        //                     } else {
+        //                         modelType = "Others";
+        //                     }
+        //                     return {
+        //                         key: modelName.id,
+        //                         text: sModelName,
+        //                         aiType: modelType
+        //                     };
+        //                 });
+        //                 that.SelectedModel = updatedGptModels[0].text.configurationName;
+        //                 var oViewModel = that.getView().getModel("viewModel");
+        //                 oViewModel.setProperty("/gptModels", updatedGptModels);
+        //                 that.allAIModels = updatedGptModels;
+        //                 that.getView().byId("selModel").setSelectedKey("d5c02aa14db581a4");
+        //                 that.getView().byId("selModelRetro").setSelectedKey(updatedGptModels[0].key);
+        //                 var apiUrl = this._sBasePath + "/deployments/" + updatedGptModels[0].key + "/chat/completions?api-version=" + that.sApiUrl;
 
-                        that.sUrl = {
-                            BSUrl: "",
-                            AIUrl: "",
-                            UserUrl: "",
-                            fstoconfUrl: "",
-                            fstotsUrl: "",
-                            tstocodeUrl: "",
-                            tstocodeGitUrl: "",
-                            coderemUrl: "",
-                            codesumUrl: ""
-                        };
+        //                 that.sUrl = {
+        //                     BSUrl: "",
+        //                     AIUrl: "",
+        //                     UserUrl: "",
+        //                     fstoconfUrl: "",
+        //                     fstotsUrl: "",
+        //                     tstocodeUrl: "",
+        //                     tstocodeGitUrl: "",
+        //                     coderemUrl: "",
+        //                     codesumUrl: ""
+        //                 };
 
-                        Object.keys(that.sUrl).forEach(key => {
-                            ////  that.sUrl[key] = apiUrl;
-                            that.sUrl[key] = updatedGptModels[0].key;
-                        });
+        //                 Object.keys(that.sUrl).forEach(key => {
+        //                     ////  that.sUrl[key] = apiUrl;
+        //                     that.sUrl[key] = updatedGptModels[0].key;
+        //                 });
 
-                        var aimodels = updatedGptModels[0].text;
-                        that.amodels = {
-                            gpt32kmodel: "",
-                            gpt4model: "",
-                            gpt4omodel: "",
-                            gpt35model: "",
-                            gptpractmodel: "",
-                            mistralmodel: "",
-                            sonnetmodel: "",
-                            textmodel: "",
-                            textv2model: ""
-                        };
-                        Object.keys(that.amodels).forEach(key => {
-                            that.amodels[key] = aimodels;
-                        });
-                        // that.getDataPromptMsg();
-                        BusyIndicator.hide();
-                    }
-                }.bind(this),
-                error: function (jqXhr, textStatus, errorMessage) {
-                    try {
-                        MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
-                    } catch (e) {
-                        MessageBox.error("Failed to load deployments: " + jqXhr.statusText);
-                    }
-                    BusyIndicator.hide();
-                }.bind(this)
-            });
+        //                 var aimodels = updatedGptModels[0].text;
+        //                 that.amodels = {
+        //                     gpt32kmodel: "",
+        //                     gpt4model: "",
+        //                     gpt4omodel: "",
+        //                     gpt35model: "",
+        //                     gptpractmodel: "",
+        //                     mistralmodel: "",
+        //                     sonnetmodel: "",
+        //                     textmodel: "",
+        //                     textv2model: ""
+        //                 };
+        //                 Object.keys(that.amodels).forEach(key => {
+        //                     that.amodels[key] = aimodels;
+        //                 });
+        //                 // that.getDataPromptMsg();
+        //                 BusyIndicator.hide();
+        //             }
+        //         }.bind(this),
+        //         error: function (jqXhr, textStatus, errorMessage) {
+        //             try {
+        //                 MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
+        //             } catch (e) {
+        //                 MessageBox.error("Failed to load deployments: " + jqXhr.statusText);
+        //             }
+        //             BusyIndicator.hide();
+        //         }.bind(this)
+        //     });
 
-        },
+        // },
         onListItemPress: async function (eveKey) {
             // start of madhu
             // saving tab tab
@@ -907,61 +910,65 @@ sap.ui.define([
                     this.getView().byId("addExBtn").setEnabled(false);
                     this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
-                }else if (eveKey.getParameters().item.getProperty("key") == "retroDocKey") {
-                this.getView().byId("selModelRetro").setSelectedKey("d5c02aa14db581a4");
-                this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
-                this.getView().getModel("switchFragments").refresh();
+                } else if (eveKey.getParameters().item.getProperty("key") == "retroDocKey") {
+                    var oOrchModel = this.getOwnerComponent().getModel("OrchestrationModels");
+                    var sRetroDefaultKey = oOrchModel ? oOrchModel.getProperty("/selectedKey") : "";
+                    if (sRetroDefaultKey) {
+                        this.getView().byId("selModelRetro").setSelectedKey(sRetroDefaultKey);
+                    }
+                    this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
+                    this.getView().getModel("switchFragments").refresh();
 
-                // Show Retro Documentation section by setting visibility flag to true
-                this.getView().getModel("retroDocModel").setProperty("/isRetroDocVisible", true);
+                    // Show Retro Documentation section by setting visibility flag to true
+                    this.getView().getModel("retroDocModel").setProperty("/isRetroDocVisible", true);
 
-                // Update timestamp for process log
-                this.getView().getModel("retroDocModel").setProperty("/logTimestamp", this._getCurrentTimestamp());
+                    // Update timestamp for process log
+                    this.getView().getModel("retroDocModel").setProperty("/logTimestamp", this._getCurrentTimestamp());
 
-                // Set the selected key in navigation list
-                this.getView().byId("navigationList").setSelectedKey("retroDocKey");
+                    // Set the selected key in navigation list
+                    this.getView().byId("navigationList").setSelectedKey("retroDocKey");
 
-                // Disable AI model selector as Retro Doc has its own
-                //this.getView().byId("selModel").setEnabled(false);
+                    // Disable AI model selector as Retro Doc has its own
+                    //this.getView().byId("selModel").setEnabled(false);
 
-                // ============================================================
-                // Set visibility for Retro Documentation panels
-                // These panels are only visible when retroDocKey is selected
-                // ============================================================
-                // Initialize or get the default model for panel visibility
-                var oDefaultModel = this.getView().getModel();
-                if (!oDefaultModel) {
-                    oDefaultModel = new sap.ui.model.json.JSONModel({});
-                    this.getView().setModel(oDefaultModel);
+                    // ============================================================
+                    // Set visibility for Retro Documentation panels
+                    // These panels are only visible when retroDocKey is selected
+                    // ============================================================
+                    // Initialize or get the default model for panel visibility
+                    var oDefaultModel = this.getView().getModel();
+                    if (!oDefaultModel) {
+                        oDefaultModel = new sap.ui.model.json.JSONModel({});
+                        this.getView().setModel(oDefaultModel);
+                    }
+
+                    // Set visibility for Agent Pipeline, Process Log, and Download panels
+                    // Pipeline should be shown only after Generate Documents is pressed
+                    oDefaultModel.setProperty("/agentPipelineVisible", false);
+                    oDefaultModel.setProperty("/logPanelVisible", true);
+                    oDefaultModel.setProperty("/downloadPanelVisible", false);
+
+                    // Initialize agent pipeline steps data
+                    oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
+                    oDefaultModel.setProperty("/agentPipelineComplete", false);
+                    oDefaultModel.setProperty("/agentSteps", [
+                        { status: "pending" },
+                        { status: "pending" },
+                        { status: "pending" },
+                        { status: "pending" }
+                    ]);
+                    oDefaultModel.setProperty("/agentConnectors", [
+                        { completed: false },
+                        { completed: false },
+                        { completed: false }
+                    ]);
+
+                    // Initialize log entries array
+                    oDefaultModel.setProperty("/logEntries", []);
+
+                    // Initialize download items array
+                    oDefaultModel.setProperty("/downloadItems", []);
                 }
-
-                // Set visibility for Agent Pipeline, Process Log, and Download panels
-                // Pipeline should be shown only after Generate Documents is pressed
-                oDefaultModel.setProperty("/agentPipelineVisible", false);
-                oDefaultModel.setProperty("/logPanelVisible", true);
-                oDefaultModel.setProperty("/downloadPanelVisible", false);
-
-                // Initialize agent pipeline steps data
-                oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
-                oDefaultModel.setProperty("/agentPipelineComplete", false);
-                oDefaultModel.setProperty("/agentSteps", [
-                    { status: "pending" },
-                    { status: "pending" },
-                    { status: "pending" },
-                    { status: "pending" }
-                ]);
-                oDefaultModel.setProperty("/agentConnectors", [
-                    { completed: false },
-                    { completed: false },
-                    { completed: false }
-                ]);
-
-                // Initialize log entries array
-                oDefaultModel.setProperty("/logEntries", []);
-
-                // Initialize download items array
-                oDefaultModel.setProperty("/downloadItems", []);
-            }
                 else {
 
                 }
@@ -2497,6 +2504,7 @@ sap.ui.define([
             this.getView().byId("addSysPrefix").setVisible(false);
             this.getView().byId("RagSwitch").setSelected(false);
             this.getView().byId("mcpToggle").setSelected(false);
+            this.getView().getModel("viewModel").setProperty("/selectedAbapObject", {});
             this.onRagToggle();
             this.getView().byId("descTxtArea").setValue("");
             this.getView().byId("multiInputPrompt").setValue("");
@@ -2793,12 +2801,18 @@ sap.ui.define([
         handleSaveParameterPopUp: function (oEvent) {
 
             // if (this.settingsFr) {
-            this._savedTemperature = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamTemp");
-            this._savedTopP = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamTopP");
-            this._maxResponse = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamMaxLength");
-            this._freqPenalty = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamFreqP");
-            this._prePenalty = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamPresenceP");
-            this._contextHist = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamContextHist");
+            // this._savedTemperature = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamTemp");
+            // this._savedTopP = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamTopP");
+            // this._maxResponse = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamMaxLength");
+            // this._freqPenalty = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamFreqP");
+            // this._prePenalty = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamPresenceP");
+            // this._contextHist = this.getView().getModel("viewModel").getProperty("/comnPopUpModelParamContextHist");
+            this._savedTemperature = this.getView().getModel("settingsModel").getProperty("/tempVis") ? this.getView().getModel("settingsModel").getProperty("/comnPopUpModelParamTemp") : null;
+            this._savedTopP = this.getView().getModel("settingsModel").getProperty("/topPVis") ? this.getView().getModel("settingsModel").getProperty("/comnPopUpModelParamTopP") : null;
+            this._maxResponse = this.getView().getModel("settingsModel").getProperty("/maxRespVis") ? this.getView().getModel("settingsModel").getProperty("/comnPopUpModelParamMaxLength") : null;
+            this._freqPenalty = this.getView().getModel("settingsModel").getProperty("/freqPVis") ? this.getView().getModel("settingsModel").getProperty("/comnPopUpModelParamFreqP") : null;
+            this._prePenalty = this.getView().getModel("settingsModel").getProperty("/presPVis") ? this.getView().getModel("settingsModel").getProperty("/comnPopUpModelParamPresenceP") : null;
+
             this.savedSettings = true;
             this.closeSysKeyFr();
             // } else {
@@ -2807,16 +2821,20 @@ sap.ui.define([
         },
         settingsRefresh: function () {
 
-            var oViewModel = this.getView().getModel("viewModel");
-            oViewModel.setProperty("/comnPopUpModelParamTemp", 0.7);
-            oViewModel.setProperty("/comnPopUpModelParamTopP", 0.95);
-            oViewModel.setProperty("/comnPopUpModelParamMaxLength", 4000);
-            oViewModel.setProperty("/comnPopUpModelParamFreqP", 0.1);
-            oViewModel.setProperty("/comnPopUpModelParamPresenceP", 0.1);
-            oViewModel.setProperty("/comnPopUpModelParamContextHist", 2);
-            oViewModel.setProperty("/SelectedStopSequence", "None");
-            oViewModel.setProperty("/TokenCount", 0);
-            oViewModel.refresh(true);
+            // var oViewModel = this.getView().getModel("viewModel");
+            // oViewModel.setProperty("/comnPopUpModelParamTemp", 0.7);
+            // oViewModel.setProperty("/comnPopUpModelParamTopP", 0.95);
+            // oViewModel.setProperty("/comnPopUpModelParamMaxLength", 4000);
+            // oViewModel.setProperty("/comnPopUpModelParamFreqP", 0.1);
+            // oViewModel.setProperty("/comnPopUpModelParamPresenceP", 0.1);
+            // oViewModel.setProperty("/comnPopUpModelParamContextHist", 2);
+            // oViewModel.setProperty("/SelectedStopSequence", "None");
+            // oViewModel.setProperty("/TokenCount", 0);
+            // oViewModel.refresh(true);
+            let selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
+            let settingsModel = models.aiModelDefaultPayload(selectedAI);
+            this.getView().setModel(settingsModel, "settingsModel");
+            this.savedSettings = false;
         },
         onSystemEdit: function () {
 
@@ -3170,8 +3188,12 @@ sap.ui.define([
         },
 
         selChangeDoc: function (eveSelVal) {
-            var that = this;
-            var _this = this;
+            let that = this;
+            let _this = this;
+            let aiModelName = this.getView().byId("selModel").getValue();
+            let apiModel = aiModelName;
+            let deploymentName = apiModel.split("/").pop();
+            let oFileUploader = this.getView().byId("fileUploader1");
             var busyDialog = new sap.m.BusyDialog();
             var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             if (bRagEnabled) {
@@ -3330,41 +3352,58 @@ sap.ui.define([
                             busyDialog.close();
                             return;
                         } else if (fileExtension === "png" || fileExtension === "jpeg" || fileExtension === "jpg") {
-                            that.getView().getModel("tcgModel").setProperty("/wordorExcel", "image");
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+                            if (deploymentName !== "gpt-4o" &&
+                                deploymentName !== "anthropic--claude-4.5-opus" &&
+                                deploymentName !== "anthropic--claude-4.5-sonnet" &&
+                                sSelectedIconTab !== "PCT" &&
+                                sSelectedIconTab !== "BPM") {
 
-                            // ✅ 1. Convert ArrayBuffer → Text (UTF‑8)
-                            let jsonText = new TextDecoder("utf-8").decode(data);
-
-                            // ✅ 2. Parse JSON
-                            let json;
-                            try {
-                                json = JSON.parse(jsonText);   // contains { value: "base64-string" }
-                            } catch (e) {
-                                console.error("Image JSON parse failed", e);
+                                oFileUploader.clear();
+                                that.getView().byId("docNameText").setVisible(false);
+                                that.getView().byId("viewDocBtn").setVisible(false);
+                                sap.m.MessageBox.information(
+                                    oBundle.getText("imageProcessingSupported")
+                                );
+                                that.getView().getModel("fileViewModel").setData([]);
+                                that.getView().getModel("fileViewModel").refresh();
                                 busyDialog.close();
-                                return;
-                            }
+                            } else {
+                                that.getView().getModel("tcgModel").setProperty("/wordorExcel", "image");
+                                that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
 
-                            // ✅ 3. Base64 data returned by backend
-                            const base64 = json.value;
+                                //  1. Convert ArrayBuffer → Text (UTF‑8)
+                                let jsonText = new TextDecoder("utf-8").decode(data);
 
-                            // ✅ 4. Create data URL
-                            const fileDataUrl = "data:image/" + fileExtension + ";base64," + base64;
-
-                            // ✅ 5. Set preview image in UI5 model
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
-
-                            // ✅ 6. Create payload object (like you did before)
-                            var imageObject = {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": fileDataUrl
+                                //  2. Parse JSON
+                                let json;
+                                try {
+                                    json = JSON.parse(jsonText);   // contains { value: "base64-string" }
+                                } catch (e) {
+                                    console.error("Image JSON parse failed", e);
+                                    busyDialog.close();
+                                    return;
                                 }
-                            };
 
-                            oModel.setProperty("/BSContent", [imageObject]);
-                            busyDialog.close();
+                                // ✅ 3. Base64 data returned by backend
+                                const base64 = json.value;
+
+                                // ✅ 4. Create data URL
+                                const fileDataUrl = "data:image/" + fileExtension + ";base64," + base64;
+
+                                // ✅ 5. Set preview image in UI5 model
+                                that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
+
+                                // ✅ 6. Create payload object (like you did before)
+                                var imageObject = {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": fileDataUrl
+                                    }
+                                };
+
+                                oModel.setProperty("/BSContent", [imageObject]);
+                                busyDialog.close();
+                            }
                         } else {
                             busyDialog.close();
                         }
@@ -5641,6 +5680,10 @@ sap.ui.define([
                         this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
                         MessageBox.error("Please Select a Prompt ID or Create a Prompt");
                         noGo = true;
+                    } else if (promptMsgData == "" && Array.isArray(aFileData) && (this.getView().byId("selModel").getValue() === "anthropic--claude-4.5-opus" || this.getView().byId("selModel").getValue() === "anthropic--claude-4.5-sonnet")) {
+                        this.getView().byId("multiInputPrompt").setValueState("Error");
+                        this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
+                        MessageBox.error("Please Select/Add a Prompt!");
                     } else {
                         this.MergeButtonTest1();
                         const oSideNavigation = this.byId("sideNavigation"),
@@ -5656,7 +5699,7 @@ sap.ui.define([
         MergeButtonTest1: function () {
             var that = this;
             var sSelectedIconTab = this.selectedKeyFunct();
- 
+
             // MCP routing: if MCP toggle is ON, scenario is code-related, and content is ABAP-related, route to ABAP MCP server
             var bUseMCP = this.getView().getModel("viewModel").getProperty("/useMCP");
             if (bUseMCP && (sSelectedIconTab === "tstocode" || sSelectedIconTab === "coderem" || sSelectedIconTab === "codesum")) {
@@ -5766,7 +5809,7 @@ sap.ui.define([
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
             var aiSelected = that.getView().byId("selModel").getSelectedKey();
             var aiModelName = that.getView().byId("selModel").getValue();
-            var apiUrl = Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl, this._sBasePath);
+            var apiUrl = await Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl, this._sBasePath);
             var contentPath = "/BSContent";
             var sContent = aModel.getProperty(contentPath); ///file path
             var oContent = "";
@@ -5807,8 +5850,12 @@ sap.ui.define([
             var oModel = this.getView().getModel("TokenLimit");
             var _this = this;
             var oViewModel = this.getView().getModel("viewModel");
-            var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
-            var payload = Utility.createPayloadBasedOnModel(aiModelName, aMessages, oViewModel, this);
+            let sett = this.getView().getModel("settingsModel");
+            let payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, sett, this);
+            let payload = Utility.createPayloadBasedOnModel(aiModelName, aMessages, sett, this);
+
+            // var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
+            // var payload = Utility.createPayloadBasedOnModel(aiModelName, aMessages, oViewModel, this);
             //var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
             BusyIndicator.show();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
@@ -7040,7 +7087,7 @@ sap.ui.define([
                                         sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
                                     }
 
-                                    
+
                                     busyDialog.close();
                                 }.bind(this));
                             }.bind(this));
@@ -7063,10 +7110,15 @@ sap.ui.define([
                 } else if (oFile.type == "image/png" || oFile.type === "image/jpeg" || oFile.type === "image/jpg") {
 
                     if (deploymentName !== "gpt-4o" &&
+                        deploymentName !== "anthropic--claude-4.5-opus" &&
+                        deploymentName !== "anthropic--claude-4.5-sonnet" &&
                         sSelectedIconTab !== "PCT" &&
                         sSelectedIconTab !== "BPM") {
                         oFileUploader.clear();
-                        sap.m.MessageBox.information(oBundle.getText("imageProcessingSupported"))
+                         that.getView().getModel("fileViewModel").setData([]);
+                        that.getView().getModel("fileViewModel").refresh();
+                        busyDialog.close();
+                        sap.m.MessageBox.information(oBundle.getText("imageProcessingSupported"));
                     } else {
                         //preview
                         var reader = new FileReader();
@@ -7547,7 +7599,7 @@ sap.ui.define([
             var finalText = "";
             var aiSelected = that.getView().byId("selModel").getSelectedKey();//
             var aiModelName = that.getView().byId("selModel").getValue(); //
-            var apiUrl4 = Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl, this._sBasePath);//
+            var apiUrl4 = await Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl, this._sBasePath);//
             var oPromptModel = this.getView().getModel("BSPromptData");
             if (sContent == undefined) {
                 sContent = null;
@@ -7599,15 +7651,16 @@ sap.ui.define([
                 aMessages = Utility.transformSysMsgforTScenarios(aMessages, sContent, promptMsgData, reupload, this.step, airesp, aMsgContentSystemDesc);
                 this.getView().getModel("msgModel").setProperty("/aMsg", aMessages);
             }
-            var histPayload = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
-            var payload1 = Utility.createPayloadBasedOnModel(aiModelName, aMessages, oViewModel, this);
+            let sett = this.getView().getModel("settingsModel");
+            let payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, sett, this);
+            let payload1 = Utility.createPayloadBasedOnModel(aiModelName, aMessages, sett, this);
 
-            //var histPayload = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
-            var payloadNonStream = histPayload;
+            // var histPayload = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
+            // var payload1 = Utility.createPayloadBasedOnModel(aiModelName, aMessages, oViewModel, this);
 
             // this.apiCall(apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData);
             await this.apiCall(apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData);
-            
+
         },
         apiCall: async function (apiUrl4, payload1, payloadNonStream, busyDialog, aiModelName, oModel, promptMsgData) {
             let oToken, usedToken;
@@ -7680,14 +7733,16 @@ sap.ui.define([
             } catch (error) {
                 busyDialog.close();
                 try {
-                    const responseMsg = await error.response?.json();
-                    if (responseMsg?.error?.code === "429") {
-                        sap.m.MessageBox.information(oBundle.getText("errorMsgManyRequest"));
+                    if (error && error._isStreamError) {
+                        sap.m.MessageBox.error(error.message);
+                    }
+                } catch (parseError) {
+                    if (error && error._isStreamError) {
+                        sap.m.MessageBox.error(error.message);
                     } else {
                         sap.m.MessageBox.information(oBundle.getText("openAIErrorMsg"));
                     }
-                } catch (parseError) {
-                    sap.m.MessageBox.information(oBundle.getText("openAIErrorMsg"));
+                    console.log(parseError);
                 }
 
                 console.error("API call failed:", error);
@@ -7733,7 +7788,7 @@ sap.ui.define([
             var finalText = "";
             var aiSelected = that.getView().byId("selModel").getSelectedKey();
             var aiModelName = that.getView().byId("selModel").getValue();
-            var apiUrl4 = Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl2 || this.sApiUrl, this._sBasePath);
+            var apiUrl4 = await Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl2 || this.sApiUrl, this._sBasePath);
             var oPromptModel = this.getView().getModel("BSPromptData");
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
             const {
@@ -7831,11 +7886,14 @@ sap.ui.define([
             var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
 
             this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
+            let sett = this.getView().getModel("settingsModel");
+            let payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, updatedaMsgs, sett, this);
+            const payload = Utility.createPayloadBasedOnModel(aiModelName, updatedaMsgs, sett, this);
 
 
-            var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, updatedaMsgs, oViewModel, this);
+            // var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, updatedaMsgs, oViewModel, this);
 
-            const payload = Utility.createPayloadBasedOnModel(aiModelName, updatedaMsgs, oViewModel, this);
+            // const payload = Utility.createPayloadBasedOnModel(aiModelName, updatedaMsgs, oViewModel, this);
 
             try {
                 const response = await fetch(apiUrl4, {
@@ -7891,14 +7949,22 @@ sap.ui.define([
                 // busyDialog.close();
                 try {
                     busyDialog.close();
-                    const responseMsg = await error.response?.json();
-                    if (responseMsg?.error?.code === "429") {
-                        sap.m.MessageBox.error(oBundle.getText("errorMsgManyRequest"));
+                    if (error && error._isStreamError) {
+                        sap.m.MessageBox.error(error.message);
+                    } else {
+                        const responseMsg = await error.response?.json();
+                        if (responseMsg?.error?.code === "429") {
+                            sap.m.MessageBox.error(oBundle.getText("errorMsgManyRequest"));
+                        } else {
+                            sap.m.MessageBox.error(oBundle.getText("openAIErrorMsg"));
+                        }
+                    }
+                } catch (parseError) {
+                    if (error && error._isStreamError) {
+                        sap.m.MessageBox.error(error.message);
                     } else {
                         sap.m.MessageBox.error(oBundle.getText("openAIErrorMsg"));
                     }
-                } catch (parseError) {
-                    sap.m.MessageBox.error(oBundle.getText("openAIErrorMsg"));
                 }
                 console.error("API call failed:", error);
             } finally {
@@ -7907,18 +7973,38 @@ sap.ui.define([
 
         },
 
+        // onAIselect: function (eve) {
+        //     var sSelectedIconTab = this.selectedKeyFunct();
+        //     let oBundle = this.getView().getModel("i18n").getResourceBundle();
+        //     let selectedAI = eve.getSource().getSelectedItem().mProperties.text;
+        //     if (selectedAI.includes("sap-rpt")) {
+        //         this.wipModel = true;
+        //         MessageBox.information(oBundle.getText("sysMsgWIP"));
+        //         //this.getView().byId("selModel").setSelectedKey("d5c02aa14db581a4");
+        //     } else {
+        //         this.wipModel = false;
+        //         var TokenModel = this.getOwnerComponent().getModel("TokenLimit");
+        //         var totToken = TokenModel.oData[sSelectedIconTab][selectedAI].TotalToken;
+        //         this.getView().getModel("TokenLimit").setProperty("/token", totToken);
+        //         this.getView().getModel("TokenLimit").setProperty("/usedToken", 0);
+        //         MessageBox.information("The selected Model is " + selectedAI);
+        //     }
+        // },
         onAIselect: function (eve) {
-            var sSelectedIconTab = this.selectedKeyFunct();
             let oBundle = this.getView().getModel("i18n").getResourceBundle();
             let selectedAI = eve.getSource().getSelectedItem().mProperties.text;
+            ////models
+            let settingsModel = models.aiModelDefaultPayload(selectedAI);
+            this.getView().setModel(settingsModel, "settingsModel");
             if (selectedAI.includes("sap-rpt")) {
                 this.wipModel = true;
                 MessageBox.information(oBundle.getText("sysMsgWIP"));
                 //this.getView().byId("selModel").setSelectedKey("d5c02aa14db581a4");
             } else {
                 this.wipModel = false;
-                var TokenModel = this.getOwnerComponent().getModel("TokenLimit");
-                var totToken = TokenModel.oData[sSelectedIconTab][selectedAI].TotalToken;
+                let sSelectedIconTab = this.selectedKeyFunct();
+                let TokenModel = this.getOwnerComponent().getModel("TokenLimit");
+                let totToken = TokenModel.oData[sSelectedIconTab][selectedAI].TotalToken;
                 this.getView().getModel("TokenLimit").setProperty("/token", totToken);
                 this.getView().getModel("TokenLimit").setProperty("/usedToken", 0);
                 MessageBox.information("The selected Model is " + selectedAI);
@@ -8182,7 +8268,7 @@ sap.ui.define([
             var finalText = "";
             var aiSelected = that.getView().byId("selModel").getSelectedKey();//
             var aiModelName = that.getView().byId("selModel").getValue(); //
-            var apiUrl4 = Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl, this._sBasePath);//
+            var apiUrl4 = await Utility.getApiUrl(aiModelName, aiSelected, this.sApiUrl, this._sBasePath);//
             var oPromptModel = this.getView().getModel("BSPromptData");
             if (sContent == undefined) {
                 sContent = null;
@@ -8213,29 +8299,35 @@ sap.ui.define([
             } else {
                 this.getView().getModel("msgModel").setProperty("/aMsg", aMessages);
             }
-            var tabConfig = Utility.handleTabPromptSetupDynamic({
-                tabKey: sSelectedIconTab,
-                view: this.getView(),
-                sUrl: this.sUrl,
-                sApiUrl: this.sApiUrl,
-                oResponseModel: this.getView().getModel("responseModel"),
-            });
-            var oPromptModel = this.getView().getModel("BSPromptData");
-            //here
-            var oPromptModel = this.getView().getModel("BSPromptData");
-            var oModel = this.getView().getModel("TokenLimit");
-            var isUserContent = this.getView().getModel("viewModel").getProperty("/bFileContentChanged");
+            // var tabConfig = Utility.handleTabPromptSetupDynamic({
+            //     tabKey: sSelectedIconTab,
+            //     view: this.getView(),
+            //     sUrl: this.sUrl,
+            //     sApiUrl: this.sApiUrl,
+            //     oResponseModel: this.getView().getModel("responseModel"),
+            // });
+            // var oPromptModel = this.getView().getModel("BSPromptData");
+            // //here
+            // var oPromptModel = this.getView().getModel("BSPromptData");
+            // var oModel = this.getView().getModel("TokenLimit");
+            // var isUserContent = this.getView().getModel("viewModel").getProperty("/bFileContentChanged");
 
-            /////////userInput being replaced by promptMsgData
-            isUserContent = true;
-            if (!isUserContent && (!promptMsgData || promptMsgData === "")) {
-                MessageBox.warning(oBundle.getText("userInputMsg"));
+            // /////////userInput being replaced by promptMsgData
+            // isUserContent = true;
+            // if (!isUserContent && (!promptMsgData || promptMsgData === "")) {
+            //     MessageBox.warning(oBundle.getText("userInputMsg"));
 
-                return;
-            }
-            var localData = oPromptModel.getData();
-            var existsInLocalData = localData.some(item => item.PROMPT_TEMPLATE === promptMsgData);
+            //     return;
+            // }
+            // var localData = oPromptModel.getData();
+            // var existsInLocalData = localData.some(item => item.PROMPT_TEMPLATE === promptMsgData);
+            // if ((!promptMsgData || promptMsgData === "") && this.executedOnce == true) {
+            //     MessageBox.warning(oBundle.getText("userInputMsg"));
 
+            //     return;
+            // }
+            let localData = oPromptModel.getData();
+            let existsInLocalData = localData.some(item => item.PROMPT_TEMPLATE === promptMsgData);
 
             var isFirstResponse = true;
             Utility.createAndFetchPromptDetails(
@@ -8256,8 +8348,11 @@ sap.ui.define([
                 this.getView().getModel("msgModel").setProperty("/aMsg", aMessages);
             }
             var oViewModel = this.getView().getModel("viewModel");
-            var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
-            var payload = Utility.createPayloadBasedOnModel(aiModelName, aMessages, oViewModel, this);
+            let sett = this.getView().getModel("settingsModel");
+            let payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, sett, this);
+            let payload = Utility.createPayloadBasedOnModel(aiModelName, aMessages, sett, this);
+            //// var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, aMessages, oViewModel, this);
+            //// var payload = Utility.createPayloadBasedOnModel(aiModelName, aMessages, oViewModel, this);
 
             var busyDialog = new sap.m.BusyDialog();
             busyDialog.open();
@@ -8319,8 +8414,11 @@ sap.ui.define([
 
                 this.sendTokenUsageLog(oUsedToken, promptMsgData);
             } catch (error) {
-
-                sap.m.MessageBox.error(oBundle.getText("errorAzureAPI"));
+                if (error && error._isStreamError) {
+                    sap.m.MessageBox.error(error.message);
+                } else {
+                    sap.m.MessageBox.error(oBundle.getText("errorAzureAPI"));
+                }
             } finally {
                 busyDialog.close();
             }
@@ -9366,6 +9464,10 @@ sap.ui.define([
                 templateNameText: oView.byId("selectedTemplateName") ? oView.byId("selectedTemplateName").getText() : "",
                 templateInfoVisible: oView.byId("templateInfoBox") ? oView.byId("templateInfoBox").getVisible() : false,
                 templateToggleState: oView.byId("templateToggle") ? oView.byId("templateToggle").getState() : false,
+                // MCP state per tab
+                mcpEnabled: this.getView().getModel("viewModel").getProperty("/useMCP") || false,
+                mcpSelectedTool: this.getView().getModel("viewModel").getProperty("/selectedMCPTool") || "",
+                mcpSelectedAbapObject: JSON.parse(JSON.stringify(this.getView().getModel("viewModel").getProperty("/selectedAbapObject") || {})),
             };
             // STEP 2: also store detail response for this tab
             var oAiRespModel = this.getOwnerComponent().getModel("airesponseDetailModel");
@@ -9429,15 +9531,15 @@ sap.ui.define([
                 }
                 var oDefModelSave = this.getView().getModel();
                 if (oDefModelSave) {
-                    oState.retroLogEntries       = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/logEntries")       || []));
-                    oState.retroDownloadItems    = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/downloadItems")    || []));
-                    oState.retroLogPanelVisible  = oDefModelSave.getProperty("/logPanelVisible")  !== undefined ? oDefModelSave.getProperty("/logPanelVisible")  : true;
-                    oState.retroDlPanelVisible   = !!oDefModelSave.getProperty("/downloadPanelVisible");
-                    oState.retroPipelineVisible  = !!oDefModelSave.getProperty("/agentPipelineVisible");
-                    oState.retroPipelineStatus   = oDefModelSave.getProperty("/agentPipelineStatus")   || "In Progress";
+                    oState.retroLogEntries = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/logEntries") || []));
+                    oState.retroDownloadItems = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/downloadItems") || []));
+                    oState.retroLogPanelVisible = oDefModelSave.getProperty("/logPanelVisible") !== undefined ? oDefModelSave.getProperty("/logPanelVisible") : true;
+                    oState.retroDlPanelVisible = !!oDefModelSave.getProperty("/downloadPanelVisible");
+                    oState.retroPipelineVisible = !!oDefModelSave.getProperty("/agentPipelineVisible");
+                    oState.retroPipelineStatus = oDefModelSave.getProperty("/agentPipelineStatus") || "In Progress";
                     oState.retroPipelineComplete = !!oDefModelSave.getProperty("/agentPipelineComplete");
-                    oState.retroAgentSteps       = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentSteps")       || []));
-                    oState.retroAgentConnectors  = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentConnectors")  || []));
+                    oState.retroAgentSteps = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentSteps") || []));
+                    oState.retroAgentConnectors = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentConnectors") || []));
                 }
             }
 
@@ -9466,15 +9568,15 @@ sap.ui.define([
                     }
                     var oDefModelR = this.getView().getModel();
                     if (oDefModelR) {
-                        oDefModelR.setProperty("/logEntries",          oState.retroLogEntries       || []);
-                        oDefModelR.setProperty("/downloadItems",       oState.retroDownloadItems    || []);
-                        oDefModelR.setProperty("/logPanelVisible",     oState.retroLogPanelVisible  !== undefined ? oState.retroLogPanelVisible : true);
-                        oDefModelR.setProperty("/downloadPanelVisible",!!oState.retroDlPanelVisible);
-                        oDefModelR.setProperty("/agentPipelineVisible",!!oState.retroPipelineVisible);
-                        oDefModelR.setProperty("/agentPipelineStatus", oState.retroPipelineStatus   || "In Progress");
-                        oDefModelR.setProperty("/agentPipelineComplete",!!oState.retroPipelineComplete);
-                        oDefModelR.setProperty("/agentSteps",          oState.retroAgentSteps       || []);
-                        oDefModelR.setProperty("/agentConnectors",     oState.retroAgentConnectors  || []);
+                        oDefModelR.setProperty("/logEntries", oState.retroLogEntries || []);
+                        oDefModelR.setProperty("/downloadItems", oState.retroDownloadItems || []);
+                        oDefModelR.setProperty("/logPanelVisible", oState.retroLogPanelVisible !== undefined ? oState.retroLogPanelVisible : true);
+                        oDefModelR.setProperty("/downloadPanelVisible", !!oState.retroDlPanelVisible);
+                        oDefModelR.setProperty("/agentPipelineVisible", !!oState.retroPipelineVisible);
+                        oDefModelR.setProperty("/agentPipelineStatus", oState.retroPipelineStatus || "In Progress");
+                        oDefModelR.setProperty("/agentPipelineComplete", !!oState.retroPipelineComplete);
+                        oDefModelR.setProperty("/agentSteps", oState.retroAgentSteps || []);
+                        oDefModelR.setProperty("/agentConnectors", oState.retroAgentConnectors || []);
                         oDefModelR.refresh(true);
                     }
                 }
@@ -9631,13 +9733,13 @@ sap.ui.define([
                         oView.byId("templateToggle").setState(false);
                     }
                     // Reset MCP state for first-time visit to this tab (avoid leakage from previous tab)
-                var oVM = this.getView().getModel("viewModel");
-                if (oVM) {
-                    oVM.setProperty("/useMCP", false);
-                    oVM.setProperty("/selectedMCPTool", "");
-                    oVM.setProperty("/selectedAbapObject", {});
-                }
-                return;
+                    var oVM = this.getView().getModel("viewModel");
+                    if (oVM) {
+                        oVM.setProperty("/useMCP", false);
+                        oVM.setProperty("/selectedMCPTool", "");
+                        oVM.setProperty("/selectedAbapObject", {});
+                    }
+                    return;
                     return;
                 }
 
@@ -9817,17 +9919,24 @@ sap.ui.define([
 
                 this.savedSettings = oState.parsett || false;
 
-                if (this.savedSettings == true) {
-                    oViewModel.setProperty("/comnPopUpModelParamTemp", oState.savedTemperature || 0.7);
-                    oViewModel.setProperty("/comnPopUpModelParamTopP", oState.savedTopP || 0.95);
-                    oViewModel.setProperty("/comnPopUpModelParamMaxLength", oState.maxResponse || 4000);
-                    oViewModel.setProperty("/comnPopUpModelParamFreqP", oState.freqPenalty || 0.1);
-                    oViewModel.setProperty("/comnPopUpModelParamPresenceP", oState.prePenalty || 0.1);
-                    // oViewModel.setProperty("/SelectedStopSequence",this._prePenalty || 0.7);
-                    oViewModel.setProperty("/comnPopUpModelParamContextHist", oState.contextHist || 2);
-                    // oViewModel.setProperty("/TokenCount", 0 ||);
-                }
+                // if (this.savedSettings == true) {
+                //     oViewModel.setProperty("/comnPopUpModelParamTemp", oState.savedTemperature || 0.7);
+                //     oViewModel.setProperty("/comnPopUpModelParamTopP", oState.savedTopP || 0.95);
+                //     oViewModel.setProperty("/comnPopUpModelParamMaxLength", oState.maxResponse || 4000);
+                //     oViewModel.setProperty("/comnPopUpModelParamFreqP", oState.freqPenalty || 0.1);
+                //     oViewModel.setProperty("/comnPopUpModelParamPresenceP", oState.prePenalty || 0.1);
+                //     // oViewModel.setProperty("/SelectedStopSequence",this._prePenalty || 0.7);
+                //     oViewModel.setProperty("/comnPopUpModelParamContextHist", oState.contextHist || 2);
+                //     // oViewModel.setProperty("/TokenCount", 0 ||);
+                // }
+                if (this.savedSettings) {
+                    this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamTemp", oState.savedTemperature || null);
+                    this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamTopP", oState.savedTopP || null);
+                    this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamMaxLength", oState.maxResponse || null);
+                    this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamFreqP", oState.freqPenalty || null);
+                    this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamPresenceP", oState.prePenalty || null);
 
+                }
                 ////git tab
                 if (oView.byId("gitFileTree")) {
                     oView.byId("gitFileTree").setVisible(oState.gitTreeVis || false);
@@ -9985,7 +10094,9 @@ sap.ui.define([
             );
 
             var oViewModel = this.getView().getModel("viewModel");
-            var payload = Utility.createPayloadBasedOnModel(apiModelText, aMessages, oViewModel, this);
+            // var payload = Utility.createPayloadBasedOnModel(apiModelText, aMessages, oViewModel, this);
+            let sett = this.getView().getModel("settingsModel");
+            let payload = Utility.createPayloadBasedOnModel(apiModelText, aMessages, sett, this);
 
             // Resolve modelName: updating the model name fro KB payload
             const resolvedModelName = this.resolveModelName(apiModelText);
@@ -13086,7 +13197,7 @@ sap.ui.define([
                     return;
                 }
 
-                                // Show TR release reminder only if TR exists
+                // Show TR release reminder only if TR exists
                 var aSelectedObjects = oRetroDocModel.getProperty("/selectedObjects");
                 if (aSelectedObjects && aSelectedObjects.length > 0) {
                     this._retroFetchTransportsFromAPI(aSelectedObjects[0].objectName).then(function (oData) {
@@ -13714,7 +13825,7 @@ sap.ui.define([
                         oRetroDocModel.setProperty("/searchResultsCount", aSearchResults.length);
                         oRetroDocModel.setProperty("/searchResultsVisible", aSearchResults.length > 0);
                         // Populate search suggestions for the ComboBox dropdown
-                        var aSearchSuggestions = aSearchResults.map(function(item) {
+                        var aSearchSuggestions = aSearchResults.map(function (item) {
                             return { key: item.objectName, text: item.objectName };
                         });
                         oRetroDocModel.setProperty("/searchSuggestions", aSearchSuggestions);
@@ -16173,7 +16284,9 @@ Please provide the Functional Specification in plain text format with clear sect
 
             var aMessages = [{ role: "user", content: sPrompt }];
             var oViewModel = this.getView().getModel("viewModel");
-            var oPayload = Utility.createPayloadBasedOnModel(sModelName, aMessages, oViewModel, this);
+            //  var oPayload = Utility.createPayloadBasedOnModel(sModelName, aMessages, oViewModel, this);
+            let sett = this.getView().getModel("settingsModel");
+            var oPayload = Utility.createPayloadBasedOnModel(sModelName, aMessages, sett, this);
 
             // Remove stream from payload entirely - orchestration_config.stream must also be removed
             // so that AI Core returns a plain JSON response instead of an SSE stream
@@ -16364,7 +16477,7 @@ Please provide the Functional Specification in plain text format with clear sect
             return sResult;
         },
 
-        
+
         _extractAICoreText: function (data) {
             // Claude / Anthropic response format
             if (data && Array.isArray(data.content)) {
@@ -18760,7 +18873,7 @@ Please provide the Functional Specification in plain text format with clear sect
             return docxLib.Packer.toBlob(oDoc);
         },
 
-       // ========== ABAP MCP SERVER INTEGRATION ==========
+        // ========== ABAP MCP SERVER INTEGRATION ==========
         onMCPToggle: function (oEvent) {
             var bSelected = oEvent.getParameter("selected");
             this.getView().getModel("viewModel").setProperty("/useMCP", bSelected);
@@ -18772,6 +18885,7 @@ Please provide the Functional Specification in plain text format with clear sect
             } else {
                 this.getView().getModel("viewModel").setProperty("/selectedMCPCategory", "");
                 this.getView().getModel("viewModel").setProperty("/selectedMCPTool", "");
+                this.getView().getModel("viewModel").setProperty("/selectedAbapObject", {});
                 MessageToast.show("MCP disabled - using default AI models");
             }
             // Persist MCP state per-tab immediately
@@ -18790,13 +18904,18 @@ Please provide the Functional Specification in plain text format with clear sect
             var oSelectedItem = oEvent.getParameter("selectedItem");
             if (oSelectedItem) {
                 var sToolName = oSelectedItem.getKey();
-                this.getView().getModel("viewModel").setProperty("/selectedMCPTool", sToolName);
+                if (!sToolName) return; // ignore placeholder selection
                 MessageToast.show("Selected MCP Tool: " + sToolName);
                 if (sToolName === "SAPSearch") {
                     this._openSapSearchDialog();
                 } else if (sToolName === "SAPWrite") {
                     this._openAbapCreateDialog();
                 }
+                // Reset dropdown back to placeholder after a short delay so re-selecting the same tool works
+                var that = this;
+                setTimeout(function () {
+                    that.getView().getModel("viewModel").setProperty("/selectedMCPTool", "");
+                }, 300);
             }
             // Persist MCP state per-tab immediately
             this._saveTabState(this.byId("navigationList").getSelectedKey());
@@ -18807,9 +18926,8 @@ Please provide the Functional Specification in plain text format with clear sect
             var aFilteredTools = [];
             if (sCategory === "ABAP") {
                 aFilteredTools = [
-                    { name: "SAPRead", description: "Read ABAP source, table data, CDS views, metadata extensions" },
-                    { name: "SAPSearch", description: "Object search + full-text source code search across the system" },
-                    { name: "SAPWrite", description: "Create/update/delete ABAP source and DDIC metadata" }
+                    { name: "SAPSearch", displayName: "Read Object", description: "Object search + full-text source code search across the system" },
+                    { name: "SAPWrite", displayName: "Create Object", description: "Create/update/delete ABAP source and DDIC metadata" }
                 ];
             } else {
                 var sCategoryPrefix = sCategory === "UI5" ? "ui5__" : sCategory === "CAPM" ? "capm__" : "";
@@ -18861,7 +18979,6 @@ Please provide the Functional Specification in plain text format with clear sect
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc);
             var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
             var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-            this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
             try {
                 var fetchedCode = sContent || "";
                 // Priority 1: Use object selected via SAPSearch
@@ -18876,14 +18993,41 @@ Please provide the Functional Specification in plain text format with clear sect
                 if (abapObjectInfo && abapObjectInfo.objectName) {
                     var mcpResponse = await this._fetchAbapCodeViaMCP(abapObjectInfo);
                     if (mcpResponse && mcpResponse.success && mcpResponse.data) {
-                        fetchedCode = mcpResponse.data.source || JSON.stringify(mcpResponse.data, null, 2);
-                        console.log("Fetched ABAP code via MCP:", fetchedCode.substring(0, 200) + "...");
+                        var sMcpCode = mcpResponse.data.source || JSON.stringify(mcpResponse.data, null, 2);
+                        console.log("Fetched ABAP code via MCP:", sMcpCode.substring(0, 200) + "...");
+                        // Combine existing file content with fetched ABAP code
+                        if (sContent && typeof sContent === "string" && sContent.trim() !== "") {
+                            fetchedCode = sContent + "\n\n--- ABAP Source Code (" + abapObjectInfo.objectName + ") ---\n\n" + sMcpCode;
+                        } else {
+                            fetchedCode = sMcpCode;
+                        }
                     }
                 }
                 this.getView().getModel("appmodel").setProperty("/BSContent", fetchedCode);
-                this.executedOnce = false;
                 busyDialog.close();
+                // On second+ MCP call, use reUpload path to maintain conversation history (system→user→assistant→user)
+                if (this.executedOnce) {
+                    // executedOnce is already true from first call, so msgModel.aMsg has [system, user, assistant]
+                    // reUploadContentResponse will append the new user message and send full conversation
+                    this.reUploadContentResponse();
+                    return;
+                }
+                // First MCP call: use handleUploadContentPress to initialize conversation with [system, user]
+                this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
                 await this.handleUploadContentPress();
+                this.executedOnce = true;
+
+                // Ensure assistant response is added to msgModel for conversation history continuity
+                var sAiResp = this.getOwnerComponent().getModel("airesponseDetailModel").getProperty("/resp") || "";
+                if (sAiResp) {
+                    var aMsgs = this.getView().getModel("msgModel").getProperty("/aMsg") || [];
+                    var bHasAssistant = aMsgs.some(function (m) { return m.role === "assistant"; });
+                    if (!bHasAssistant) {
+                        aMsgs.push({ role: "assistant", content: sAiResp });
+                        this.getView().getModel("msgModel").setProperty("/aMsg", aMsgs);
+                    }
+                }
+
                 // Post-process: split response into code blocks for coderem/codesum tabs (same as cdGen)
                 var sScenario = this.selectedKeyFunct();
                 if (sScenario === "coderem" || sScenario === "codesum") {
@@ -18909,12 +19053,12 @@ Please provide the Functional Specification in plain text format with clear sect
                             var oMultiCEBox = sap.ui.getCore().byId("application-Zsemobj-display-component---DetailDetail--multipleCodeEd") ||
                                 that.getOwnerComponent().getRootControl().getController ? null : null;
                             // Use the component to find the DetailDetail view
-                            var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfeq.view.DetailDetail"];
+                            var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfe.view.DetailDetail"];
                             if (!oDetailCtrl) {
                                 // Alternative: find via router targets
                                 var aPages = sap.ui.getCore().byId("__component0---app") ? sap.ui.getCore().byId("__component0---app").getPages() : [];
                             }
-                        } catch(e) {}
+                        } catch (e) { }
                         // Simpler approach: set a flag in the model that DetailDetail view binds to
                         oAiResp.setProperty("/codeEdVis", true);
                         oAiResp.refresh(true);
@@ -19079,11 +19223,23 @@ Please provide the Functional Specification in plain text format with clear sect
                 var pattern = oModel.getProperty("/pattern") || "*";
                 var busyDialog = new BusyDialog({ text: "Searching..." });
                 busyDialog.open();
-                var res = await this._runAbapMcpTool("SAPSearch", { type: type, query: pattern });
+                var res = await this._runAbapMcpTool("SAPSearch", { query: pattern, maxResults: 500 });
                 busyDialog.close();
                 var results = [];
                 if (res && !res.isError && res.message) {
                     results = this._extractSapSearchResults(res.message);
+                    // Filter results by selected object type with ADT type mapping
+                    if (type) {
+                        var sTypeUpper = type.toUpperCase();
+                        results = results.filter(function (item) {
+                            var sItemType = (item.type || "").toUpperCase();
+                            // FUNC matches FUGR/FF (ADT type for function modules)
+                            if (sTypeUpper === "FUNC") {
+                                return sItemType === "FUGR/FF" || sItemType === "FUNC";
+                            }
+                            return sItemType === sTypeUpper || sItemType.startsWith(sTypeUpper + "/");
+                        });
+                    }
                 }
                 oModel.setProperty("/results", results);
             } catch (err) {
@@ -19186,9 +19342,10 @@ Please provide the Functional Specification in plain text format with clear sect
                     verticalScrolling: true,
                     content: [oLintMsgStrip, oCodeArea],
                     beginButton: new sap.m.Button({
-                        text: "Lint",
+                        text: "Check Code",
                         type: "Emphasized",
                         icon: "sap-icon://syntax",
+                        tooltip: "Analyze code quality: runs syntax check, ATC inspection, and auto-formats the source code",
                         press: function () { that._onLintAbapCode(oLintMsgStrip); }
                     }),
                     endButton: new sap.m.Button({
@@ -19378,6 +19535,8 @@ Please provide the Functional Specification in plain text format with clear sect
         // AbapCreate (SAPWrite) dialog helpers
         _openAbapCreateDialog: async function () {
             try {
+                // Clear the selected ABAP object so the program name link disappears
+                this.getView().getModel("viewModel").setProperty("/selectedAbapObject", {});
                 var oModel = this.getView().getModel("abapCreateModel");
                 if (!oModel) {
                     oModel = new JSONModel({
@@ -19424,7 +19583,19 @@ Please provide the Functional Specification in plain text format with clear sect
                 if (parse && !parse.isError && parse.message) {
                     try {
                         var arr = JSON.parse(parse.message);
-                       if (Array.isArray(arr)) { aList = arr.map(function (t) { var id = t.id || t.trkorr || t.name || (typeof t === "string" ? t : ""); var desc = t.description || t.desc || ""; return { key: id, text: id + (desc ? " - " + desc : "") }; }); } else if (arr && Array.isArray(arr.transports)) { aList = arr.transports.map(function (t) { var id = t.id || t.trkorr || t.name || ""; var desc = t.description || t.desc || ""; return { key: id, text: id + (desc ? " - " + desc : "") }; }); }
+                        if (Array.isArray(arr)) {
+                            aList = arr.map(function (t) {
+                                var id = t.id || t.trkorr || t.name || (typeof t === "string" ? t : ""); var desc = t.description || t.desc || "";
+                                return { key: id, text: id + (desc ? " - " + desc : "") };
+                            });
+                        }
+                        else if (arr && Array.isArray(arr.transports)) {
+                            aList = arr.transports.map(function (t) {
+                                var id = t.id || t.trkorr || t.name || ""; var desc = t.description || t.desc || ""; return {
+                                    key: id, text: id + (desc ? " - " + desc : "")
+                                };
+                            });
+                        }
                     } catch (e) { /* plain text */ }
                 }
                 var oM = this.getView().getModel("abapCreateModel");
@@ -19470,6 +19641,95 @@ Please provide the Functional Specification in plain text format with clear sect
         },
         onCancelAbapCreate: function () {
             if (this._abapCreateDlg) { this._abapCreateDlg.close(); }
+        },
+        onCreateTransportFromAbapCreate: function () {
+            var that = this;
+            var oAbapModel = this.getView().getModel("abapCreateModel");
+            var sObjectName = oAbapModel ? oAbapModel.getProperty("/objectName") : "";
+            var sDefaultDesc = sObjectName ? "Transport for " + sObjectName : "New transport request";
+
+            sap.m.InputDialog = sap.m.InputDialog || null;
+            // Use a simple dialog with an Input to get the transport description
+            var oInput = new sap.m.Input({
+                value: sDefaultDesc,
+                width: "100%",
+                placeholder: "Enter transport description"
+            });
+
+            var oDialog = new sap.m.Dialog({
+                title: "Create Transport Request",
+                contentWidth: "400px",
+                content: [
+                    new sap.m.VBox({
+                        items: [
+                            new sap.m.Label({ text: "Description", required: true }),
+                            oInput
+                        ]
+                    }).addStyleClass("sapUiSmallMargin")
+                ],
+                beginButton: new sap.m.Button({
+                    text: "Create",
+                    type: "Emphasized",
+                    press: async function () {
+                        var sDesc = oInput.getValue().trim();
+                        if (!sDesc) {
+                            MessageToast.show("Please enter a description");
+                            return;
+                        }
+                        oDialog.close();
+                        var busyDialog = new BusyDialog({ text: "Creating transport..." });
+                        busyDialog.open();
+                        try {
+                            var sPkg = oAbapModel ? oAbapModel.getProperty("/package") : "$TMP";
+                            var res = await that._runAbapMcpTool("SAPTransport", {
+                                action: "create",
+                                description: sDesc,
+                                package: sPkg
+                            });
+                            busyDialog.close();
+                            if (res && !res.isError && res.message) {
+                                // Parse the transport ID from the response
+                                var sTransportId = "";
+                                try {
+                                    var oRes = JSON.parse(res.message);
+                                    sTransportId = oRes.id || oRes.trkorr || oRes.transport || "";
+                                } catch (e) {
+                                    // Try extracting ID pattern like A4HK900123
+                                    var match = res.message.match(/[A-Z][A-Z0-9]{2}K\d{6}/);
+                                    sTransportId = match ? match[0] : res.message.trim();
+                                }
+                                if (sTransportId) {
+                                    // Add to transport list and select it
+                                    var aTransports = oAbapModel.getProperty("/transports") || [];
+                                    aTransports.unshift({ key: sTransportId, text: sTransportId + " - " + sDesc });
+                                    oAbapModel.setProperty("/transports", aTransports);
+                                    oAbapModel.setProperty("/transport", sTransportId);
+                                    MessageToast.show("Transport " + sTransportId + " created");
+                                } else {
+                                    MessageToast.show("Transport created successfully");
+                                    that.onFetchTransports();
+                                }
+                            } else {
+                                MessageBox.error("Failed to create transport: " + (res ? res.message : "Unknown error"));
+                            }
+                        } catch (err) {
+                            busyDialog.close();
+                            MessageBox.error("Error creating transport: " + (err.message || String(err)));
+                        }
+                        oDialog.destroy();
+                    }
+                }),
+                endButton: new sap.m.Button({
+                    text: "Cancel",
+                    press: function () {
+                        oDialog.close();
+                        oDialog.destroy();
+                    }
+                })
+            });
+
+            this.getView().addDependent(oDialog);
+            oDialog.open();
         }
         // ========== END ABAP MCP SERVER INTEGRATION ==========
 

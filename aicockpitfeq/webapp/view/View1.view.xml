@@ -167,7 +167,7 @@
                 showHeader="false"
             >
                 <content>
-                <!-- ============================================================== -->
+                 <!-- ============================================================== -->
                 <!-- RETRO DOCUMENTATION SECTION - START -->
                 <!-- Added for Retro Documentation feature -->
                 <!-- This entire section is only visible when retroDocKey is selected -->
@@ -196,8 +196,9 @@
                               <ComboBox
                                     tooltip="Select AI Model"
                                     id="selModelRetro"
+                                    selectedKey="{OrchestrationModels>/selectedKey}"
                                     items="{
-							path: 'viewModel>/gptModels',
+							path: 'OrchestrationModels>/items',
                             sorter: {
                             path: 'aiType',
                             group: true
@@ -207,8 +208,8 @@
                                     class=""
                                 >
                                     <core:Item
-                                        key="{viewModel>key}"
-                                        text="{viewModel>text}"
+                                        key="{OrchestrationModels>key}"
+                                        text="{OrchestrationModels>text}"
                                     />
                                 </ComboBox>
                           
@@ -653,7 +654,7 @@
                                         class="processLogBody">
                                         <CustomListItem>
                                             <HBox alignItems="Center" width="100%" class="sapUiTinyMarginBeginEnd sapUiTinyMarginTopBottom logItem">
-                                            <Text text="#{seq}" class="logSeq sapUiTinyMarginEnd" wrapping="false" width="32px" />
+                                                <Text text="#{seq}" class="logSeq sapUiTinyMarginEnd" wrapping="false" width="32px" />
                                                 <core:Icon
                                                     src="{= ${type} === 'success' ? 'sap-icon://accept' : (${type} === 'error' ? 'sap-icon://error' : (${type} === 'processing' ? 'sap-icon://synchronize' : 'sap-icon://hint'))}"
                                                     color="{= ${type} === 'success' ? '#107E3E' : (${type} === 'error' ? '#BB0000' : (${type} === 'processing' ? '#E9730C' : '#0A6ED1'))}"
@@ -668,12 +669,12 @@
                                                 <!-- Fixed-width placeholder keeps timestamp column aligned on ALL rows -->
                                                 <HBox width="36px" alignItems="Center" justifyContent="Center">
                                                     <layoutData><FlexItemData shrinkFactor="0" /></layoutData>
-                                                <Button
-                                                    visible="{hasViewButton}"
-                                                    icon="sap-icon://display"
-                                                    type="Transparent"
-                                                    tooltip="View Document"
-                                                    press=".onViewLogItem" />
+                                                    <Button
+                                                        visible="{hasViewButton}"
+                                                        icon="sap-icon://display"
+                                                        type="Transparent"
+                                                        tooltip="View Document"
+                                                        press=".onViewLogItem" />
                                                 </HBox>
                                             </HBox>
                                         </CustomListItem>
@@ -734,6 +735,8 @@
                 <!-- ============================================================== -->
                 <!-- RETRO DOCUMENTATION SECTION - END -->
                 <!-- ============================================================== -->
+
+                <!-- Original Content - Hidden when Retro Documentation is selected -->
                     <ScrollContainer
                         id="mainContentScrollContainer"
                         horizontal="false"
@@ -762,20 +765,20 @@
                                     <ComboBox
                                         tooltip="Select AI Model"
                                         id="selModel"
+                                        selectedKey="{OrchestrationModels>/selectedKey}"
                                         items="{
-							path: 'viewModel>/gptModels',
+							path: 'OrchestrationModels>/items',
                             sorter: {
                             path: 'aiType',
                             group: true
                             }
 						}"
                                         selectionChange=".onAIselect"
-                                        
                                         class=""
                                     >
                                         <core:Item
-                                            key="{viewModel>key}"
-                                            text="{viewModel>text}"
+                                            key="{OrchestrationModels>key}"
+                                            text="{OrchestrationModels>text}"
                                         />
                                     </ComboBox>
                                     <Button
@@ -1435,7 +1438,7 @@
                                                         select=".onRagToggle"
                                                     />
                                                 </HBox>
-                                                <!-- MCP Toggle and Controls (visible only for Code Gen, Code Rem, Code Sum) -->
+                                                 <!-- MCP Toggle and Controls (visible only for Code Gen, Code Rem, Code Sum) -->
                                                 <HBox alignItems="Center" class="sapUiTinyMarginTop" visible="{= ${selKeyForDetailDetail>/keyD} === 'cdGen' || ${selKeyForDetailDetail>/keyD} === 'cdRem' || ${selKeyForDetailDetail>/keyD} === 'cdSum' }">
                                                     <Label
                                                         text="MCP"
@@ -1454,13 +1457,14 @@
                                                         items="{mcpToolsModel>/filteredTools}"
                                                         change=".onMCPToolSelectionChange"
                                                         selectedKey="{viewModel>/selectedMCPTool}"
+                                                        forceSelection="false"
                                                         class="sapUiTinyMarginBegin"
                                                         tooltip="Select MCP Tool"
                                                     >
                                                         <core:Item key="" text="-- Tool --" />
                                                         <core:Item
                                                             key="{mcpToolsModel>name}"
-                                                            text="{mcpToolsModel>name}"
+                                                            text="{mcpToolsModel>displayName}"
                                                         />
                                                     </Select>
                                                     <Link
@@ -1670,6 +1674,7 @@
                             class="sapUiTinyMarginEnd sapUiTinyMarginTop"
                             visible="{retroDocModel>/isRetroDocVisible}"
                         />
+                        <!-- Original Footer Buttons - visible when retro doc is NOT active -->
                         <Button
                             text="{i18n>pctOutput}"
                             class="sapUiTinyMarginEnd sapUiTinyMarginTop"

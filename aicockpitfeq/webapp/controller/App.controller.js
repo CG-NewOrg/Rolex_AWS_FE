@@ -204,21 +204,21 @@ sap.ui.define([
 
             this._stopSpeaking({ resetToggle: false });
             this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", []);
-            // (Optional) also stop mic if it was recording
             if (this._recognition && this._isListening) {
-                try { this._recognition.stop(); } catch (e) { }
+                try { this._recognition.stop(); } catch (e) {
+                    console.error('Error stopping recognition:', e);
+                }
                 this._isListening = false;
-                var oMicBtn = sap.ui.getCore().byId("micButton");
+                const oMicBtn = sap.ui.getCore().byId("micButton");
                 if (oMicBtn) { oMicBtn.setType("Default"); }
             }
 
-            // Get the model bound to the view
-            var oChatModel = this.getView().getModel("chatModel");
+            const oChatModel = this.getView().getModel("chatModel");
             if (oChatModel) {
-                oChatModel.setProperty("/data", []); // Clear all messages
+                oChatModel.setProperty("/data", []);
             }
-            var userName = this.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserName");
-            var aData = oChatModel.getProperty("/data") || [];
+            const userName = this.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserName");
+            let aData = oChatModel.getProperty("/data") || [];
             if (aData.length === 0) {
                 aData.push({
                     aiResponse: `Hello ${userName}, How can I help you?`,
@@ -229,10 +229,10 @@ sap.ui.define([
 
         },
         onSendMessage: async function () {
-            var that = this;
-            var oSendBtn = sap.ui.getCore().byId("sendButton");
+            const that = this;
+            const oSendBtn = sap.ui.getCore().byId("sendButton");
             const oList = sap.ui.getCore().byId("chatListChatBot");
-            var currentIcon = oSendBtn.getIcon();
+            const currentIcon = oSendBtn.getIcon();
             let noScript = true;
             if (currentIcon === "sap-icon://stop") {
 
@@ -247,295 +247,134 @@ sap.ui.define([
             }
 
             if (currentIcon === "sap-icon://paper-plane") {
-                // ---- SEND LOGIC ----
-                var query = sap.ui.getCore().byId("chatInput").getValue().trim();
+                const query = sap.ui.getCore().byId("chatInput").getValue().trim();
                 if (!query) {
                     sap.m.MessageToast.show("Please enter a message.");
                     return;
                 }
-                const maliciousPatterns = [
-                    /<script\b[^>]*>[\s\S]*?<\/script>/gi,
-                    /javascript:/gi,
-                    /vbscript:/gi,
-                    /on\w+\s*=\s*["'][^"']*["']/gi,
-                    /eval\s*\(/gi,
-                    /document\.write/gi,
-                    /document\.cookie/gi,
-                    /window\.location/gi,
-                    /\.exec\s*\(/gi,
-                    /new\s+Function\s*\(/gi,
-                    /fromCharCode/gi,
-                    /\\x[0-9a-fA-F]{2}/g,
-                    /\\u[0-9a-fA-F]{4}/g,
-                    /base64_decode/gi,
-                    /shell_exec/gi,
-                    /system\s*\(/gi,
-                    /passthru/gi,
-                    /exec\s*\(/gi,
-                    /popen\s*\(/gi,
-                    /proc_open/gi,
-                    /<\?php/gi,
-                    /<%[\s\S]*?%>/g,
-                    /powershell/gi,
-                    /cmd\.exe/gi,
-                    /\/bin\/sh/gi,
-                    /\/bin\/bash/gi,
-                    /wget\s+/gi,
-                    /curl\s+.*-o/gi,
-                    /nc\s+-e/gi,
-                    /rm\s+-rf/gi
-                ];
-                for (const pattern of maliciousPatterns) {
-                    if (pattern.test(query)) {
-                        noScript = false;
-                    }
-                }
-                var xssPatterns = [
-                    // JavaScript execution functions
-                    { pattern: /\balert\s*\(/gi, name: "alert()" },
-                    { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
-                    { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
-                    { pattern: /\beval\s*\(/gi, name: "eval()" },
-                    { pattern: /\bFunction\s*\(/gi, name: "Function()" },
-                    { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
-                    { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
-                    { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
 
-                    // Script tags and protocols
-                    { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
-                    { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
-                    { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
-                    { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
-                    { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
-
-                    // Event handlers (on* attributes)
-                    { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
-                    { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
-                    { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
-                    { pattern: /\bonload\s*=/gi, name: "onload handler" },
-                    { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
-                    { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
-                    { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
-                    { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
-                    { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
-                    { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
-                    { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
-                    { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
-
-                    // DOM manipulation
-                    { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
-                    { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
-                    { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
-                    { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
-                    { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
-                    { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
-                    { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
-
-                    // Window/Location manipulation
-                    { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
-                    { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
-                    { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
-                    { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
-
-                    // Dangerous HTML elements
-                    { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
-                    { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
-                    { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
-                    { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
-                    { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
-                    { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
-                    { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
-                    { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
-                    { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
-                    { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
-                    { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
-                    { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
-
-                    // Encoding bypass attempts
-                    { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
-                    { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
-                    { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
-
-                    // Expression and binding attacks
-                    { pattern: /expression\s*\(/gi, name: "CSS expression()" },
-                    { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
-                    { pattern: /-moz-binding/gi, name: "Mozilla binding" },
-
-                    // Constructor access
-                    { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
-                    { pattern: /\b__proto__/gi, name: "__proto__ access" },
-                    { pattern: /\bprototype\s*\./gi, name: "prototype access" }
-                ];
-
-                // Check each pattern
-                for (var i = 0; i < xssPatterns.length; i++) {
-                    if (xssPatterns[i].pattern.test(query)) {
-                        // detectedPatterns.push(xssPatterns[i].name);
-                        noScript = false;
-                    }
-                }
-                var validate = this.onValidatePress(query);
+                const validate = this.onValidatePress(query);
                 if (!validate) {
                     sap.m.MessageToast.show("Validation failed.");
                     return;
                 }
-                // let result = Utility.validatePrompt(query);
 
-                // if (!result.isAllowed) {
-                //     sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- " + result.reasons.join("\n- "));
-                //     sap.ui.getCore().byId("chatInput").setValue("");
-                // } else 
-                    if (noScript == false) {
-                    sap.m.MessageBox.error("Your input was blocked for the following reasons:\n- Malicious data");
-                    sap.ui.getCore().byId("chatInput").setValue("");
+                const chatBotRagEnabled = sap.ui.getCore().byId("RagSwitch2").getSelected();
+                if (chatBotRagEnabled) {
+                    that.KBImplimentChatbot(query);
                 } else {
-                    //By Aishwarya
-                    var chatBotRagEnabled = sap.ui.getCore().byId("RagSwitch2").getSelected();
-                    if (chatBotRagEnabled) {
-                        that.KBImplimentChatbot(query);  //RAG function call
-                    } else {
-                        // this.apiLink = "https://Ikb_Capgemini.cfapps.eu10.hana.ondemand.com/capgemini_ikb";
-                        // var modelKey = sap.ui.getCore().byId("chatModelSelect").getSelectedKey();
-                        var oSelect = sap.ui.getCore().byId("chatModelSelect");
-                        var modelKey = oSelect.getSelectedKey();
-                        var modelText = oSelect.getSelectedItem().getText();
+                    const oSelect = sap.ui.getCore().byId("chatModelSelect");
+                    const modelKey = oSelect.getSelectedKey();
+                    const modelText = oSelect.getSelectedItem().getText();
 
-                        // this.apiLink=this.KBModelSelect(modelKey);
-                        // Change icon to Stop
-                        oSendBtn.setIcon("sap-icon://stop");
-                        var chatModel = this.getView().getModel("chatModel");
-                        var aData = chatModel.getProperty("/data") || [];
-                        var oChatItem = {
-                            userMessage: query,
-                            aiResponse: "" // placeholder for AI
-                        };
-                        aData.push(oChatItem);
-                        // userMessage: query
+                    oSendBtn.setIcon("sap-icon://stop");
+                    const chatModel = this.getView().getModel("chatModel");
+                    let aData = chatModel.getProperty("/data") || [];
+                    const oChatItem = {
+                        userMessage: query,
+                        aiResponse: ""
+                    };
+                    aData.push(oChatItem);
+                    chatModel.setProperty("/data", aData);
+                    sap.ui.getCore().byId("chatInput").setValue("");
 
-                        // });
-                        chatModel.setProperty("/data", aData);
-                        sap.ui.getCore().byId("chatInput").setValue("");
+                    setTimeout(() => {
+                        oList.scrollToIndex(aData.length - 1);
+                    }, 0);
 
+                    const aMsgModelChatBot = this.getView().getModel("aMsgModelForChatBot");
+                    const allMsgs = aMsgModelChatBot.oData.aMsg;
+                    allMsgs.push({
+                        "role": "user",
+                        "content": query
+                    });
+                    this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
+
+                    const oViewModel = this.getView().getModel("chatModel");
+                    that.callChatGPTModelforChatbot();
+                    const apiUrl = await that.getApiUrlforChatbot(modelText, modelKey, this.sApiUrl);
+                    const payload = that.createPayloadBasedOnModelforChatbot(modelKey, allMsgs, oViewModel, this);
+
+                    this._chatAbortController = new AbortController();
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                                "X-Frame-Options": "DENY",
+                                "X-XSS-Protection": "0",
+                                "X-Content-Type-Options": "nosniff",
+                                ...this.defaultHeaders
+                            },
+                            body: JSON.stringify(payload),
+                            signal: this._chatAbortController.signal
+                        });
+
+                        const data = await response.json();
+
+                        let answer = "";
+
+                        if (data.orchestration_result && data.orchestration_result.choices && data.orchestration_result.choices.length > 0) {
+                            const msg = data.orchestration_result.choices[0].message;
+                            if (msg?.content) {
+                                answer = msg.content;
+                            }
+                        }
+                        else if (data.choices && data.choices.length > 0) {
+                            const msg = data.choices[0].message;
+                            if (msg?.content) {
+                                answer = msg.content;
+                            }
+                        }
+                        else if (data.output_text) {
+                            answer = data.output_text;
+                        }
+                        else if (data.content && Array.isArray(data.content)) {
+                            answer = data.content
+                                .filter(c => c.type === "text")
+                                .map(c => c.text)
+                                .join("\n");
+                        }
+
+                        allMsgs.push({
+                            "role": "assistant",
+                            "content": answer
+                        });
+                        this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
+                        this.getView().getModel("aMsgModelForChatBot").refresh();
+
+                        if (!answer) {
+                            answer = "No response received from model.";
+                        }
+                        oChatItem.aiResponse = answer;
+                        chatModel.refresh(true);
                         setTimeout(() => {
                             oList.scrollToIndex(aData.length - 1);
                         }, 0);
 
-                        // sharepoint changes
-                        // var aMessages = [
-                        //     {
-                        //         "role": "user",
-                        //         "content": query
-                        //     }
+                        that.speakText(answer);
+                        that._resetSendButton();
 
-                        // ];
-                        const aMsgModelChatBot = this.getView().getModel("aMsgModelForChatBot");
-                        const allMsgs = aMsgModelChatBot.oData.aMsg;
-                        allMsgs.push({
-                            "role": "user",
-                            "content": query
-                        });
-                        this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
-
-                        var oViewModel = this.getView().getModel("chatModel");
-                        that.callChatGPTModelforChatbot();
-                        var apiUrl = that.getApiUrlforChatbot(modelText, modelKey, this.sApiUrl);
-                        var payload = that.createPayloadBasedOnModelforChatbot(modelText, allMsgs, oViewModel, this);
-
-                        this._chatAbortController = new AbortController();
-                        try {
-                            const response = await fetch(apiUrl, {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
-                                    "X-Frame-Options": "DENY",
-                                    "X-XSS-Protection": "0",
-                                    "X-Content-Type-Options": "nosniff",
-                                    ...this.defaultHeaders
-                                },
-                                body: JSON.stringify(payload),
-                                signal: this._chatAbortController.signal
-                            });
-
-                            const data = await response.json();
-
-                            let answer = "";
-
-                            // GPT-4 / GPT-4o / Mistral (chat.completions)
-                            if (data.choices && data.choices.length > 0) {
-                                const msg = data.choices[0].message;
-                                if (msg && msg.content) {
-                                    answer = msg.content;
-                                }
-                            }
-                            // GPT-5 (responses API)
-                            else if (data.output_text) {
-                                answer = data.output_text;
-                            }
-                            // Anthropic (Claude / Bedrock)
-                            else if (data.content && Array.isArray(data.content)) {
-                                answer = data.content
-                                    .filter(c => c.type === "text")
-                                    .map(c => c.text)
-                                    .join("\n");
-                            }
-
-                            // fallback
-
-                            allMsgs.push({
-                                "role": "assistant",
-                                "content": answer
-                            });
-                            this.getView().getModel("aMsgModelForChatBot").setProperty("/aMsg", allMsgs);
-                            this.getView().getModel("aMsgModelForChatBot").refresh();
-                            if (!answer) {
-                                answer = "No response received from model.";
-                            }
-                            oChatItem.aiResponse = answer;
-                            chatModel.refresh(true);
-                            setTimeout(() => {
-                                oList.scrollToIndex(aData.length - 1);
-                            }, 0);
-                            // aData.push({
-                            //     aiResponse: answer
-                            // });
-
-                            // chatModel.setProperty("/data", aData);
-                            that.speakText(answer);
-                            that._resetSendButton();
-
-                        } catch (error) {
-                            if (error.name === "AbortError") {
-                                console.log("Request aborted by user.");
-                            } else {
-                                console.error("API call failed:", error);
-                                sap.m.MessageBox.error("Some error occurred. Please try again.");
-                            }
-                            that._resetSendButton();
-
-                        } finally {
-                            this._chatAbortController = null;
+                    } catch (error) {
+                        if (error.name === "AbortError") {
+                            console.log("Request aborted by user.");
+                        } else {
+                            console.error("API call failed:", error);
+                            sap.m.MessageBox.error("Some error occurred. Please try again.");
                         }
+                        that._resetSendButton();
+
+                    } finally {
+                        this._chatAbortController = null;
                     }
                 }
             }
         },
         callChatGPTModelforChatbot: async function () {
-            var that = this;
-            var isClient = undefined;
-            var isDev = undefined;
-            // var userModel = await this.getOwnerComponent().getModel("userInforModel");
-            // var fullname = userModel.getData().firstname + userModel.getData().lastname;
-            var oPayload = {
-                User_Email_Id: this.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserEmailId"),
-                userName: this.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserName")
-            }
-            // checkis rolde added issue in payload object
-            var payload = {};
-            payload["payload"] = oPayload;
-
-            var allowedModels = [
+            const that = this;
+            const allowedModels = [
                 "gpt-5",
                 "gpt-4o",
                 "anthropic--claude-3.5-sonnet",
@@ -543,109 +382,83 @@ sap.ui.define([
                 "mistralai--mistral-large-instruct",
                 "anthropic--claude-4.5-opus"
             ];
-            // BusyIndicator.show();
-            $.ajax({
 
-                url: this._sBasePath + '/cockpit/getDeployments',
-                type: "POST",
+            const sUrl = this._sBasePath + "/lm/scenarios/foundation-models/models";
+
+            $.ajax({
+                url: sUrl,
+                type: "GET",
                 headers: {
-                    "SAP-Connectivity-SCC-Location_ID": "PBS",
                     "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
                     "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
                     "X-Frame-Options": "DENY",
                     "X-XSS-Protection": "0",
-                    "X-Content-Type-Options": "nosniff"
+                    "X-Content-Type-Options": "nosniff",
+                     ...this.defaultHeaders
                 },
-                contentType: "application/json",
-                data: JSON.stringify(payload),
                 success: function (data, status, xhr) {
-                    var aresult = data.value.result;
-                    that.sApiUrl = aresult.sqlResponse.APIVERSION;
+                    const aModels = (data && data.resources) ? data.resources : [];
 
-                    // var updatedGptModelsforChatbot = data.value.result.deployments.map(function (modelName) {
-                    //     return {
-                    //         key: modelName.id,
-                    //         text: modelName.details.resources.backendDetails.model.name
-                    //     };
-                    // });
-
-                    // that.SelectedModel = updatedGptModelsforChatbot[0].text.configurationName;
-
-                    var updatedGptModelsforChatbot = aresult.deployments
-                        .filter(function (deployment) {
-                            var modelName =
-                                deployment.details.resources.backendDetails?.model?.name || deployment.details.resources.backend_details?.model?.name;
-                            return allowedModels.includes(modelName);
+                    const updatedGptModelsforChatbot = aModels
+                        .filter(function (item) {
+                            return allowedModels.includes(item.model);
                         })
-                        .map(function (deployment) {
+                        .map(function (item) {
                             return {
-                                key: deployment.id,
-                                text: deployment.details.resources.backendDetails?.model?.name || deployment.details.resources.backend_details?.model?.name
+                                key: item.model,
+                                text: item.model
                             };
                         });
 
                     that.SelectedModel =
                         updatedGptModelsforChatbot.length > 0
-                            ? updatedGptModelsforChatbot[0].text
+                            ? updatedGptModelsforChatbot[0].key
                             : "";
 
-                    var oViewModel = that.getView().getModel("chatModel");
-                    oViewModel.setProperty("/gptModels", updatedGptModelsforChatbot);
-                }.bind(this),
+                    const oViewModel = that.getView().getModel("chatModel");
+
+                    oViewModel.setProperty(
+                        "/gptModels",
+                        updatedGptModelsforChatbot
+                    );
+                },
                 error: function (jqXhr, textStatus, errorMessage) {
-                    MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
-                }.bind(this)
+                    try {
+                        sap.m.MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
+                    } catch (e) {
+                        sap.m.MessageBox.error("Failed to load models: " + jqXhr.statusText);
+                    }
+                }
             });
         },
-        getApiUrlforChatbot: function (apiModelName, aiKey, sApiUrl) {
-            // let baseUrl = sUrl[urlKey];
-            if (apiModelName === "anthropic--claude-3.5-sonnet" || apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
-                return this._sBasePath + `/deployments/${aiKey}/invoke`;
-            } else if (apiModelName === "mistralai--mistral-large-instruct") {
-                return this._sBasePath + `/deployments/${aiKey}/chat/completions`;
+        getApiUrlforChatbot: async function (apiModelName, aiKey, sApiUrl) {
+            const deploymentId = await models.getOrchestrationDeploymentId(this._sBasePath);
+            if (!deploymentId) {
+                throw new Error("Orchestration deployment not found");
             }
-            else if (apiModelName === "amazon--nova-pro") {
-
-                return this._sBasePath + `/deployments/${aiKey}/converse-stream`;
-            }
-
-            else {
-                if (apiModelName == "o3") {
-                    sApiUrl = '2024-12-01-preview';
-                }
-                return this._sBasePath + `/deployments/${aiKey}/chat/completions?api-version=${sApiUrl}`;
-            }
+            return this._sBasePath + `/deployments/${deploymentId}/completion`;
         },
         createPayloadBasedOnModelforChatbot: function (apiModelName, aMessages, oViewModel, controllerContext) {
-            var stop = null;
-            var that = this;
-            // var isPopupOpen = oViewModel.getProperty("/isParamPopupOpen");
-            // var isPopupEdited = oViewModel.getProperty("/isParamPopupEdited");
-            var payload;
-            var { system, messages: cleanedMessages } = that.sanitizePayloadMessagesforChatbot(aMessages);
-            if (apiModelName === "anthropic--claude-3.5-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.5-sonnet") {
-                payload = that._createAnthropicPayloadFromModelfrChatbot(cleanedMessages, system, oViewModel);
-                //payload = this._createAnthropicPayloadFromModel(aMessages);
-            } else if (apiModelName === "mistralai--mistral-large-instruct") {
-                if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                    aMessages[0].role = "system";
-                }
-                payload = that._createMistralPayloadFromModelfrChatbot(aMessages, stop, true, oViewModel);
-            } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
-                payload = that._createGPTModelPayloadFromModelfrChatbot(aMessages, true);
-            }
-            else if (apiModelName === "mistralai--mistral-small-instruct") {
-
-                if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                    aMessages[0].role = "system";
-                }
-                var payload = that._createMistralSmallPayloadFromModelfrChatbot(aMessages, stop, true, oViewModel);
-            }
-            else {
-                payload = that._createPayloadFromModelfrChatbot(aMessages, stop, true, oViewModel);
-            }
-
-            return payload;
+            const template = (aMessages || [])
+                .filter(function (m) { return m && typeof m.content !== "undefined"; })
+                .map(function (m) {
+                    return { role: m.role, content: m.content };
+                });
+ 
+            return {
+                orchestration_config: {
+                    module_configurations: {
+                        templating_module_config: {
+                            template: template
+                        },
+                        llm_module_config: {
+                            model_name: apiModelName,
+                            model_params: {
+                            }
+                        }
+                    }
+                },
+            };
         },
         sanitizePayloadMessagesforChatbot: function (aMessages) {
             var userPrompt = null;
@@ -678,58 +491,58 @@ sap.ui.define([
             };
 
         },
-        _createAnthropicPayloadFromModelfrChatbot: function (aMessages, stop, oViewModel) {
-            return {
-                anthropic_version: "bedrock-2023-05-31",
-                messages: aMessages,
-                max_tokens: 1024,
-                temperature: 0.7
-            };
-        },
+        // _createAnthropicPayloadFromModelfrChatbot: function (aMessages, stop, oViewModel) {
+        //     return {
+        //         anthropic_version: "bedrock-2023-05-31",
+        //         messages: aMessages,
+        //         max_tokens: 1024,
+        //         temperature: 0.7
+        //     };
+        // },
 
-        _createGPTModelPayloadFromModelfrChatbot: function (aMessages, nonStream) {
-            return {
-                messages: aMessages,
-                temperature: 1,
-                max_completion_tokens: 32000,
-                stop: null
-            }
-        },
-        _createMistralPayloadFromModelfrChatbot: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                model: "mistralai--mistral-large-instruct",
-                messages: aMessages,
-                temperature: 0.7,
-                top_p: 0.95,
-                frequency_penalty: 0.1,
-                presence_penalty: 0.1,
-                max_tokens: 4000,
-                stop: stop || null
-            };
-        },
-        _createMistralSmallPayloadFromModelfrChatbot: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                model: "mistralai--mistral-small-instruct",
-                messages: aMessages,
-                temperature: 0.7,
-                top_p: 0.95,
-                frequency_penalty: 0.1,
-                presence_penalty: 0.1,
-                max_tokens: 4000,
-                stop: stop || null
-            };
-        },
-        _createPayloadFromModelfrChatbot: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                messages: aMessages,
-                temperature: 0.7,
-                top_p: 0.95,
-                frequency_penalty: 0.1,
-                presence_penalty: 0.1,
-                max_tokens: 4000,
-                stop: stop || null
-            };
-        },
+        // _createGPTModelPayloadFromModelfrChatbot: function (aMessages, nonStream) {
+        //     return {
+        //         messages: aMessages,
+        //         temperature: 1,
+        //         max_completion_tokens: 32000,
+        //         stop: null
+        //     }
+        // },
+        // _createMistralPayloadFromModelfrChatbot: function (aMessages, stop, nonStream, oViewModel) {
+        //     return {
+        //         model: "mistralai--mistral-large-instruct",
+        //         messages: aMessages,
+        //         temperature: 0.7,
+        //         top_p: 0.95,
+        //         frequency_penalty: 0.1,
+        //         presence_penalty: 0.1,
+        //         max_tokens: 4000,
+        //         stop: stop || null
+        //     };
+        // },
+        // _createMistralSmallPayloadFromModelfrChatbot: function (aMessages, stop, nonStream, oViewModel) {
+        //     return {
+        //         model: "mistralai--mistral-small-instruct",
+        //         messages: aMessages,
+        //         temperature: 0.7,
+        //         top_p: 0.95,
+        //         frequency_penalty: 0.1,
+        //         presence_penalty: 0.1,
+        //         max_tokens: 4000,
+        //         stop: stop || null
+        //     };
+        // },
+        // _createPayloadFromModelfrChatbot: function (aMessages, stop, nonStream, oViewModel) {
+        //     return {
+        //         messages: aMessages,
+        //         temperature: 0.7,
+        //         top_p: 0.95,
+        //         frequency_penalty: 0.1,
+        //         presence_penalty: 0.1,
+        //         max_tokens: 4000,
+        //         stop: stop || null
+        //     };
+        // },
         //Start of Aishwarya for chatbot RAG 
         KBImplimentChatbot: async function (userMessage) {
             //main function for RAG 

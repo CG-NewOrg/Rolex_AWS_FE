@@ -562,3 +562,9 @@ z-index: 10 !important;
     white-space: nowrap;
     flex-shrink: 0;
 }
+
+.sapSearchTip {
+    font-size: 0.75rem;
+    color: #6a6d70;
+    font-style: italic;
+}

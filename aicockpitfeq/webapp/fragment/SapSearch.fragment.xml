@@ -7,48 +7,41 @@
   <Dialog
     id="sapSearchDialog"
     title="Object Selection"
-    contentWidth="720px"
+    contentWidth="780px"
     resizable="true"
     draggable="true">
 
-    <VBox class="sapUiMediumMargin">
-      <f:SimpleForm
-        editable="true"
-        layout="ResponsiveGridLayout"
-        labelSpanXL="4"
-        labelSpanL="4"
-        labelSpanM="4"
-        labelSpanS="12"
-        adjustLabelSpan="false"
-        emptySpanXL="0"
-        emptySpanL="0"
-        emptySpanM="0"
-        emptySpanS="0"
-        columnsXL="1"
-        columnsL="1"
-        columnsM="1"
-        singleContainerFullSize="false">
-
-        <f:content>
-          <Label text="Object Type" required="true"/>
+    <VBox class="sapUiSmallMarginTop sapUiSmallMarginBottom" width="100%">
+      <!-- Filter bar style: 3 fields side by side -->
+      <HBox alignItems="Start" justifyContent="Start" class="sapUiSmallMarginBottom sapUiSmallMarginBegin">
+        <VBox class="sapUiSmallMarginEnd">
+          <layoutData><FlexItemData growFactor="1"/></layoutData>
+          <Label text="Object Type" required="true" class="sapUiTinyMarginBottom"/>
           <Select
             selectedKey="{sapSearchModel>/objectType}"
             width="100%">
-            <core:Item key="PROG" text="Program (PROG)"/>
-            <core:Item key="CLAS" text="Class (CLAS)"/>
-            <core:Item key="INTF" text="Interface (INTF)"/>
-            <core:Item key="FUGR" text="Function Group (FUGR)"/>
-            <core:Item key="INCL" text="Include (INCL)"/>
-            <core:Item key="TABL" text="Table (TABL)"/>
-            <core:Item key="DDLS" text="CDS View (DDLS)"/>
-            <core:Item key="BDEF" text="Behavior Definition (BDEF)"/>
-            <core:Item key="SRVD" text="Service Definition (SRVD)"/>
-            <core:Item key="MSAG" text="Message Class (MSAG)"/>
-            <core:Item key="DTEL" text="Data Element (DTEL)"/>
-            <core:Item key="DOMA" text="Domain (DOMA)"/>
+            <core:Item key="PROG" text="Program"/>
+            <core:Item key="FUGR" text="Function Group"/>
+            <core:Item key="FUNC" text="Function Module"/>
+            <core:Item key="CLAS" text="Class/Interface"/>
+            <core:Item key="INTF" text="Interface"/>
+            <core:Item key="TABL" text="Table"/>
+            <core:Item key="DDLS" text="CDS View"/>
+            <core:Item key="BDEF" text="Behavior Definition"/>
+            <core:Item key="SRVD" text="Service Definition"/>
+            <core:Item key="SRVB" text="Service Binding"/>
+            <core:Item key="DEVC" text="Package"/>
+            <core:Item key="INCL" text="Include"/>
+            <core:Item key="MSAG" text="Message Class"/>
+            <core:Item key="DTEL" text="Data Element"/>
+            <core:Item key="DOMA" text="Domain"/>
+            <core:Item key="TRAN" text="Transaction"/>
           </Select>
+        </VBox>
 
-          <Label text="SAP System" required="true"/>
+        <VBox class="sapUiSmallMarginEnd">
+          <layoutData><FlexItemData growFactor="1"/></layoutData>
+          <Label text="SAP System" required="true" class="sapUiTinyMarginBottom"/>
           <Select
             selectedKey="{sapSearchModel>/sapSystem}"
             width="100%">
@@ -56,25 +49,23 @@
             <core:Item key="QAS" text="QAS — Quality"/>
             <core:Item key="PRD" text="PRD — Production"/>
           </Select>
+        </VBox>
 
-          <Label text="Search Pattern" required="true"/>
-          <HBox alignItems="Center" justifyContent="Start">
-            <SearchField
-              id="sapSearchPattern"
-              width="100%"
-              value="{sapSearchModel>/pattern}"
-              placeholder="e.g. ZABAP_MCP_TEST or Z*"
-              search=".onSapSearchExecute"
-              class="sapUiTinyMarginEnd"/>
-            <Button icon="sap-icon://decline" type="Transparent" press=".onSapSearchReset" tooltip="Clear"/>
-          </HBox>
-
+        <VBox>
+          <layoutData><FlexItemData growFactor="2"/></layoutData>
+          <Label text="Search Pattern" required="true" class="sapUiTinyMarginBottom"/>
+          <SearchField
+            id="sapSearchPattern"
+            width="90%"
+            value="{sapSearchModel>/pattern}"
+            placeholder="e.g. Z* or ZABAP_TEST"
+            search=".onSapSearchExecute"
+            showRefreshButton="false"/>
           <Text
-            text="Tip: Wildcards are supported by the backend search. Use Z* to search all Z-objects of the selected type."
-            class="sapUiTinyMarginTop sapUiContentPadding"
-            wrapping="true"/>
-        </f:content>
-      </f:SimpleForm>
+            text="Tip: Use Z* to search all Z-objects of the selected type."
+            class="sapUiTinyMarginTop sapSearchTip"/>
+        </VBox>
+      </HBox>
 
       <Table
         id="sapSearchResultsTable"
@@ -107,15 +98,14 @@
         </items>
       </Table>
 
-      <HBox justifyContent="End" class="sapUiSmallMarginTop">
-        <Button text="Use Selected" type="Emphasized" press=".onSapSearchUseSelected"/>
-        <Button text="Close" type="Transparent" press=".onSapSearchClose" class="sapUiTinyMarginBegin"/>
-      </HBox>
     </VBox>
 
     <beginButton>
-      <Button text="Search" type="Emphasized" press=".onSapSearchExecute"/>
+      <Button text="Use Selected" type="Emphasized" press=".onSapSearchUseSelected"/>
     </beginButton>
+    <endButton>
+      <Button text="Close" type="Transparent" press=".onSapSearchClose"/>
+    </endButton>
   </Dialog>
 
 </core:FragmentDefinition>

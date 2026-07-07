@@ -2,8 +2,9 @@ sap.ui.define([
     "sap/ui/core/Fragment",
     "sap/m/MessageBox",
     "sap/m/BusyDialog",
-    "sap/ui/model/json/JSONModel"
-], function (Fragment, MessageBox, BusyDialog, JSONModel) {
+    "sap/ui/model/json/JSONModel",
+    "aicockpitfeq/model/models"
+], function (Fragment, MessageBox, BusyDialog, JSONModel, models) {
     "use strict";
 
     return {
@@ -35,315 +36,309 @@ sap.ui.define([
         getSystemMessage: function (oView, sId) {
 
         },
-        getApiUrl: function (apiModelName, aiKey, sApiUrl, basePath) {
-
-            if (apiModelName?.toLowerCase().includes("sap-abap")) {
-                return `${basePath}/deployments/${aiKey}/completion`;
-                // } else if (apiModelName === "anthropic--claude-3.5-sonnet" || apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet") {
-            } else if (apiModelName?.toLowerCase().includes("anthropic")) {
-                return `${basePath}/deployments/${aiKey}/invoke-with-response-stream`;
-            } else if (apiModelName === "mistralai--mistral-large-instruct") {
-                return `${basePath}/deployments/${aiKey}/chat/completions`;
+         getApiUrl: async function (apiModelName, aiKey, sApiUrl, basePath) {
+            const deploymentId = await models.getOrchestrationDeploymentId(basePath);
+            if (!deploymentId) {
+                throw new Error("Orchestration deployment not found");
             }
-            else if (apiModelName === "amazon--nova-pro") {
-
-                return `${basePath}/deployments/${aiKey}/converse-stream`;
-            }
-
-            else {
-                if (apiModelName == "o3") {
-                    sApiUrl = '2024-12-01-preview';
-                }
-                const v = sApiUrl || "2024-12-01-preview";
-                return `${basePath}/deployments/${aiKey}/chat/completions?api-version=${v}`;
-            }
+            return `${basePath}/deployments/${deploymentId}/completion`;
         },
-        createPayloadBasedOnModel: function (apiModelName, aMessages, oViewModel, controllerContext) {
-            var stop = null;
-            // var isPopupOpen = oViewModel.getProperty("/isParamPopupOpen");
-            // var isPopupEdited = oViewModel.getProperty("/isParamPopupEdited");
-            var payload;
-            //for (var r = 0; r < aMessages.length; r++) {
-            //     if (apiModelName.includes("anthropic")) {
-            //         if (aMessages[r].role == "system") {
-            //             aMessages[r].role = "user";
-            //         }
-            //     } else {
-            //         if (aMessages[r].role == "system") {
-            //             aMessages[r].role = "system";
-            //         }
-            //     }
-            for (var r = 0; r < aMessages.length; r++) {
-                if (apiModelName.includes("anthropic")) {
-                    if (aMessages[r].role == "system") {
-                        aMessages[r].role = "user";
+        _getModelProvider: function (modelName) {
+            if (!modelName) return "openai";
+            var name = modelName.toLowerCase();
+            if (name.includes("sap-abap") || name.includes("abap")) return "sap-abap";
+            if (name.includes("anthropic") || name.includes("claude")) return "anthropic";
+            if (name.includes("gemini")) return "google";
+            if (name.includes("amazon") || name.includes("titan") || name.includes("nova")) return "amazon";
+            if (name.includes("mistral") || name.includes("codestral") || name.includes("mixtral")) return "mistral";
+            if (name.includes("meta") || name.includes("llama")) return "meta";
+            if (name.includes("cohere") || name.includes("command")) return "cohere";
+            return "openai";
+        },
+        _buildModelParams: function (provider, params) {
+            var modelParams = {};
+            if (params.max_tokens !== undefined) modelParams.max_tokens = params.max_tokens;
+            if (params.temperature !== undefined) modelParams.temperature = params.temperature;
+            if (params.top_p !== undefined) modelParams.top_p = params.top_p;
+
+            if (provider === "openai") {
+                if (params.frequency_penalty !== undefined) modelParams.frequency_penalty = params.frequency_penalty;
+                if (params.presence_penalty !== undefined) modelParams.presence_penalty = params.presence_penalty;
+            } else if (provider === "google" || provider === "cohere") {
+                if (params.top_k !== undefined) modelParams.top_k = params.top_k;
+            }
+
+            return modelParams;
+        },
+        _extractMessagesForTemplate: function (aMessages) {
+            var systemMessage = "";
+            var userMessage = "";
+            var imageData = null;
+
+            for (var i = 0; i < aMessages.length; i++) {
+                if (aMessages[i].role === "system" && !systemMessage) {
+                    systemMessage = aMessages[i].content || "";
+                }
+                if (aMessages[i].role === "user") {
+                    var content = aMessages[i].content;
+                    if (Array.isArray(content)) {
+                        // Multimodal content (image + text)
+                        for (var j = 0; j < content.length; j++) {
+                            if (content[j].type === "text") {
+                                userMessage = content[j].text || "";
+                            } else if (content[j].type === "image_url") {
+                                imageData = content[j].image_url;
+                            }
+                        }
+                    } else {
+                        userMessage = content || "";
                     }
-                    if (apiModelName == "anthropic--claude-3-haiku") {
-                        if (aMessages[r].role == "user" && aMessages[r + 1] && aMessages[r + 1].role == "user") {
-                            aMessages[r + 1].role = "assistant";
+                }
+            }
+
+            return { systemMessage: systemMessage, userMessage: userMessage, imageData: imageData };
+        },
+        _createOrchestrationPayload: function (apiModelName, aMessages, params, stream) {
+            if (stream === undefined) stream = true;
+            var provider = this._getModelProvider(apiModelName);
+            var modelParams = this._buildModelParams(provider, params);
+            var isMultiTurn = aMessages.some(function (msg) { return msg.role === "assistant"; });
+
+        if (provider === "sap-abap") {
+                var systemMessage = "";
+                for (var s = 0; s < aMessages.length; s++) {
+                    if (aMessages[s].role === "system" && aMessages[s].content) {
+                        systemMessage = aMessages[s].content;
+                        break;
+                    }
+                }
+                var nonSystemMessages = aMessages.filter(function (msg) { return msg.role !== "system"; });
+ 
+                if (isMultiTurn) {
+                    var firstUserMsg = "";
+                    var lastAssistantMsg = "";
+                    var lastUserMsg = "";
+ 
+                    for (var i = 0; i < nonSystemMessages.length; i++) {
+                        var msg = nonSystemMessages[i];
+                        if (msg.role === "user" && !firstUserMsg) {
+                            firstUserMsg = msg.content || "";
+                        }
+                        if (msg.role === "assistant") {
+                            lastAssistantMsg = msg.content || "";
+                        }
+                        if (msg.role === "user") {
+                            lastUserMsg = msg.content || "";
                         }
                     }
-                    if (aMessages[r].role == "assistant" && aMessages[r + 1] && aMessages[r + 1].role == "assistant") {
-                        aMessages[r + 1].role = "user";
-                    }
-                } else {
-                    if (aMessages[r].role == "system") {
-                        aMessages[r].role = "system";
+ 
+                    return {
+                        orchestration_config: {
+                            stream: stream,
+                            module_configurations: {
+                                llm_module_config: {
+                                    model_name: apiModelName,
+                                    model_params: modelParams
+                                },
+                                templating_module_config: {
+                                    template: [
+                                        { role: "user", content: "{{?initial_request}}" },
+                                        { role: "assistant", content: "{{?previous_response}}" },
+                                        { role: "user", content: "{{?followup_request}}" }
+                                    ]
+                                }
+                            }
+                        },
+                        input_params: {
+                            initial_request: initialRequest,
+                            previous_response: lastAssistantMsg,
+                            followup_request: lastUserMsg
+                        }
+                    };
+                }
+ 
+                var userContent = "";
+                for (var j = 0; j < nonSystemMessages.length; j++) {
+                    if (nonSystemMessages[j].role === "user") {
+                        userContent = nonSystemMessages[j].content || "";
                     }
                 }
-                if (!apiModelName.includes("amazon--nova-pro") && aMessages[r].role == "assistant" && aMessages[r].usedTokens) {
+                 var combinedUserMessage = userContent;
+                if (systemMessage) {
+                    combinedUserMessage = systemMessage + "\n" + userContent;
+                }
+ 
+                return {
+                    orchestration_config: {
+                        stream: stream,
+                        module_configurations: {
+                            llm_module_config: {
+                                model_name: apiModelName,
+                                model_params: modelParams
+                            },
+                            templating_module_config: {
+                                template: [
+                                    { role: "user", content: "{{?user_message}}" }
+                                ]
+                            }
+                        }
+                    },
+                    input_params: {
+                        user_message: combinedUserMessage
+                    }
+                };
+            }
+
+            if (isMultiTurn) {
+                var conversationTemplate = aMessages.map(function (msg) {
+                    return { role: msg.role, content: msg.content };
+                });
+
+                return {
+                    orchestration_config: {
+                        stream: stream,
+                        module_configurations: {
+                            llm_module_config: {
+                                model_name: apiModelName,
+                                model_params: modelParams
+                            },
+                            templating_module_config: {
+                                template: conversationTemplate
+                            }
+                        }
+                    }
+                };
+            }
+            var extractedMessages = this._extractMessagesForTemplate(aMessages);
+
+            // Image/multimodal case: build payload with image_url in template
+            if (extractedMessages.imageData) {
+                return {
+                    orchestration_config: {
+                        stream: stream,
+                        module_configurations: {
+                            llm_module_config: {
+                                model_name: apiModelName,
+                                model_params: modelParams
+                            },
+                            templating_module_config: {
+                                template: [
+                                    { role: "system", content: "{{?system_message}}" },
+                                    {
+                                        role: "user",
+                                        content: [
+                                            {
+                                                type: "text",
+                                                text: "{{?user_text}}"
+                                            },
+                                            {
+                                                type: "image_url",
+                                                image_url: {
+                                                    url: extractedMessages.imageData.url
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    input_params: {
+                        system_message: extractedMessages.systemMessage,
+                        user_text: extractedMessages.userMessage
+                    }
+                };
+            }
+
+            return {
+                orchestration_config: {
+                    stream: stream,
+                    module_configurations: {
+                        llm_module_config: {
+                            model_name: apiModelName,
+                            model_params: modelParams
+                        },
+                        templating_module_config: {
+                            template: [
+                                { role: "system", content: "{{?system_message}}" },
+                                { role: "user", content: "{{?user_message}}" }
+                            ]
+                        }
+                    }
+                },
+                input_params: {
+                    system_message: extractedMessages.systemMessage,
+                    user_message: extractedMessages.userMessage
+                }
+            };
+        },
+
+        createPayloadBasedOnModel: function (apiModelName, aMessages, oViewModel, controllerContext) {
+            var params = {};
+            if (controllerContext.savedSettings === false && oViewModel) {
+                params.temperature = oViewModel.getProperty("/comnPopUpModelParamTemp");
+                params.top_p = oViewModel.getProperty("/comnPopUpModelParamTopP");
+                params.max_tokens = oViewModel.getProperty("/comnPopUpModelParamMaxLength");
+                params.frequency_penalty = oViewModel.getProperty("/comnPopUpModelParamFreqP");
+                params.presence_penalty = oViewModel.getProperty("/comnPopUpModelParamPresenceP");
+                params.top_k = oViewModel.getProperty("/comnPopUpModelParamTopK");
+
+            } else if (controllerContext) {
+                params.temperature = controllerContext._savedTemperature;
+                params.top_p = controllerContext._savedTopP;
+                params.max_tokens = controllerContext._maxResponse;
+                params.frequency_penalty = controllerContext._freqPenalty;
+                params.presence_penalty = controllerContext._prePenalty;
+            }
+
+            let cleanedObj = Object.fromEntries(
+                Object.entries(params).filter(([key, value]) => value !== null)
+            );
+            let finalParams = Object.fromEntries(
+                Object.entries(cleanedObj).filter(([_, value]) => value !== undefined)
+            );
+            params = finalParams;
+
+            for (var r = 0; r < aMessages.length; r++) {
+                if (aMessages[r].role === "assistant" && aMessages[r].usedTokens) {
                     delete aMessages[r].usedTokens;
                 }
-
             }
-            if (controllerContext.savedSettings == false) {
-                // if (isPopupOpen && isPopupEdited) {
-                var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages,apiModelName);
-                //var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages);
-                if (apiModelName === "anthropic--claude-3.5-sonnet") {
-                    payload = this._createAnthropicPayload(cleanedMessages, system, controllerContext);
-                    //payload = this._createAnthropicPayload(aMessages, system, oViewModel);
-                } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
-                    payload = this._createGPTModelPayload(aMessages, false);
-                }
-                else if (apiModelName === "mistralai--mistral-large-instruct") {
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    payload = this._createMistralPayload(aMessages, stop, false, controllerContext);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
-                    payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-                } else if (apiModelName === "mistralai--mistral-small-instruct") {
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralSmallPayload(aMessages, stop, false, controllerContext);
-                } else if (apiModelName === "mistralai--mistral-medium-instruct") {
 
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralMediumPayload(aMessages, stop, false, controllerContext);
-                }
-                else if (apiModelName === "amazon--nova-pro") {
-
-                    var payload = this._createNovaProPayload(aMessages, stop, false, controllerContext);
-                }
-                else if (apiModelName === "o3") {
-
-                    var payload = this._createo3Payload(aMessages, false, controllerContext);
-                }
-                else if (apiModelName === "sonar") {
-
-                    var payload = this._createSonarPayload(aMessages, false, controllerContext);
-                } else if (apiModelName === "sap-abap-1") {
-
-                    var payload = this._createABAPPayload(aMessages, apiModelName);
-
-                }
-                else {
-                    payload = this._createModelPayload(aMessages, stop, false, controllerContext);
-                }
-            } else {
-
-                // for (var r = 0; r < aMessages.length; r++) {
-                //     if (apiModelName.includes("anthropic")) {
-                //         if (aMessages[r].role == "system") {
-                //             aMessages[r].role = "user";
-                //         }
-                //     } if (aMessages[r].role == "system") {
-                //         aMessages[r].role = "system";
-                //     }
-                // }
-                var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages,apiModelName);
-                // var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages);
-                if (apiModelName === "anthropic--claude-3.5-sonnet") {
-                    payload = this._createAnthropicPayloadFromModel(cleanedMessages, system, oViewModel);
-                    //payload = this._createAnthropicPayloadFromModel(aMessages);
-                } else if (apiModelName === "mistralai--mistral-large-instruct") {
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    payload = this._createMistralPayloadFromModel(aMessages, stop, false, oViewModel);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
-
-                    payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-
-                } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
-                    payload = this._createGPTModelPayloadFromModel(aMessages, false);
-                }
-                else if (apiModelName === "mistralai--mistral-small-instruct") {
-
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralSmallPayloadFromModel(aMessages, stop, false, oViewModel);
-                } else if (apiModelName === "mistralai--mistral-medium-instruct") {
-
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralMediumPayloadFromModel(aMessages, stop, false, oViewModel);
-                }
-                else if (apiModelName === "amazon--nova-pro") {
-                    var payload = this._createNovaProPayloadFromModel(aMessages, stop, false, oViewModel);
-                }
-                else if (apiModelName === "o3") {
-                    var payload = this._createo3PayloadFromModel(aMessages, false, oViewModel);
-                } else if (apiModelName === "sonar") {
-                    var payload = this._createSonarPayloadFromModel(aMessages, false, oViewModel);
-                }
-                else if (apiModelName === "sap-abap-1") {
-                    var payload = this._createABAPPayloadFromModel(aMessages, apiModelName, oViewModel);
-                }
-                else {
-                    payload = this._createPayloadFromModel(aMessages, stop, false, oViewModel);
-                }
-            }
-            return payload;
+            return this._createOrchestrationPayload(apiModelName, aMessages, params, true);
         },
         createPayloadBasedOnModelNonStream: function (apiModelName, aMessages, oViewModel, controllerContext, promptMsgData) {
-            var stop = null;
-            // var isPopupOpen = oViewModel.getProperty("/isParamPopupOpen");
-            // var isPopupEdited = oViewModel.getProperty("/isParamPopupEdited");
-            var payload;
-            // if (isPopupOpen && isPopupEdited) {
-            // for (var r = 0; r < aMessages.length; r++) {
-            //     if (apiModelName.includes("anthropic")) {
-            //         if (aMessages[r].role == "system") {
-            //             aMessages[r].role = "user";
-            //         }
+            var params = {};
 
-            //     } else {
-            //         if (aMessages[r].role == "system") {
-            //             aMessages[r].role = "system";
-            //         }
-            //     }
+            if (controllerContext.savedSettings === false && oViewModel) {
+                params.temperature = oViewModel.getProperty("/comnPopUpModelParamTemp");
+                params.top_p = oViewModel.getProperty("/comnPopUpModelParamTopP");
+                params.max_tokens = oViewModel.getProperty("/comnPopUpModelParamMaxLength");
+                params.frequency_penalty = oViewModel.getProperty("/comnPopUpModelParamFreqP");
+                params.presence_penalty = oViewModel.getProperty("/comnPopUpModelParamPresenceP");
+                params.top_k = oViewModel.getProperty("/comnPopUpModelParamTopK");
+            } else if (controllerContext) {
+                params.temperature = controllerContext._savedTemperature;
+                params.top_p = controllerContext._savedTopP;
+                params.max_tokens = controllerContext._maxResponse;
+                params.frequency_penalty = controllerContext._freqPenalty;
+                params.presence_penalty = controllerContext._prePenalty;
+            }
+            let cleanedObj = Object.fromEntries(
+                Object.entries(params).filter(([key, value]) => value !== null)
+            );
+            let finalParams = Object.fromEntries(
+                Object.entries(cleanedObj).filter(([_, value]) => value !== undefined)
+            );
+            params = finalParams;
+
             for (var r = 0; r < aMessages.length; r++) {
-                if (apiModelName.includes("anthropic")) {
-                    if (aMessages[r].role == "system") {
-                        aMessages[r].role = "user";
-                    }
-                    if (apiModelName == "anthropic--claude-3-haiku") {
-                        if (aMessages[r].role == "user" && aMessages[r + 1] && aMessages[r + 1].role == "user") {
-                            aMessages[r + 1].role = "assistant";
-                        }
-                        if (aMessages[r].role == "assistant" && aMessages[r + 1] && aMessages[r + 1].role == "assistant") {
-                            aMessages[r + 1].role = "user";
-                        }
-                    }
-
-                } else {
-                    if (aMessages[r].role == "system") {
-                        aMessages[r].role = "system";
-                    }
-                }
-                if (!apiModelName.includes("amazon--nova-pro") && aMessages[r].role == "assistant" && aMessages[r].usedTokens) {
+                if (aMessages[r].role === "assistant" && aMessages[r].usedTokens) {
                     delete aMessages[r].usedTokens;
                 }
             }
-            if (apiModelName == "anthropic--claude-3-haiku") {
-                var totalL = aMessages.length;
-                if (aMessages[totalL - 1].role !== "user") {
-                    aMessages.push({ "role": "user", "content": promptMsgData });
-                }
-            }
-            if (controllerContext.savedSettings == false) {
-                // if (isPopupOpen && isPopupEdited) {
-                var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages,apiModelName);
-                // var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages);
-                if (apiModelName === "anthropic--claude-3.5-sonnet") {
-                    //  payload = this._createAnthropicPayload(aMessages, system, oViewModel);
-                    payload = this._createAnthropicPayload(cleanedMessages, system, controllerContext);
-                } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
-                    payload = this._createGPTModelPayload(aMessages, true);
-                }
-                else if (apiModelName === "mistralai--mistral-large-instruct") {
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    payload = this._createMistralPayload(aMessages, stop, true, controllerContext);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
 
-                    payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-                } else if (apiModelName === "mistralai--mistral-small-instruct") {
-
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralSmallPayload(aMessages, stop, true, controllerContext);
-                } else if (apiModelName === "mistralai--mistral-medium-instruct") {
-
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralMediumPayload(aMessages, stop, true, controllerContext);
-                }
-                else if (apiModelName === "amazon--nova-pro") {
-                    var payload = this._createNovaProPayload(aMessages, stop, true, controllerContext);
-                } else if (apiModelName === "o3") {
-
-                    var payload = this._createo3Payload(aMessages, true, controllerContext);
-                }
-                else if (apiModelName === "sonar") {
-
-                    var payload = this._createSonarPayload(aMessages, true, controllerContext);
-                } else if (apiModelName === "sap-abap-1") {
-
-                    var payload = this._createABAPPayload(aMessages, apiModelName);
-
-                }
-                else {
-                    payload = this._createModelPayload(aMessages, stop, true, controllerContext);
-                }
-            } else {
-                var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages,apiModelName);
-                // var { system, messages: cleanedMessages } = this.sanitizePayloadMessages(aMessages);
-                if (apiModelName === "anthropic--claude-3.5-sonnet") {
-                    payload = this._createAnthropicPayloadFromModel(cleanedMessages, system, oViewModel);
-                    // payload = this._createAnthropicPayloadFromModel(aMessages);
-                } else if (apiModelName === "mistralai--mistral-large-instruct") {
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    payload = this._createMistralPayloadFromModel(aMessages, stop, true, oViewModel);
-                } else if (apiModelName === "anthropic--claude-3-haiku" || apiModelName === "anthropic--claude-3-sonnet" || apiModelName === "anthropic--claude-4.5-opus" || apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
-
-                    payload = this._createBasicAnthropicPayload(cleanedMessages, system);
-
-                } else if (apiModelName === "gpt-5" || apiModelName === "gpt-5-mini" || apiModelName === "gpt-5-nano") {
-                    payload = this._createGPTModelPayloadFromModel(aMessages, true);
-                }
-                else if (apiModelName === "mistralai--mistral-small-instruct") {
-
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralSmallPayloadFromModel(aMessages, stop, true, oViewModel);
-                } else if (apiModelName === "mistralai--mistral-medium-instruct") {
-
-                    if (aMessages && aMessages.length > 0 && aMessages[0].role === "assistant") {
-                        aMessages[0].role = "system";
-                    }
-                    var payload = this._createMistralMediumPayloadFromModel(aMessages, stop, true, oViewModel);
-                }
-                else if (apiModelName === "amazon--nova-pro") {
-
-                    var payload = this._createNovaProPayloadFromModel(aMessages, stop, true, oViewModel);
-                }
-                else if (apiModelName === "o3") {
-                    var payload = this._createo3PayloadFromModel(aMessages, true, oViewModel);
-                } else if (apiModelName === "sonar") {
-                    var payload = this._createSonarPayloadFromModel(aMessages, true, oViewModel);
-                }
-                else if (apiModelName === "sap-abap-1") {
-                    var payload = this._createABAPPayloadFromModel(aMessages, apiModelName, oViewModel);
-                }
-                else {
-                    payload = this._createPayloadFromModel(aMessages, stop, true, oViewModel);
-                }
-            }
-            return payload;
+            return this._createOrchestrationPayload(apiModelName, aMessages, params, false);
         },
         sanitizePayloadMessages: function (aMessages, apiModelName) {
             var systemPrompt = null;
@@ -418,297 +413,12 @@ sap.ui.define([
                 messages: sanitized
             };
         },
-        //create payload based on stream and AI model
-        _createABAPPayload: function (aMessages, apiModelName) {
-            var filteredMessages = aMessages
-                .filter(function (msg) { return msg.role !== "system"; })
-                .map(function (msg) {
-                    var clean = { role: msg.role, content: msg.content };
-                    return clean;
-                });
-
-            return {
-                orchestration_config: {
-                    module_configurations: {
-                        templating_module_config: {
-                            template: filteredMessages
-                        },
-                        llm_module_config: {
-                            model_name: apiModelName
-                        }
-                    }
-                }
-            };
-        },
-
-        _createABAPPayloadFromModel: function (aMessages, apiModelName, oViewModel) {
-            var filteredMessages = aMessages
-                .filter(function (msg) { return msg.role !== "system"; })
-                .map(function (msg) {
-                    var clean = { role: msg.role, content: msg.content };
-                    return clean;
-                });
-
-            return {
-                orchestration_config: {
-                    module_configurations: {
-                        templating_module_config: {
-                            template: filteredMessages
-                        },
-                        llm_module_config: {
-                            model_name: apiModelName,
-                            model_params: {
-                                temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                                top_p: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                                max_tokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength")
-                            }
-                        }
-                    }
-                }
-            };
-        },
-        _createPayloadFromModel: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                messages: aMessages,
-                temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                top_p: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                frequency_penalty: oViewModel.getProperty("/comnPopUpModelParamFreqP"),
-                presence_penalty: oViewModel.getProperty("/comnPopUpModelParamPresenceP"),
-                max_tokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength"),
-                stop: stop,
-                stream: nonStream ? false : true
-
-            };
-        },
-        _createo3PayloadFromModel: function (aMessages, nonStream) {
-            return {
-                "model": "o3",
-                "messages": aMessages,
-                "temperature": 1,
-                "max_completion_tokens": 24576,
-                "stream": nonStream ? false : true
-            };
-        },
-        _createSonarPayloadFromModel: function (aMessages, nonStream) {
-            return {
-                "model": "sonar",
-                "messages": aMessages,
-                "max_tokens": 4096,
-                "stop": null,
-                "stream": nonStream ? false : true
-            };
-        },
-        _createNovaProPayloadFromModel: function (aMessages, stop, nonStream, oViewModel) {
-            // Format messages for Nova Pro: convert 'system' to 'user' and wrap content
-            const formattedMessages = aMessages.map(msg => {
-                const role = (msg.role === "system") ? "user" : msg.role;
-                return {
-                    role: role,
-                    content: [{ text: msg.content }]
-                };
-            });
-
-            return {
-                model: "amazon--nova-pro",
-                messages: formattedMessages,
-                inferenceConfig: {
-                    temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                    topP: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                    maxTokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength")
-                },
-                stopSequences: Array.isArray(stop) ? stop : [],
-                stream: nonStream ? false : true
-            };
-        },
-        _createMistralMediumPayloadFromModel: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                model: "mistralai--mistral-medium-instruct",
-                messages: aMessages,
-                temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                top_p: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                frequency_penalty: oViewModel.getProperty("/comnPopUpModelParamFreqP"),
-                presence_penalty: oViewModel.getProperty("/comnPopUpModelParamPresenceP"),
-                max_tokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength"),
-                stop: stop,
-                stream: nonStream ? false : true
-            };
-        },
-        _createMistralSmallPayloadFromModel: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                model: "mistralai--mistral-small-instruct",
-                messages: aMessages,
-                temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                top_p: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                frequency_penalty: oViewModel.getProperty("/comnPopUpModelParamFreqP"),
-                presence_penalty: oViewModel.getProperty("/comnPopUpModelParamPresenceP"),
-                max_tokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength"),
-                stop: stop,
-                stream: nonStream ? false : true
-            };
-        },
-        _createGPTModelPayloadFromModel: function (aMessages, nonStream) {
-            return {
-                messages: aMessages,
-                temperature: 1,
-                max_completion_tokens: 32000,
-                stop: null,
-                stream: nonStream ? false : true
-            }
-        },
-        _createBasicAnthropicPayload: function (payloadtext) {
-            return {
-                anthropic_version: "bedrock-2023-05-31",
-                messages: payloadtext,
-                temperature: 1,
-                max_tokens: 16384
-                // stream: true
-            };
-        },
-        _createMistralPayloadFromModel: function (aMessages, stop, nonStream, oViewModel) {
-            return {
-                model: "mistralai--mistral-large-instruct",
-                messages: aMessages,
-                temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                top_p: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                frequency_penalty: oViewModel.getProperty("/comnPopUpModelParamFreqP"),
-                presence_penalty: oViewModel.getProperty("/comnPopUpModelParamPresenceP"),
-                max_tokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength"),
-                stop: stop,
-                stream: nonStream ? false : true
-            };
-        },
-        _createAnthropicPayloadFromModel: function (payloadText, stop, oViewModel) {
-            return {
-                anthropic_version: "bedrock-2023-05-31",
-                messages: payloadText,
-                temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                top_p: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                max_tokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength"),
-                // stream: true
-            };
-        },
-        _createModelPayload: function (aMessages, stop, nonStream, _this) {
-            return {
-                messages: aMessages,
-                temperature: _this._savedTemperature,
-                top_p: _this._savedTopP,
-                frequency_penalty: _this._freqPenalty,
-                presence_penalty: _this._prePenalty,
-                max_tokens: _this._maxResponse,
-                stop: stop,
-                stream: nonStream ? false : true
-            };
-        },
-        _createNovaProPayload: function (aMessages, stop, nonStream) {
-            // Format messages for Nova Pro: convert 'system' to 'user' and wrap content
-            const formattedMessages = aMessages.map(msg => {
-                const role = (msg.role === "system") ? "user" : msg.role;
-                return {
-                    role: role,
-                    content: [{ text: msg.content }]
-                };
-            });
-
-            return {
-                model: "amazon--nova-pro",
-                messages: formattedMessages,
-                inferenceConfig: {
-                    temperature: oViewModel.getProperty("/comnPopUpModelParamTemp"),
-                    topP: oViewModel.getProperty("/comnPopUpModelParamTopP"),
-                    maxTokens: oViewModel.getProperty("/comnPopUpModelParamMaxLength")
-                },
-                stopSequences: Array.isArray(stop) ? stop : [],
-                stream: nonStream ? false : true
-            };
-        },
-        _createo3Payload: function (aMessages, nonStream, _this) {
-            return {
-                "model": "o3",
-                "messages": aMessages,
-                "temperature": _this._savedTemperature,
-                "max_completion_tokens": _this._maxResponse,
-                "stream": nonStream ? false : true
-            };
-        },
-        _createSonarPayload: function (aMessages, nonStream, _this) {
-            return {
-                "model": "sonar",
-                "messages": aMessages,
-                "max_tokens": _this._maxResponse,
-                "stop": null,
-                "stream": nonStream ? false : true
-            };
-        },
-        _createMistralMediumPayload: function (aMessages, stop, nonStream, _this) {
-            return {
-                model: "mistralai--mistral-medium-instruct",
-                messages: aMessages,
-                temperature: _this._savedTemperature,
-                top_p: _this._savedTopP,
-                frequency_penalty: _this._freqPenalty,
-                presence_penalty: _this._prePenalty,
-                max_tokens: _this._maxResponse,
-                stop: stop,
-                stream: nonStream ? false : true
-            };
-        },
-        _createMistralSmallPayload: function (aMessages, stop, nonStream, _this) {
-            return {
-                model: "mistralai--mistral-small-instruct",
-                messages: aMessages,
-                temperature: _this._savedTemperature,
-                top_p: _this._savedTopP,
-                frequency_penalty: _this._freqPenalty,
-                presence_penalty: _this._prePenalty,
-                max_tokens: _this._maxResponse,
-                stop: stop,
-                stream: nonStream ? false : true
-
-            };
-        },
-        _createMistralPayload: function (aMessages, stop, nonStream, _this) {
-            return {
-                model: "mistralai--mistral-large-instruct",
-                messages: aMessages,
-                temperature: this._savedTemperature,
-                top_p: this._savedTopP,
-                frequency_penalty: this._freqPenalty,
-                presence_penalty: this._prePenalty,
-                max_tokens: this._maxResponse,
-                stop: stop,
-                stream: nonStream ? false : true
-            };
-        },
-        _createGPTModelPayload: function (aMessages, nonStream) {
-            return {
-                messages: aMessages,
-                temperature: 1,
-                // max_completion_tokens: this._maxResponse,
-                max_completion_tokens: 32000,
-                stop: null,
-                stream: nonStream ? false : true
-
-            }
-        },
-        _createAnthropicPayload: function (payloadText, system, _this) {
-            return {
-                anthropic_version: "bedrock-2023-05-31",
-                messages: payloadText,
-                temperature: _this._savedTemperature,
-                top_p: _this._savedTopP,
-                max_tokens: _this._maxResponse
-                //stream: true
-            };
-        },
 
         processAPIResponse: async function (oController, payloadNonStream, response, apiModelName, busyDialog, apiUrl) {
             let oUsedToken, oResMsg, sResponse;
             var runContext = oController._activeRun ? { ...oController._activeRun } : null;
-
-            var sSelectedIconTab = oController.selectedKeyFunct();
-
+            //var sSelectedIconTab = oController.selectedKeyFunct();
             var ceArr = [];
-            // Helper function to parse streaming code blocks progressively
             function parseCodeBlocksStreaming(text) {
                 var blocks = [];
                 var remaining = text;
@@ -717,21 +427,19 @@ sap.ui.define([
                 var match;
 
                 while ((match = codeBlockRegex.exec(text)) !== null) {
-                    // Add text before code block
                     if (match.index > lastIndex) {
                         var textBefore = text.substring(lastIndex, match.index);
                         if (textBefore.trim()) {
                             blocks.push({ textData: textBefore, codeData: "", lang: "" });
                         }
                     }
-                    // Add code block
+
                     var lang = match[1] || "";
                     var code = "```" + match[1] + "\n" + match[2] + "```";
                     blocks.push({ textData: "", codeData: code, lang: lang });
                     lastIndex = match.index + match[0].length;
                 }
 
-                // Add remaining text after last code block
                 if (lastIndex < text.length) {
                     var remainingText = text.substring(lastIndex);
                     if (remainingText.trim()) {
@@ -739,7 +447,6 @@ sap.ui.define([
                     }
                 }
 
-                // If no code blocks found, return the text as is
                 if (blocks.length === 0 && text.trim()) {
                     blocks.push({ textData: text, codeData: "", lang: "" });
                 }
@@ -747,32 +454,27 @@ sap.ui.define([
                 return blocks;
             }
 
-            // Helper function to detect incomplete code block at the end
             function hasIncompleteCodeBlock(text) {
                 var openCount = (text.match(/```/g) || []).length;
                 return openCount % 2 !== 0;
             }
 
-            // Helper function to extract current incomplete code block for streaming display
             function getStreamingCodeDisplay(text) {
                 var blocks = [];
                 var parts = text.split("```");
 
                 for (var i = 0; i < parts.length; i++) {
                     if (i % 2 === 0) {
-                        // Text part (outside code blocks)
                         if (parts[i].trim()) {
                             blocks.push({ textData: parts[i], codeData: "", lang: "" });
                         }
                     } else {
-                        // Code part (inside code blocks)
                         var codeContent = parts[i];
                         var lang = "";
                         var firstNewline = codeContent.indexOf("\n");
                         if (firstNewline > 0) {
                             lang = codeContent.substring(0, firstNewline).trim();
                         }
-                        // Check if this is a complete or incomplete code block
                         var isComplete = (i < parts.length - 1) || (parts.length > i + 1);
                         var codeWithBackticks = "```" + codeContent + (isComplete ? "```" : "");
                         blocks.push({ textData: "", codeData: codeWithBackticks, lang: lang });
@@ -785,6 +487,18 @@ sap.ui.define([
             function nextFrame() {
                 return new Promise(resolve => requestAnimationFrame(resolve));
             }
+            // --- Typing-effect helpers ---
+            var TYPING_CHARS_PER_STEP = 5;
+            var TYPING_STEP_DELAY_MS = 10;
+            function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+            async function revealTyping(aiRespModel, prevResult, delta) {
+                for (var _ci = 0; _ci < delta.length; _ci += TYPING_CHARS_PER_STEP) {
+                    aiRespModel.setProperty("/resp",
+                        prevResult + delta.substring(0, Math.min(_ci + TYPING_CHARS_PER_STEP, delta.length)));
+                    await sleep(TYPING_STEP_DELAY_MS);
+                }
+                aiRespModel.setProperty("/resp", prevResult + delta);
+            }
 
             busyDialog.open();
             var tokenData = oController.getView().getModel("TokenLimit").oData;
@@ -793,7 +507,7 @@ sap.ui.define([
             var tknUsed = tokenData[scenario][selectedAI].TotalToken;
             oController.getView().getModel("TokenLimit").setProperty("/token", tknUsed);
             async function fetchTokenUsage() {
-                // busyDialog.open();
+
                 try {
                     const response = await fetch(apiUrl, {
                         method: "POST",
@@ -803,10 +517,10 @@ sap.ui.define([
                         },
                         body: JSON.stringify(payloadNonStream)
                     });
-                    //   busyDialog.close();
-                    //      oController.getView().getModel("airesponseDetailModel").setProperty("/downloadVis", true);
                     const json = await response.json();
-                    return json.usage?.total_tokens || null;
+                    return json.orchestration_result?.usage?.total_tokens
+                        || json.usage?.total_tokens
+                        || null;
 
                 } catch (error) {
                     busyDialog.close();
@@ -818,7 +532,7 @@ sap.ui.define([
                 apiModelName === "anthropic--claude-3-haiku" ||
                 apiModelName === "anthropic--claude-3-sonnet" ||
                 apiModelName === "anthropic--claude-4.5-opus" ||
-                apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet") {
+                apiModelName === "anthropic--claude-4-sonnet" || apiModelName === "anthropic--claude-4.7-opus" || apiModelName === "anthropic--claude-4.6-sonnet" || apiModelName === "anthropic--claude-4.5-sonnet") {
 
                 // Streaming handler for Anthropic models via invoke-with-response-stream
                 const reader = response.body.getReader();
@@ -855,14 +569,78 @@ sap.ui.define([
 
                         try {
                             const json = JSON.parse(rawData);
-                            const eventType = json.type;
+                            // Check for error response in stream
+                            if (json.code && json.code >= 400 && json.message) {
+                                busyDialog.close();
+                                var streamErr = new Error(json.message);
+                                streamErr._isStreamError = true;
+                                throw streamErr;
+                            }
+                            if (json.orchestration_result || json.module_results) {
+                                // Token usage (sent on a later chunk that carries usage)
+                                const llmUsage = json.module_results?.llm?.usage;
+                                if (llmUsage) {
+                                    inputTokens = llmUsage.prompt_tokens || 0;
+                                    outputTokens = llmUsage.completion_tokens || 0;
+                                }
 
-                            // Extract input token usage from message_start
+                                const orchChoice = json.orchestration_result?.choices?.[0];
+                                const deltaText = orchChoice?.delta?.content ||
+                                    json.module_results?.llm?.choices?.[0]?.delta?.content || "";
+
+                                if (deltaText) {
+                                    result += deltaText;
+
+                                    var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+                                    if (scenario == "tstocode") {
+                                        var streamingBlocks = getStreamingCodeDisplay(result);
+                                        if (streamingBlocks.length > 0) {
+                                            var hasIncomplete = hasIncompleteCodeBlock(result);
+                                            if (hasIncomplete) {
+                                                var lastBacktickIndex = result.lastIndexOf("```");
+                                                var beforeIncomplete = result.substring(0, lastBacktickIndex);
+                                                var incompleteCode = result.substring(lastBacktickIndex);
+                                                var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+                                                ceArr = completedBlocks.slice();
+                                                var streamLang = "";
+                                                var codeContent = incompleteCode.substring(3);
+                                                var firstNewline = codeContent.indexOf("\n");
+                                                if (firstNewline > 0 && firstNewline < 20) {
+                                                    streamLang = codeContent.substring(0, firstNewline).trim();
+                                                }
+                                                ceArr.push({ textData: "", codeData: incompleteCode, lang: streamLang });
+                                            } else {
+                                                ceArr = parseCodeBlocksStreaming(result);
+                                            }
+                                            oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                        }
+                                    }
+
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+                                    busyDialog.close();
+                                    await revealTyping(oController.getView().getModel("airesponseDetailModel"), result.substring(0, result.length - deltaText.length), deltaText);
+
+                                    sResponseChunks.push({ role: "assistant", content: deltaText });
+                                }
+
+                                // Detect stream end via finish_reason
+                                if (orchChoice?.finish_reason === "stop") {
+                                    if (scenario == "tstocode") {
+                                        ceArr = parseCodeBlocksStreaming(result);
+                                        oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                    }
+                                    done = true;
+                                    break;
+                                }
+                                continue;
+                            }
+
+                            const eventType = json.type;
                             if (eventType === "message_start" && json.message?.usage) {
                                 inputTokens = json.message.usage.input_tokens || 0;
                             }
-
-                            // Extract text delta from content_block_delta
                             if (eventType === "content_block_delta" && json.delta?.type === "text_delta") {
                                 const deltaText = json.delta.text || "";
                                 if (deltaText) {
@@ -896,9 +674,8 @@ sap.ui.define([
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
-                                    oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
                                     busyDialog.close();
-                                    await nextFrame();
+                                    await revealTyping(oController.getView().getModel("airesponseDetailModel"), result.substring(0, result.length - deltaText.length), deltaText);
 
                                     sResponseChunks.push({
                                         role: "assistant",
@@ -924,6 +701,7 @@ sap.ui.define([
 
                         } catch (err) {
                             busyDialog.close();
+                            if (err._isStreamError) throw err;
                             console.error("Anthropic stream parse error:", rawData, err);
                         }
                     }
@@ -947,25 +725,10 @@ sap.ui.define([
                 let done = false;
                 let accumulatedText = "";
                 let result = "";
-                let usageData = null;
+                let inputTokens = 0;
+                let outputTokens = 0;
                 const sResponseChunks = [];
 
-                function normalizeChunk(rawData) {
-                    return rawData
-                        // Fix keys: 'key': → "key":
-                        .replace(/'([^']+)':/g, '"$1":')
-                        // Fix values: : 'value' → : "value"
-                        .replace(/:\s*'([^']*?)'/gs, (_, val) => {
-                            // Escape special chars inside values
-                            let safeVal = val
-                                .replace(/\\/g, "\\\\")
-                                .replace(/"/g, '\\"')
-                                .replace(/\n/g, "\\n"); // normalize line breaks
-                            return `: "${safeVal}"`;
-                        })
-                        // Remove trailing commas before } or ]
-                        .replace(/,(\s*[}\]])/g, "$1");
-                }
                 while (!done) {
                     const { value, done: streamDone } = await reader.read();
                     done = streamDone;
@@ -977,77 +740,94 @@ sap.ui.define([
                     accumulatedText = lines.pop(); // keep unfinished line
 
                     for (const line of lines) {
-                        if (!line.trim().startsWith("data: ")) continue;
+                        if (!line.trim().startsWith("data:")) continue;
 
-                        const rawData = line.replace("data: ", "").trim();
+                        const rawData = line.replace(/^data:\s*/, "").trim();
 
-                        if (rawData === "[DONE]") {
-                            ceArr.push({ textData: oController.getView().getModel("airesponseDetailModel").oData.resp, codeData: "", lang: "" });
-                            oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
-
-                            done = true;
+                        if (!rawData || rawData === "[DONE]") {
+                            if (rawData === "[DONE]") {
+                                if (scenario === "tstocode") {
+                                    ceArr = parseCodeBlocksStreaming(result);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                }
+                                done = true;
+                            }
                             break;
                         }
 
                         try {
-                            const safeData = normalizeChunk(rawData);
-                            const json = JSON.parse(safeData);
-
+                            const json = JSON.parse(rawData);
+                            // Check for error response in stream
+                            if (json.code && json.code >= 400 && json.message) {
+                                busyDialog.close();
+                                var streamErr = new Error(json.message);
+                                streamErr._isStreamError = true;
+                                throw streamErr;
+                            }
+                            const llmUsage = json.module_results?.llm?.usage;
+                            if (llmUsage) {
+                                inputTokens = llmUsage.prompt_tokens || 0;
+                                outputTokens = llmUsage.completion_tokens || 0;
+                            }
                             const deltaText =
-                                json.contentBlockDelta?.delta?.text ||
-                                json.generation ||
-                                json.text ||
-                                "";
+                                json.orchestration_result?.choices?.[0]?.delta?.content ||
+                                json.module_results?.llm?.choices?.[0]?.delta?.content || "";
 
                             if (deltaText) {
+                                result += deltaText;
+
                                 var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
-                                var formattedText = deltaText.replaceAll("\\n", "\n");
-                                result += formattedText;
-                                //scenario == "coderem" ||
-                                if (scenario == "tstocode") {
-                                    beforeText += result.split("```")[0];
-                                    codeText += "```" + result.split("```")[1];
-                                    afterText += result.split(codeText)[1];
-                                    var lang = codeText.split("\n")[0];
-                                    codeLanguage = lang.split("```")[1];
-                                    if (afterText !== "undefined" && afterText !== "") {
-                                        ceArr.push({ textData: beforeText, codeData: codeText, lang: codeLanguage });
-                                        result = "";
-                                        oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                if (scenario === "tstocode") {
+                                    var hasIncomplete = hasIncompleteCodeBlock(result);
+                                    if (hasIncomplete) {
+                                        var lastBacktickIndex = result.lastIndexOf("```");
+                                        var beforeIncomplete = result.substring(0, lastBacktickIndex);
+                                        var incompleteCode = result.substring(lastBacktickIndex);
+                                        var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+                                        ceArr = completedBlocks.slice();
+                                        var streamLang = "";
+                                        var codeContent = incompleteCode.substring(3);
+                                        var firstNewline = codeContent.indexOf("\n");
+                                        if (firstNewline > 0 && firstNewline < 20) {
+                                            streamLang = codeContent.substring(0, firstNewline).trim();
+                                        }
+                                        ceArr.push({ textData: "", codeData: incompleteCode, lang: streamLang });
+                                    } else {
+                                        ceArr = parseCodeBlocksStreaming(result);
                                     }
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                                 }
-                                busyDialog.close();
+
                                 oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
                                 oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
-                                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
-                                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
                                 oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
-                                oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
-                                await nextFrame();
-                                ///check this text area update
-                                // if (typeof oTextArea !== "undefined") {
-                                //     oTextArea.setValue(result);
-                                //     await nextFrame(); // Let UI update
-                                // }
+                                busyDialog.close();
+                                await revealTyping(oController.getView().getModel("airesponseDetailModel"), result.substring(0, result.length - deltaText.length), deltaText);
 
-                                sResponseChunks.push({
-                                    role: "assistant",
-                                    content: deltaText
-                                });
+                                sResponseChunks.push({ role: "assistant", content: deltaText });
                             }
-
-                            // Capture usage if present
-                            if (json.metadata?.usage) usageData = json.metadata.usage;
+                            const finishReason =
+                                json.orchestration_result?.choices?.[0]?.finish_reason ||
+                                json.module_results?.llm?.choices?.[0]?.finish_reason;
+                            if (finishReason === "stop") {
+                                if (scenario === "tstocode") {
+                                    ceArr = parseCodeBlocksStreaming(result);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                }
+                                done = true;
+                                break;
+                            }
 
                         } catch (err) {
                             busyDialog.close();
-                            console.error("Failed to normalize/parse chunk:", rawData, err);
+                            if (err._isStreamError) throw err;
+                            console.error("amazon--nova-pro stream parse error:", rawData, err);
                         }
                     }
                 }
 
                 sResponse = result;
-                oUsedToken = usageData?.totalTokens || 0;
+                oUsedToken = inputTokens + outputTokens;
                 oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
                 oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
                 oResMsg = {
@@ -1055,46 +835,119 @@ sap.ui.define([
                     usedTokens: oUsedToken,
                     content: sResponse
                 };
+                busyDialog.close();
             }
             else if (apiModelName === "sap-abap-1") {
-                const aResponse = await response.json();
-                const orchestration = aResponse.orchestration_result;
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
 
-                const choice = orchestration?.choices?.[0];
-                const message = choice?.message;
+                let done = false;
+                let accumulatedText = "";
+                let result = "";
+                let inputTokens = 0;
+                let outputTokens = 0;
+                const sResponseChunks = [];
 
-                sResponse = message?.content || "";
+                while (!done) {
+                    const { value, done: streamDone } = await reader.read();
+                    done = streamDone;
 
-                oResMsg = {
-                    role: message?.role || "assistant",
-                    content: sResponse
-                };
+                    const chunk = decoder.decode(value || new Uint8Array(), { stream: true });
+                    accumulatedText += chunk;
 
-                oUsedToken = orchestration?.usage?.total_tokens || 0;
+                    const lines = accumulatedText.split("\n");
+                    accumulatedText = lines.pop();
 
-                var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
-                //scenario == "coderem" ||
-                if (scenario == "tstocode") {
-                    var resArr = oResMsg.content.split("```");
-                    for (var h = 0; h < resArr.length; h++) {
-                        if (resArr[h + 1] !== undefined) {
-                            var lang = resArr[h + 1].split("\n")[0];
-                            codeLanguage = lang.split("```")[1];
-                            ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: codeLanguage });
-                            h++;
+                    for (const line of lines) {
+                        if (!line.trim().startsWith("data:")) continue;
+
+                        const rawData = line.replace(/^data:\s*/, "").trim();
+                        if (!rawData || rawData === "[DONE]") {
+                            if (rawData === "[DONE]") {
+                                if (scenario === "tstocode") {
+                                    ceArr = parseCodeBlocksStreaming(result);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                }
+                                done = true;
+                            }
+                            continue;
                         }
-                        else {
-                            ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
+
+                        try {
+                            const json = JSON.parse(rawData);
+                            // Check for error response in stream
+                            if (json.code && json.code >= 400 && json.message) {
+                                busyDialog.close();
+                                MessageBox.error(json.message);
+                                throw new Error(json.message);
+                            }
+                            const llmUsage = json.module_results?.llm?.usage;
+                            if (llmUsage) {
+                                inputTokens = llmUsage.prompt_tokens || 0;
+                                outputTokens = llmUsage.completion_tokens || 0;
+                            }
+                            const deltaText =
+                                json.orchestration_result?.choices?.[0]?.delta?.content ||
+                                json.module_results?.llm?.choices?.[0]?.delta?.content || "";
+
+                            if (deltaText) {
+                                result += deltaText;
+
+                                var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
+                                if (scenario === "tstocode") {
+                                    var hasIncomplete = hasIncompleteCodeBlock(result);
+                                    if (hasIncomplete) {
+                                        var lastBacktickIndex = result.lastIndexOf("```");
+                                        var beforeIncomplete = result.substring(0, lastBacktickIndex);
+                                        var incompleteCode = result.substring(lastBacktickIndex);
+                                        var completedBlocks = parseCodeBlocksStreaming(beforeIncomplete);
+                                        ceArr = completedBlocks.slice();
+                                        var streamLang = "";
+                                        var codeContent = incompleteCode.substring(3);
+                                        var firstNewline = codeContent.indexOf("\n");
+                                        if (firstNewline > 0 && firstNewline < 20) {
+                                            streamLang = codeContent.substring(0, firstNewline).trim();
+                                        }
+                                        ceArr.push({ textData: "", codeData: incompleteCode, lang: streamLang });
+                                    } else {
+                                        ceArr = parseCodeBlocksStreaming(result);
+                                    }
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                }
+
+                                oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
+                                oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
+                                oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+                                busyDialog.close();
+                                await revealTyping(oController.getView().getModel("airesponseDetailModel"), result.substring(0, result.length - deltaText.length), deltaText);
+
+                                sResponseChunks.push({ role: "assistant", content: deltaText });
+                            }
+                            const finishReason = json.orchestration_result?.choices?.[0]?.finish_reason ||
+                                json.module_results?.llm?.choices?.[0]?.finish_reason;
+                            if (finishReason === "stop") {
+                                if (scenario === "tstocode") {
+                                    ceArr = parseCodeBlocksStreaming(result);
+                                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
+                                }
+                                done = true;
+                                break;
+                            }
+                        } catch (err) {
+                            busyDialog.close();
+                            if (err._isStreamError) throw err;
+                            console.error("sap-abap-1 stream parse error:", rawData, err);
                         }
                     }
-                    oController.getView().getModel("airesponseDetailModel").setProperty("/multiCE", ceArr);
                 }
-                oController.getView().getModel("airesponseDetailModel").setProperty("/resp", sResponse);
-                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
-                oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
-                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
-                // oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
-                oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
+
+                sResponse = result;
+                oUsedToken = inputTokens + outputTokens;
+
+                oResMsg = {
+                    role: "assistant",
+                    content: sResponse
+                };
 
                 oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
                 oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
@@ -1109,9 +962,9 @@ sap.ui.define([
                 let result = ''; // Accumulated text for UI
                 oUsedToken = await fetchTokenUsage();
                 oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
-                var tokenData = oController.getView().getModel("TokenLimit").oData;
-                var selectedAI = oController.getView().byId("selModel").getSelectedItem().mProperties.text;
-                var tknUsed = tokenData[scenario][selectedAI].TotalToken;
+                const tokenData = oController.getView().getModel("TokenLimit").oData;
+                const selectedAIText = oController.getView().byId("selModel").getSelectedItem().mProperties.text;
+                tknUsed = tokenData[scenario][selectedAIText].TotalToken;
                 oController.getView().getModel("TokenLimit").setProperty("/token", tknUsed);
                 oController.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
                 while (!done) {
@@ -1139,8 +992,27 @@ sap.ui.define([
                             try {
 
                                 const json = JSON.parse(data);
-                                const deltaText = json.choices?.[0]?.delta?.content;
+                                // Check for error response in stream
+                                if (json.code && json.code >= 400 && json.message) {
+                                    busyDialog.close();
+                                    var streamErr = new Error(json.message);
+                                    streamErr._isStreamError = true;
+                                    throw streamErr;
+                                }
+                                // Support both legacy (json.choices) and orchestration wrapper format
+                                const deltaText = json.orchestration_result?.choices?.[0]?.delta?.content ||
+                                    json.module_results?.llm?.choices?.[0]?.delta?.content ||
+                                    json.choices?.[0]?.delta?.content;
 
+                                // Token usage from orchestration format
+                                if (json.module_results?.llm?.usage) {
+                                    const u = json.module_results.llm.usage;
+                                    oUsedToken = (u.prompt_tokens || 0) + (u.completion_tokens || 0);
+                                    oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+                                } else if (json?.usage?.total_tokens) {
+                                    oUsedToken = json.usage.total_tokens;
+                                    oController.getView().getModel("TokenLimit").setProperty("/usedToken", oUsedToken);
+                                }
 
                                 if (deltaText) {
                                     var beforeText = "", codeText = "", afterText = "", codeLanguage = "";
@@ -1164,7 +1036,7 @@ sap.ui.define([
                                                                 codeData: "```" + nextCodePart + "```",
                                                                 lang: lang
                                                             });
-                                                            p++; // Skip the code part
+                                                            p++;
                                                         }
                                                     }
                                                 }
@@ -1205,12 +1077,9 @@ sap.ui.define([
 
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/codeType", codeLanguage);
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/beforeResult", beforeText);
-                                    // oController.getView().getModel("airesponseDetailModel").setProperty("/codeEdVis", codeText !== "```undefined" ? true : false);
-                                    //oController.getView().getModel("airesponseDetailModel").setProperty("/codeResult", codeText !== "```undefined" ? codeText : "");
                                     oController.getView().getModel("airesponseDetailModel").setProperty("/afterResult", afterText !== "undefined" ? afterText : "");
-                                    oController.getView().getModel("airesponseDetailModel").setProperty("/resp", result);
                                     busyDialog.close();
-                                    await nextFrame();
+                                    await revealTyping(oController.getView().getModel("airesponseDetailModel"), result.substring(0, result.length - deltaText.length), deltaText);
 
                                     sResponseChunks.push({
                                         role: 'assistant',
@@ -1220,6 +1089,7 @@ sap.ui.define([
 
                             } catch (err) {
                                 busyDialog.close();
+                                if (err._isStreamError) throw err;
                                 console.error('Stream parse error:', err);
                             }
                         }
@@ -1249,10 +1119,10 @@ sap.ui.define([
                     var resArr = oResMsg.content.split("```");
                     for (var h = 0; h < resArr.length; h++) {
                         if (resArr[h + 1] !== undefined) {
-                            var lang = resArr[h + 1].split("\n")[0];
-                            codeLanguage = lang.split("```")[1];
+                            var language = resArr[h + 1].split("\n")[0];
+                            codeLanguage = language.split("```")[1];
                             ceArr.push({ textData: resArr[h], codeData: "```" + resArr[h + 1], lang: codeLanguage });
-                            h++;
+                            // h++;
                         } else {
                             ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
                         }
