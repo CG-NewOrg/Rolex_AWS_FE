@@ -1335,6 +1335,16 @@ sap.ui.define([
                 aFilters.push(new sap.ui.model.Filter("EMAIL_ID", sap.ui.model.FilterOperator.Contains, sEmailText));
             }
 
+            if (popUpSel === "admin") {
+                var oMultiCombo = this.byId("idProjectMultiCombo");
+                if (oMultiCombo) {
+                    var sSelectedKey = oMultiCombo.getSelectedKey();
+                    if (sSelectedKey) {
+                        aFilters.push(new sap.ui.model.Filter("project", sap.ui.model.FilterOperator.EQ, sSelectedKey));
+                    }
+                }
+            }
+
             if (sStart) {
                 aFilters.push(
                     new sap.ui.model.Filter("date", function (value) {
@@ -1437,291 +1447,627 @@ sap.ui.define([
             }
         },
 
+        onProjectChange: function () {
+            this._adminLogCurrentPage = 1;
+            var oSelect = this.byId("idProjectMultiCombo");
+            var sSelectedKey = oSelect ? oSelect.getSelectedKey() : "";
+            if (sSelectedKey) {
+                var oPayload = {
+                    project: sSelectedKey,
+                    limit: this._adminLogLimit,
+                    offset: 0
+                };
+                this.successCallofAdminLog(oPayload);
+            } else {
+                var isSuperAdmin = this.getView().getModel("flagModel").getProperty("/isSuperAdmin");
+                var oPayload;
+                if (isSuperAdmin) {
+                    oPayload = {
+                        limit: this._adminLogLimit,
+                        offset: 0
+                    };
+                } else {
+                    oPayload = {
+                        project: this._ProjectDetail,
+                        limit: this._adminLogLimit,
+                        offset: 0
+                    };
+                }
+                this.successCallofAdminLog(oPayload);
+            }
+        },
+         
         onAdminLogIconTabBarPress: async function () {
-
-            var oview = this.getView();
-            var that = this;
-            var UserloginModel = new sap.ui.model.json.JSONModel();
-            oview.setModel(UserloginModel, "UserloginModel");
             this.allow = true;
-            var catModel = models.createJSONModel(this, "categoryModel");
+            let UserloginModel = new sap.ui.model.json.JSONModel();
+            this.getView().setModel(UserloginModel, "UserloginModel");
+            this._adminLogLimit = 100;
+            this._adminLogCurrentPage = 1;
+            let adminPagingModel = new sap.ui.model.json.JSONModel({
+                currentPage: 1,
+                prevEnabled: false,
+                nextEnabled: true
+            });
+            this.getView().setModel(adminPagingModel, "adminPagingModel");
+
+            let catModel = models.createJSONModel(this, "categoryModel");
             this.getView().setModel(catModel, "catModel");
-
+            let isSuperAdmin = this.getView().getModel("flagModel").getProperty("/isSuperAdmin");
+            let oPayload;
+            if (isSuperAdmin) {
+                oPayload = {
+                    limit: this._adminLogLimit,
+                    offset: 0
+                };
+            } else {
+                oPayload = {
+                    project: this._ProjectDetail,
+                    limit: this._adminLogLimit,
+                    offset: 0
+                };
+            }
             if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "admin") {
-                //user list log start
-                var oPayload = {
-                    project: this._ProjectDetail
-                };
-
-                var sUrl = this._sBasePath + "/cockpit/getLoginDetailsOfAllUser";
-
-                /////original app url
-                var oPayload1 = JSON.stringify(oPayload);
-                let oHeaders = {
-                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
-                    "X-Frame-Options": "DENY",
-                    "X-XSS-Protection": "0",
-                    "X-Content-Type-Options": "nosniff"
-                };
-                $.ajax({
-                    url: sUrl,
-                    type: "GET",
-                    data: oPayload,
-                    headers: oHeaders,
-                    success: function (data, status, xhr) {
-                        var flattenedData = [];
-
-                        data.value.result.forEach(function (session) {
-
-                            flattenedData.push({
-                                USERNAME: session.USERNAME,
-                                EMAIL_ID: session.EMAIL_ID,
-                                date: new Date(session.date).toLocaleDateString('en-GB'),
-                                project: session.project === "null" ? " " : session.project,
-                                totalSessions: session.totalSessions,
-                                totalDuration: session.totalDuration,
-                                totalTokensConsumed: session.totalTokensConsumed,
-                                models: session.models || []
-                            });
-                        });
-
-
-                        UserloginModel.setData(flattenedData);
-                        UserloginModel.refresh();
-                        BusyIndicator.hide();
-
-                    },
-
-                    error: function (jqXhr, textStatus, errorMessage) {
-                        if (JSON.parse(jqXhr.responseText).error.code == "403") {
-                            that.getView().getModel("flagModel").setProperty("/isAdmin", false);
-                        }
-                        that.allow = false;
-                        let aDependents = that.getView().getDependents();
-                        aDependents.forEach(function (oDependent) {
-                            var title = oDependent.mProperties.title;
-                            if (title.includes("Admin Log List")) {
-                                if (oDependent.isOpen && oDependent.isOpen()) {
-                                    oDependent.close();
-                                }
-
-                                if (oDependent instanceof sap.m.Dialog || oDependent.isA("sap.ui.core.Fragment")) {
-                                    oDependent.destroy();
-                                }
-                            }
-                        });
-                        // console.log(errorMessage);
-                        // console.log(JSON.parse(jqXhr.responseText).error.message);
-                        BusyIndicator.hide();
-                        MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
-                    }
-                });
-                if (!this.adminLogList) {
-                    // BusyIndicator.show();
-                    this.adminLogList = await this.loadFragment({
-                        name: "aicockpitfeq.fragment.UserListLog"
-                    }).then(function (adminLogList) {
-                        this.adminLogList = adminLogList; // Store the dialog instance
-                        // this.adminLogList.setBusyIndicatorDelay(0);
-                        // this.adminLogList.setBusy(true);
-                        this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        if (this.allow == true) {
-                            this.adminLogList.open();
-                        }
-                    }.bind(this));
-                } else {
-                    if (this.allow == true) {
-                        this.adminLogList.open();
-                    }
-                    BusyIndicator.hide();
-                }
+                this.successCallofAdminLog(oPayload);
+                this.ProjectListSuperAdmin();
             } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "user") {
+                this.successCallofUserLog();
 
-                var mailId = this._loggedInUser;
-                var oPayload = {
-                    Email_Id: mailId,
-                    project: this._ProjectDetail
-                };
-                var sUrl = this._sBasePath + "/cockpit/getLoginDetails";
-
-                BusyIndicator.show();
-                let oHeader = {
-                    "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                    "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
-                    "X-Frame-Options": "DENY",
-                    "X-XSS-Protection": "0",
-                    "X-Content-Type-Options": "nosniff"
-                };
-                $.ajax({
-                    url: sUrl,
-                    type: "GET",
-                    data: oPayload,
-                    headers: oHeader,
-                    success: function (data, status, xhr) {
-                        var flattenedData = [];
-                        var mailId = data.value.result.EMAIL_ID;
-                        var uname = data.value.result.USERNAME;
-
-                        data.value.result.sessionHistory.forEach(function (session) {
-
-                            flattenedData.push({
-                                USERNAME: uname,
-                                EMAIL_ID: mailId,
-                                date: new Date(session.date).toLocaleDateString('en-GB'),
-                                sortDate: new Date(session.date).getTime(),
-                                totalSessions: session.totalSessions,
-                                totalDuration: session.totalDuration,
-                                totalTokensConsumed: session.totalTokensConsumed,
-                                project: session.project,
-                                models: session.models || [],
-                                selectedModelId: "",
-                                selectedModelToken: ""
-                            });
-
-                        });
-
-                        UserloginModel.setData(flattenedData);
-                        UserloginModel.refresh();
-                        BusyIndicator.hide();
-
-                    },
-                    error: function (jqXhr, textStatus, errorMessage) {
-                        console.log(errorMessage);
-                        console.log(JSON.parse(jqXhr.responseText).error.message);
-                        BusyIndicator.hide();
-                        MessageBox.error(jqXhr.responseText);
-                    }
-                });
-                if (!this.adminLogList) {
-                    // BusyIndicator.show();
-                    this.adminLogList = await this.loadFragment({
-                        name: "aicockpitfeq.fragment.UserListLog"
-                    }).then(function (oDialog3) {
-                        this.adminLogList = oDialog3; // Store the dialog instance
-                        this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        oDialog3.open();
-                        //BusyIndicator.hide();
-                    }.bind(this));
-                } else {
-                    this.adminLogList.open();
-                    BusyIndicator.hide();
-                }
             } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "promptlibpr") {
 
-                var msgtypeModel = models.createJSONModel(this, "msgType");
+                let msgtypeModel = models.createJSONModel(this, "msgType");
                 this.getView().setModel(msgtypeModel, "msgtypeModel");
 
-                if (!this.adminLogList) {
-                    // BusyIndicator.show();
-                    this.adminLogList = await that.loadFragment({
-                        name: "aicockpitfeq.fragment.UserListLog"
-                    }).then(function (oDialog4) {
-                        this.adminLogList = oDialog4;
-                        this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        oDialog4.open();
-                        // var url = this._sBasePath + "/lm/promptTemplates?scenario=BS&version=0.0.1";
-                        let sCategory = "BS";
-                        let sMsgType = "prompt";
-                        var roleSel = "user";
-                        var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + sCategory + "&MsgType=" + sMsgType + "&ProjectId=" + that._ProjectDetail;
-                        this.getView().byId("msgSelected").setSelectedKey(roleSel);
-                        //this.getView().byId("msgSelected").setSelectedKey(roleSel);
-                        that.onSearch(url, roleSel);
-                        // BusyIndicator.hide();
-                    }.bind(this));
-                } else {
-                    this.adminLogList.open();
-                    BusyIndicator.hide();
-                }
-            } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "knowlB") {
 
-            } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "promptsUsed") {
-                this.getPromptDetailsofUser();
-                if (!this.adminLogList) {
-                    // BusyIndicator.show();
-                    this.adminLogList = await this.loadFragment({
-                        name: "aicockpitfeq.fragment.UserListLog"
-                    }).then(function (oDialog5) {
-                        this.adminLogList = oDialog5; // Store the dialog instance
-                        this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        oDialog5.open();
-                        // BusyIndicator.hide();
-                    }.bind(this));
-                } else {
-                    this.adminLogList.open();
-                    BusyIndicator.hide();
-                }
-            } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "knowlBAdmin") {
+            }
+            else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "knowlBAdmin") {
 
-                var sCategory = "BS";
-                var sProject = this._ProjectDetail;
-                var sUserName = this._loggedInUserName;
+                let sCategory = "BS";
+                let sProject = this._ProjectDetail;
+                let sUserName = this._loggedInUserName;
                 this.loadKnowlBAdminFiles(sCategory, sProject, sUserName);
 
-                if (!this.adminLogList) {
-                    // BusyIndicator.show();
-                    this.adminLogList = await this.loadFragment({
-                        name: "aicockpitfeq.fragment.UserListLog"
-                    }).then(function (oDialog) {
-                        this.adminLogList = oDialog; // Store the dialog instance
-                        this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        oDialog.open();
-                        //BusyIndicator.hide();
-                    }.bind(this));
-                } else {
-                    this.adminLogList.open();
-                    BusyIndicator.hide();
-                }
             } else {
                 this.getFiles("BS");
-                if (!this.adminLogList) {
-                    BusyIndicator.show();
-                    this.adminLogList = await this.loadFragment({
-                        name: "aicockpitfeq.fragment.UserListLog"
-                    }).then(function (oDialog5) {
-                        this.adminLogList = oDialog5; // Store the dialog instance
-                        this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
-                            if (oEvent.key === "Escape") {
-                                oEvent.stopPropagation();
-                                oEvent.preventDefault();
-                            }
-                        });
-                        oDialog5.open();
-                        // BusyIndicator.hide();
-                    }.bind(this));
-                } else {
+
+            }
+
+            this.openAdminLogPopUp();
+
+        },
+        openAdminLogPopUp: async function () {
+
+            if (!this.adminLogList) {
+
+                this.adminLogList = await this.loadFragment({
+                    name: "aicockpitfeq.fragment.UserListLog"
+                }).then(function (oDialog) {
+                    this.adminLogList = oDialog; // Store the dialog instance
+                    this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+                        if (oEvent.key === "Escape") {
+                            oEvent.stopPropagation();
+                            oEvent.preventDefault();
+                        }
+                    });
+                    if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "promptlibpr") {
+                        let url = this._sBasePath + "/cockpit/getPromptDetails?Category=BS&MsgType=prompt&ProjectId=" + this._ProjectDetail;
+                        this.onSearch(url, "user");
+                    }
+                    if (this.allow == true) {
+                        oDialog.open();
+                    }
+                }.bind(this));
+            } else {
+                if (this.allow == true) {
                     this.adminLogList.open();
-                    BusyIndicator.hide();
                 }
+                sap.ui.core.BusyIndicator.hide();
             }
 
         },
+        successCallofAdminLog: function (oPayload) {
+            let UserloginModel = new sap.ui.model.json.JSONModel();
+            let that = this;
+            let oHeaders = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
+            this.getView().setModel(UserloginModel, "UserloginModel");
+            let isSuperAdmin = this.getView().getModel("flagModel").getProperty("/isSuperAdmin");
+            let sUrl;
+            if (isSuperAdmin) {
+                sUrl = this._sBasePath + '/cockpit/getLoginDetailsOfAllUser';
+            } else {
+                sUrl = this._sBasePath + '/cockpit/getLoginDetailsOfAllUserAd';
+            }
+            $.ajax({
+                url: sUrl,
+                type: "GET",
+                contentType: "application/json",
+                data: oPayload,
+                headers: oHeaders,
+                beforeSend: function () {
+                    sap.ui.core.BusyIndicator.show();
+                },
+                success: function (data, status, xhr) {
+                    let flattenedData = [];
+                    data.value.result.forEach(function (session) {
+                        flattenedData.push({
+                            USERNAME: session.USERNAME,
+                            EMAIL_ID: session.EMAIL_ID,
+                            date: new Date(session.date).toLocaleDateString('en-GB'),
+                            project: session.project === "null" ? " " : session.project,
+                            totalSessions: session.totalSessions,
+                            totalDuration: session.totalDuration,
+                            totalTokensConsumed: session.totalTokensConsumed,
+                            models: session.models || []
+                        });
+                    });
+                    UserloginModel.setData(flattenedData);
+                    UserloginModel.refresh();
+
+                    // Update pagination model
+                    let oPagingModel = that.getView().getModel("adminPagingModel");
+                    if (oPagingModel) {
+                        let iCurrentPage = that._adminLogCurrentPage || 1;
+                        oPagingModel.setProperty("/currentPage", iCurrentPage);
+                        oPagingModel.setProperty("/prevEnabled", iCurrentPage > 1);
+                        let iResultCount = Array.isArray(data.value.result) ? data.value.result.length : 0;
+                        oPagingModel.setProperty("/nextEnabled", iResultCount > 0);
+                    }
+
+                    sap.ui.core.BusyIndicator.hide();
+                },
+
+                error: function (jqXhr, textStatus, errorMessage) {
+                    let aDependents = that.getView().getDependents();
+                    aDependents.forEach(function (oDependent) {
+                        var title = oDependent.mProperties.title;
+                        if (title.includes("Admin Log List")) {
+                            if (oDependent.isOpen && oDependent.isOpen()) {
+                                oDependent.close();
+                            }
+
+                            if (oDependent instanceof sap.m.Dialog || oDependent.isA("sap.ui.core.Fragment")) {
+                                oDependent.destroy();
+                            }
+                        }
+                    });
+                    if (JSON.parse(jqXhr.responseText).error.code == "403") {
+                        that.getView().getModel("flagModel").setProperty("/isAdmin", false);
+                    }
+                    that.allow = false;
+                    that.closeSysKeyFr();
+                    sap.ui.core.BusyIndicator.hide();
+                    MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
+                }
+            });
+        },
+        getSuperAdminPayload: function (iOffset) {
+            var oSelect = this.byId("idProjectMultiCombo");
+            var sSelectedKey = oSelect ? oSelect.getSelectedKey() : "";
+            var isSuperAdmin = this.getView().getModel("flagModel").getProperty("/isSuperAdmin");
+            var oPayload;
+
+            if (sSelectedKey) {
+                oPayload = {
+                    project: sSelectedKey,
+                    limit: this._adminLogLimit,
+                    offset: iOffset
+                };
+            } else if (isSuperAdmin) {
+                oPayload = {
+                    limit: this._adminLogLimit,
+                    offset: iOffset
+                };
+            } else {
+                oPayload = {
+                    project: this._ProjectDetail,
+                    limit: this._adminLogLimit,
+                    offset: iOffset
+                };
+            }
+            return oPayload;
+        },
+        onAdminLogNextPage: function () {
+            this._adminLogCurrentPage = (this._adminLogCurrentPage || 1) + 1;
+            let iOffset = (this._adminLogCurrentPage - 1) * this._adminLogLimit;
+            this.successCallofAdminLog(this.getSuperAdminPayload(iOffset));
+        },
+        onAdminLogPrevPage: function () {
+            if (this._adminLogCurrentPage > 1) {
+                this._adminLogCurrentPage = this._adminLogCurrentPage - 1;
+            }
+            let iOffset = (this._adminLogCurrentPage - 1) * this._adminLogLimit;
+            this.successCallofAdminLog(this.getSuperAdminPayload(iOffset));
+        },
+        successCallofUserLog: function () {
+            let mailId = this._loggedInUser;
+
+            let oPayload = {
+                Email_Id: mailId,
+                project: this._ProjectDetail
+            };
+            let oPayload1 = JSON.stringify(oPayload);
+            let UserloginModel = new sap.ui.model.json.JSONModel();
+            this.getView().setModel(UserloginModel, "UserloginModel");
+            let sUrl = this._sBasePath + '/cockpit/getLoginDetails';
+            /////original app url
+            $.ajax({
+                url: sUrl,
+                type: "GET",
+                contentType: "application/json",
+                data: oPayload,
+                beforeSend: function () {
+                    sap.ui.core.BusyIndicator.show();
+                },
+                success: function (data, status, xhr) {
+                    let flattenedData = [];
+                    let mailId = data.value.result.EMAIL_ID;
+                    let uname = data.value.result.USERNAME;
+
+                    data.value.result.sessionHistory.forEach(function (session) {
+
+                        flattenedData.push({
+                            USERNAME: uname,
+                            EMAIL_ID: mailId,
+                            date: new Date(session.date).toLocaleDateString('en-GB'),
+                            sortDate: new Date(session.date).getTime(),
+                            totalSessions: session.totalSessions,
+                            totalDuration: session.totalDuration,
+                            totalTokensConsumed: session.totalTokensConsumed,
+                            project: session.project,
+                            models: session.models || [],
+                            selectedModelId: "",
+                            selectedModelToken: ""
+                        });
+
+                    });
+
+                    UserloginModel.setData(flattenedData);
+                    UserloginModel.refresh();
+                    sap.ui.core.BusyIndicator.hide();
+
+                },
+                error: function (jqXhr, textStatus, errorMessage) {
+                    console.log(errorMessage);
+                    //console.log(JSON.parse(jqXhr.responseText).error.message);
+                    sap.ui.core.BusyIndicator.hide();
+                    MessageBox.error(jqXhr.sText);
+                }
+            });
+        },
+
+        ProjectListSuperAdmin: function () {
+            var that = this;
+            var sApiUrl = this._sBasePath + "/cockpit/getAllUsers()";
+
+            fetch(sApiUrl, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                }
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch users for projects: " + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    var aUsers = data.value || data || [];
+                    var oUniqueProjects = {};
+                    aUsers.forEach(function (user) {
+                        var sProjectField = user.Project_Details || user.projectDetails || user.project || "";
+                        if (sProjectField && sProjectField.trim() !== "") {
+                            var aProjects = sProjectField.split(",");
+                            aProjects.forEach(function (sProject) {
+                                var sTrimmedProject = sProject.trim();
+                                if (sTrimmedProject !== "" && !oUniqueProjects[sTrimmedProject]) {
+                                    oUniqueProjects[sTrimmedProject] = true;
+                                }
+                            });
+                        }
+                    });
+
+                    var aProjectNames = Object.keys(oUniqueProjects).sort();
+                    var aProjects = aProjectNames.map(function (sName) {
+                        return { project: sName };
+                    });
+
+                    that.getView().getModel("prjModel").setProperty("/projects", aProjects);
+                })
+                .catch(function (error) {
+                });
+        },
+        // onAdminLogIconTabBarPress: async function () {
+
+        //     var oview = this.getView();
+        //     var that = this;
+        //     var UserloginModel = new sap.ui.model.json.JSONModel();
+        //     oview.setModel(UserloginModel, "UserloginModel");
+        //     this.allow = true;
+        //     var catModel = models.createJSONModel(this, "categoryModel");
+        //     this.getView().setModel(catModel, "catModel");
+
+        //     if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "admin") {
+        //         //user list log start
+        //         var oPayload = {
+        //             project: this._ProjectDetail
+        //         };
+
+        //         var sUrl = this._sBasePath + "/cockpit/getLoginDetailsOfAllUserAd";
+
+        //         /////original app url
+        //         var oPayload1 = JSON.stringify(oPayload);
+        //         let oHeaders = {
+        //             "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //             "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //             "X-Frame-Options": "DENY",
+        //             "X-XSS-Protection": "0",
+        //             "X-Content-Type-Options": "nosniff"
+        //         };
+        //         $.ajax({
+        //             url: sUrl,
+        //             type: "GET",
+        //             data: oPayload,
+        //             headers: oHeaders,
+        //             success: function (data, status, xhr) {
+        //                 var flattenedData = [];
+
+        //                 data.value.result.forEach(function (session) {
+
+        //                     flattenedData.push({
+        //                         USERNAME: session.USERNAME,
+        //                         EMAIL_ID: session.EMAIL_ID,
+        //                         date: new Date(session.date).toLocaleDateString('en-GB'),
+        //                         project: session.project === "null" ? " " : session.project,
+        //                         totalSessions: session.totalSessions,
+        //                         totalDuration: session.totalDuration,
+        //                         totalTokensConsumed: session.totalTokensConsumed,
+        //                         models: session.models || []
+        //                     });
+        //                 });
+
+
+        //                 UserloginModel.setData(flattenedData);
+        //                 UserloginModel.refresh();
+        //                 BusyIndicator.hide();
+
+        //             },
+
+        //             error: function (jqXhr, textStatus, errorMessage) {
+        //                 if (JSON.parse(jqXhr.responseText).error.code == "403") {
+        //                     that.getView().getModel("flagModel").setProperty("/isAdmin", false);
+        //                 }
+        //                 that.allow = false;
+        //                 let aDependents = that.getView().getDependents();
+        //                 aDependents.forEach(function (oDependent) {
+        //                     var title = oDependent.mProperties.title;
+        //                     if (title.includes("Admin Log List")) {
+        //                         if (oDependent.isOpen && oDependent.isOpen()) {
+        //                             oDependent.close();
+        //                         }
+
+        //                         if (oDependent instanceof sap.m.Dialog || oDependent.isA("sap.ui.core.Fragment")) {
+        //                             oDependent.destroy();
+        //                         }
+        //                     }
+        //                 });
+        //                 // console.log(errorMessage);
+        //                 // console.log(JSON.parse(jqXhr.responseText).error.message);
+        //                 BusyIndicator.hide();
+        //                 MessageBox.error(JSON.parse(jqXhr.responseText).error.message);
+        //             }
+        //         });
+        //         if (!this.adminLogList) {
+        //             // BusyIndicator.show();
+        //             this.adminLogList = await this.loadFragment({
+        //                 name: "aicockpitfeq.fragment.UserListLog"
+        //             }).then(function (adminLogList) {
+        //                 this.adminLogList = adminLogList; // Store the dialog instance
+        //                 // this.adminLogList.setBusyIndicatorDelay(0);
+        //                 // this.adminLogList.setBusy(true);
+        //                 this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+        //                     if (oEvent.key === "Escape") {
+        //                         oEvent.stopPropagation();
+        //                         oEvent.preventDefault();
+        //                     }
+        //                 });
+        //                 if (this.allow == true) {
+        //                     this.adminLogList.open();
+        //                 }
+        //             }.bind(this));
+        //         } else {
+        //             if (this.allow == true) {
+        //                 this.adminLogList.open();
+        //             }
+        //             BusyIndicator.hide();
+        //         }
+        //     } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "user") {
+
+        //         var mailId = this._loggedInUser;
+        //         var oPayload = {
+        //             Email_Id: mailId,
+        //             project: this._ProjectDetail
+        //         };
+        //         var sUrl = this._sBasePath + "/cockpit/getLoginDetails";
+
+        //         BusyIndicator.show();
+        //         let oHeader = {
+        //             "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //             "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //             "X-Frame-Options": "DENY",
+        //             "X-XSS-Protection": "0",
+        //             "X-Content-Type-Options": "nosniff"
+        //         };
+        //         $.ajax({
+        //             url: sUrl,
+        //             type: "GET",
+        //             data: oPayload,
+        //             headers: oHeader,
+        //             success: function (data, status, xhr) {
+        //                 var flattenedData = [];
+        //                 var mailId = data.value.result.EMAIL_ID;
+        //                 var uname = data.value.result.USERNAME;
+
+        //                 data.value.result.sessionHistory.forEach(function (session) {
+
+        //                     flattenedData.push({
+        //                         USERNAME: uname,
+        //                         EMAIL_ID: mailId,
+        //                         date: new Date(session.date).toLocaleDateString('en-GB'),
+        //                         sortDate: new Date(session.date).getTime(),
+        //                         totalSessions: session.totalSessions,
+        //                         totalDuration: session.totalDuration,
+        //                         totalTokensConsumed: session.totalTokensConsumed,
+        //                         project: session.project,
+        //                         models: session.models || [],
+        //                         selectedModelId: "",
+        //                         selectedModelToken: ""
+        //                     });
+
+        //                 });
+
+        //                 UserloginModel.setData(flattenedData);
+        //                 UserloginModel.refresh();
+        //                 BusyIndicator.hide();
+
+        //             },
+        //             error: function (jqXhr, textStatus, errorMessage) {
+        //                 console.log(errorMessage);
+        //                 console.log(JSON.parse(jqXhr.responseText).error.message);
+        //                 BusyIndicator.hide();
+        //                 MessageBox.error(jqXhr.responseText);
+        //             }
+        //         });
+        //         if (!this.adminLogList) {
+        //             // BusyIndicator.show();
+        //             this.adminLogList = await this.loadFragment({
+        //                 name: "aicockpitfeq.fragment.UserListLog"
+        //             }).then(function (oDialog3) {
+        //                 this.adminLogList = oDialog3; // Store the dialog instance
+        //                 this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+        //                     if (oEvent.key === "Escape") {
+        //                         oEvent.stopPropagation();
+        //                         oEvent.preventDefault();
+        //                     }
+        //                 });
+        //                 oDialog3.open();
+        //                 //BusyIndicator.hide();
+        //             }.bind(this));
+        //         } else {
+        //             this.adminLogList.open();
+        //             BusyIndicator.hide();
+        //         }
+        //     } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "promptlibpr") {
+
+        //         var msgtypeModel = models.createJSONModel(this, "msgType");
+        //         this.getView().setModel(msgtypeModel, "msgtypeModel");
+
+        //         if (!this.adminLogList) {
+        //             // BusyIndicator.show();
+        //             this.adminLogList = await that.loadFragment({
+        //                 name: "aicockpitfeq.fragment.UserListLog"
+        //             }).then(function (oDialog4) {
+        //                 this.adminLogList = oDialog4;
+        //                 this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+        //                     if (oEvent.key === "Escape") {
+        //                         oEvent.stopPropagation();
+        //                         oEvent.preventDefault();
+        //                     }
+        //                 });
+        //                 oDialog4.open();
+        //                 // var url = this._sBasePath + "/lm/promptTemplates?scenario=BS&version=0.0.1";
+        //                 let sCategory = "BS";
+        //                 let sMsgType = "prompt";
+        //                 var roleSel = "user";
+        //                 var url = this._sBasePath + "/cockpit/getPromptDetails?Category=" + sCategory + "&MsgType=" + sMsgType + "&ProjectId=" + that._ProjectDetail;
+        //                 this.getView().byId("msgSelected").setSelectedKey(roleSel);
+        //                 //this.getView().byId("msgSelected").setSelectedKey(roleSel);
+        //                 that.onSearch(url, roleSel);
+        //                 // BusyIndicator.hide();
+        //             }.bind(this));
+        //         } else {
+        //             this.adminLogList.open();
+        //             BusyIndicator.hide();
+        //         }
+        //     } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "knowlB") {
+
+        //     } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "promptsUsed") {
+        //         this.getPromptDetailsofUser();
+        //         if (!this.adminLogList) {
+        //             // BusyIndicator.show();
+        //             this.adminLogList = await this.loadFragment({
+        //                 name: "aicockpitfeq.fragment.UserListLog"
+        //             }).then(function (oDialog5) {
+        //                 this.adminLogList = oDialog5; // Store the dialog instance
+        //                 this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+        //                     if (oEvent.key === "Escape") {
+        //                         oEvent.stopPropagation();
+        //                         oEvent.preventDefault();
+        //                     }
+        //                 });
+        //                 oDialog5.open();
+        //                 // BusyIndicator.hide();
+        //             }.bind(this));
+        //         } else {
+        //             this.adminLogList.open();
+        //             BusyIndicator.hide();
+        //         }
+        //     } else if (this.getView().getModel("switchFragments").getProperty("/frg/frName") == "knowlBAdmin") {
+
+        //         var sCategory = "BS";
+        //         var sProject = this._ProjectDetail;
+        //         var sUserName = this._loggedInUserName;
+        //         this.loadKnowlBAdminFiles(sCategory, sProject, sUserName);
+
+        //         if (!this.adminLogList) {
+        //             // BusyIndicator.show();
+        //             this.adminLogList = await this.loadFragment({
+        //                 name: "aicockpitfeq.fragment.UserListLog"
+        //             }).then(function (oDialog) {
+        //                 this.adminLogList = oDialog; // Store the dialog instance
+        //                 this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+        //                     if (oEvent.key === "Escape") {
+        //                         oEvent.stopPropagation();
+        //                         oEvent.preventDefault();
+        //                     }
+        //                 });
+        //                 oDialog.open();
+        //                 //BusyIndicator.hide();
+        //             }.bind(this));
+        //         } else {
+        //             this.adminLogList.open();
+        //             BusyIndicator.hide();
+        //         }
+        //     } else {
+        //         this.getFiles("BS");
+        //         if (!this.adminLogList) {
+        //             BusyIndicator.show();
+        //             this.adminLogList = await this.loadFragment({
+        //                 name: "aicockpitfeq.fragment.UserListLog"
+        //             }).then(function (oDialog5) {
+        //                 this.adminLogList = oDialog5; // Store the dialog instance
+        //                 this.adminLogList.attachBrowserEvent("keydown", function (oEvent) {
+        //                     if (oEvent.key === "Escape") {
+        //                         oEvent.stopPropagation();
+        //                         oEvent.preventDefault();
+        //                     }
+        //                 });
+        //                 oDialog5.open();
+        //                 // BusyIndicator.hide();
+        //             }.bind(this));
+        //         } else {
+        //             this.adminLogList.open();
+        //             BusyIndicator.hide();
+        //         }
+        //     }
+
+        // },
         closeAdminLogListFragment: function () {
             for (var i = 0; i < this.getView().getDependents().length; i++) {
                 if (this.getView().getDependents()[i].isOpen()) {
@@ -3353,8 +3699,9 @@ sap.ui.define([
                             return;
                         } else if (fileExtension === "png" || fileExtension === "jpeg" || fileExtension === "jpg") {
                             if (deploymentName !== "gpt-4o" &&
-                                deploymentName !== "anthropic--claude-4.5-opus" &&
-                                deploymentName !== "anthropic--claude-4.5-sonnet" &&
+                                !deploymentName.includes("anthropic") &&
+                                !deploymentName.includes("gemini") &&
+                                !deploymentName.includes("mistralai") &&
                                 sSelectedIconTab !== "PCT" &&
                                 sSelectedIconTab !== "BPM") {
 
@@ -4727,9 +5074,18 @@ sap.ui.define([
                 MessageBox.show("Please pick a valid date range.");
                 return;
             }
-
-            let params = new URLSearchParams({ fromDate: fromDate, toDate: toDate });
-            let sUrl = this._sBasePath + "/cockpit/sessionDataExcel?" + params.toString();
+            // let params = new URLSearchParams({ fromDate: fromDate, toDate: toDate });
+            // let sUrl = this._sBasePath + "/cockpit/sessionDataExcel?" + params.toString();
+            let isSuperAdmin = this.getView().getModel("flagModel").getProperty("/isSuperAdmin");
+            let params;
+            let sUrl;
+            if (isSuperAdmin) {
+                params = new URLSearchParams({ fromDate: fromDate, toDate: toDate });
+                sUrl = this._sBasePath + "/cockpit/sessionDataExcel?" + params.toString();
+            } else {
+                params = new URLSearchParams({ fromDate: fromDate, toDate: toDate, Project: this._ProjectDetail });
+                sUrl = this._sBasePath + "/cockpit/sessionDataExcelAd?" + params.toString();
+            }
             sap.m.URLHelper.redirect(sUrl, true);
             this._oUserLogDatePopover?.close();
         },
@@ -5680,7 +6036,7 @@ sap.ui.define([
                         this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
                         MessageBox.error("Please Select a Prompt ID or Create a Prompt");
                         noGo = true;
-                    } else if (promptMsgData == "" && Array.isArray(aFileData) && (this.getView().byId("selModel").getValue() === "anthropic--claude-4.5-opus" || this.getView().byId("selModel").getValue() === "anthropic--claude-4.5-sonnet")) {
+                    } else if (promptMsgData == "" && Array.isArray(aFileData) && (this.getView().byId("selModel").getValue().startsWith("anthropic--") || this.getView().byId("selModel").getValue().startsWith("gemini-") || this.getView().byId("selModel").getValue().startsWith("mistralai--"))) {
                         this.getView().byId("multiInputPrompt").setValueState("Error");
                         this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
                         MessageBox.error("Please Select/Add a Prompt!");
@@ -5932,7 +6288,11 @@ sap.ui.define([
                 busyDialog.close();
 
             } catch (error) {
+                if (error && error._isStreamError) {
+                    sap.m.MessageBox.error(error.message);
+                } else {
                 sap.m.MessageBox.error(oBundle.getText("errorAzureAPI"));
+                }
                 console.error("Fetch error:", error);
                 BusyIndicator.hide();
                 busyDialog.close();
@@ -7110,8 +7470,9 @@ sap.ui.define([
                 } else if (oFile.type == "image/png" || oFile.type === "image/jpeg" || oFile.type === "image/jpg") {
 
                     if (deploymentName !== "gpt-4o" &&
-                        deploymentName !== "anthropic--claude-4.5-opus" &&
-                        deploymentName !== "anthropic--claude-4.5-sonnet" &&
+                        !deploymentName.includes("anthropic") &&
+                        !deploymentName.includes("gemini") &&
+                        !deploymentName.includes("mistralai") &&
                         sSelectedIconTab !== "PCT" &&
                         sSelectedIconTab !== "BPM") {
                         oFileUploader.clear();
@@ -7835,27 +8196,32 @@ sap.ui.define([
             }
             var aMsgModel = this.getView().getModel("msgModel");   //// aMsgs formed in first call with assistant role added
             if (promptMsgData !== "") {
-                if (this.isImage == true && aiModelName.includes("gpt-4")) {
-                    for (var f = 0; f < sContent.length; f++) {
-                        if (sContent[f].type == "text") {
-                            sContent.pop();
+                if (this.isImage && Array.isArray(sContent)) {
+                    for (let f = sContent.length - 1; f >= 0; f--) {
+                        if (sContent[f].type === "text") {
+                            sContent.splice(f, 1);
                         }
                     }
-                    sContent.push({ "type": "text", "text": promptMsgData })
+                    sContent.push({ "type": "text", "text": promptMsgData });
                     oContent = sContent;
                     updatedThread[0].content = oContent;
+                } else if (Array.isArray(sContent)) {
+                    oContent = promptMsgData;
+                    updatedThread[0].content = oContent;
                 } else {
-                    var oContent = sContent + "\n" + promptMsgData;
+                    oContent = sContent + "\n" + promptMsgData;
                     updatedThread[0].content = oContent;
                 }
             } else {
-                updatedThread[0].content = sContent;
+                if (this.isImage && Array.isArray(sContent)) {
+                    updatedThread[0].content = sContent;
+                } else if (Array.isArray(sContent)) {
+                    updatedThread[0].content = "";
+                } else {
+                    updatedThread[0].content = sContent;
+                }
             }
-            //  if(this.isImage==true){
-            //     sContent.push({ "type": "text", "text": promptMsgData })
-
-            //     oContent = sContent;
-            //     }
+           
             if (sSelectedIconTab == "TCG" || sSelectedIconTab == "BPM" || sSelectedIconTab == "PCT") {
                 var reupload = true;
                 var airesp = this.getView().getModel("airesponseDetailModel").getProperty("/resp");
@@ -8948,6 +9314,11 @@ sap.ui.define([
                     if (ctrl.setDateValue) ctrl.setDateValue(null);
                 }
             });
+            var oProjectSelect = oView.byId("idProjectMultiCombo");
+            if (oProjectSelect) {
+                oProjectSelect.setSelectedKey("");
+            }
+            this.onProjectChange();
 
             ["idUserLogTable", "idPromptRegistryTable", "idPromptUsed", "kbTable"].forEach(function (sTableId) {
                 var oTable = oView.byId(sTableId);
@@ -11256,12 +11627,13 @@ sap.ui.define([
                 success: function (data) {
 
                     let files = [];
-                    var contents = data?.value?.data?.Contents;
+                    var contents = data?.value?.data;
 
                     if (contents) {
-                        files = contents.map(f => ({
+                        let filteredFiles = contents.filter(item => item.category === sSelectedIconTab + "Template");
+                        files = filteredFiles.map(f => ({
                             Key: f.Key,
-                            Name: f.Key.split("/").pop()
+                            Name: f.fileName
                         }));
                     }
 
@@ -11307,6 +11679,7 @@ sap.ui.define([
             const oData = oContext.getObject();
 
             this._selectedTemplateKey = oData.Key;
+            this._selectedTemplateFileName = oData.Name;
             this.getView().getModel("airesponseDetailModel").setProperty("/templateKey", oData.Key);
 
             this.byId("selectedTemplateName").setText(oData.Name);
@@ -11456,44 +11829,49 @@ sap.ui.define([
             let url = this._sBasePath + "/cockpit/viewTemplate(key='" + key + "')";
             // Show busy indicator
             sap.ui.core.BusyIndicator.show(0);
-            $.ajax({
-                url: url,
-                method: "GET",
-                success: function (response) {
-                    sap.ui.core.BusyIndicator.hide();
-                    try {
-                        // Parse the response (it's a JSON string)
-                        let data = typeof response === 'string' ? JSON.parse(response) : response;
-                        // If response has a 'value' property (OData wrapper), extract it
-                        if (data.value) {
-                            data = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-                        }
-                        // Convert Base64 to Blob
-                        let byteCharacters = atob(data.content);
-                        let byteNumbers = new Array(byteCharacters.length);
-                        for (let i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                        }
-                        let byteArray = new Uint8Array(byteNumbers);
-                        let blob = new Blob([byteArray], { type: data.contentType });
-                        // Create object URL and open in new tab
-                        let blobUrl = URL.createObjectURL(blob);
-                        window.open(blobUrl, "_blank");
-                        // Clean up the object URL after a delay
-                        setTimeout(function () {
-                            URL.revokeObjectURL(blobUrl);
-                        }, 10000);
-                    } catch (e) {
-                        console.error("Error processing response:", e);
-                        sap.m.MessageToast.show("Error displaying template");
+            var that = this;
+            fetch(url, { method: "GET" })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("HTTP " + response.status);
                     }
-                },
-                error: function (err) {
+                    var contentType = response.headers.get("Content-Type") || "";
+                    if (contentType.indexOf("application/json") !== -1) {
+                        return response.json().then(function (data) {
+                            // Unwrap if value is a JSON string
+                            if (data.value && typeof data.value === "string") {
+                                data = JSON.parse(data.value);
+                            }
+                            var cleanB64 = data.content
+                                .replace(/^data:[^;]+;base64,/, "")
+                                .replace(/\s/g, "");
+                            var byteCharacters = atob(cleanB64);
+                            var byteNumbers = new Uint8Array(byteCharacters.length);
+                            for (var i = 0; i < byteCharacters.length; i++) {
+                                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            }
+                            return new Blob([byteNumbers], { type: data.contentType || "application/octet-stream" });
+                        });
+                    } else {
+                        return response.blob();
+                    }
+                })
+                .then(function (fileBlob) {
+                    sap.ui.core.BusyIndicator.hide();
+                    var blobUrl = URL.createObjectURL(fileBlob);
+                    var a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = that._selectedTemplateFileName || "template.docx";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 10000);
+                })
+                .catch(function (err) {
                     sap.ui.core.BusyIndicator.hide();
                     console.error("Error fetching template:", err);
                     sap.m.MessageToast.show("Failed to fetch template");
-                }
-            });
+                });
         },
         onTemplateUpload: function (oEvent) {
             var that = this;
@@ -11552,10 +11930,9 @@ sap.ui.define([
                             }
 
                             that._selectedTemplateKey = templateKey;
+                            that._selectedTemplateFileName = oFile.name;
                             that.getView().getModel("airesponseDetailModel").setProperty("/templateKey", templateKey);
-                            var fileName = templateKey.split("/").pop();
-
-                            that.byId("selectedTemplateName").setText(fileName);
+                            that.byId("selectedTemplateName").setText(oFile.name);
                             that.byId("templateInfoBox").setVisible(true);
                             that.getView().byId("selectedTemplateName").setVisible(true);
                             that.getView().byId("viewTemplateBtn").setVisible(true);
@@ -19053,7 +19430,7 @@ Please provide the Functional Specification in plain text format with clear sect
                             var oMultiCEBox = sap.ui.getCore().byId("application-Zsemobj-display-component---DetailDetail--multipleCodeEd") ||
                                 that.getOwnerComponent().getRootControl().getController ? null : null;
                             // Use the component to find the DetailDetail view
-                            var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfe.view.DetailDetail"];
+                            var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfeq.view.DetailDetail"];
                             if (!oDetailCtrl) {
                                 // Alternative: find via router targets
                                 var aPages = sap.ui.getCore().byId("__component0---app") ? sap.ui.getCore().byId("__component0---app").getPages() : [];

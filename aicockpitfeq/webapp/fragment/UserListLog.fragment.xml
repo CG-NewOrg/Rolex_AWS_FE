@@ -196,6 +196,28 @@
                                     <Input id="idPromptUserId" />
                                 </fb:control>
                             </fb:FilterGroupItem>
+                              <fb:FilterGroupItem
+                                name="Projects"
+                                label="Projects"
+                                groupName="Group1"
+                                visibleInFilterBar="true"
+                                hiddenFilter="{= (${switchFragments>/frg/frName} === 'admin' &amp;&amp; ${vFlagMod>/isSuperAdmin}) ? false : true }"
+                            >
+                                <fb:control>
+                                    <Select
+                                        id="idProjectMultiCombo"
+                                        forceSelection="false"
+                                        width="100%"
+                                        items="{path: 'prjModel>/projects'}"
+                                        change=".onProjectChange"
+                                    >
+                                        <core:Item
+                                            key="{prjModel>project}"
+                                            text="{prjModel>project}"
+                                        />
+                                    </Select>
+                                </fb:control>
+                            </fb:FilterGroupItem>
                             <!-- <fb:FilterGroupItem
                                 name="Date Added"
                                 label="Date Added"
@@ -294,6 +316,25 @@
                             </ColumnListItem>
                         </items>
                     </Table>
+                    <OverflowToolbar active="false" visible="{= ${switchFragments>/frg/frName} === 'admin' &amp;&amp; (${vFlagMod>/isAdmin} || ${vFlagMod>/isSuperAdmin}) }">
+                        <ToolbarSpacer />
+                        <Button
+                            id="idAdminLogPrevPage"
+                            icon="sap-icon://navigation-left-arrow"
+                            tooltip="Previous Page"
+                            press=".onAdminLogPrevPage"
+                            enabled="{adminPagingModel>/prevEnabled}"
+                        />
+                        <Text text="Page {adminPagingModel>/currentPage}" class="sapUiSmallMarginBeginEnd" />
+                        <Button
+                            id="idAdminLogNextPage"
+                            icon="sap-icon://navigation-right-arrow"
+                            tooltip="Next Page"
+                            press=".onAdminLogNextPage"
+                            enabled="{adminPagingModel>/nextEnabled}"
+                        />
+                        <ToolbarSpacer />
+                    </OverflowToolbar>
                     <Table
                         id="kbTable"
                         sticky="ColumnHeaders"

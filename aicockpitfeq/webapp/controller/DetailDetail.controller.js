@@ -20,8 +20,8 @@ sap.ui.define([
             this.oRouter = oOwnerComponent.getRouter();
             this.oModel = oOwnerComponent.getModel();
             // Set base path for cockpit calls
-var sComponentName = this.getOwnerComponent().getManifestObject().getComponentName();
-this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
+            var sComponentName = this.getOwnerComponent().getManifestObject().getComponentName();
+            this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             this.getView().byId("aiResponsePanel").setVisible(false);
             this.keytobeSet = "";
             this.airespText = "";
@@ -31,7 +31,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
 
         _onPatternMatch: function (oEvent) {
             this.keytobeSet = oEvent.getParameter("arguments").dispKey;
-             // Propagate viewModel from View1 so bindings like viewModel>/useMCP work here
+            // Propagate viewModel from View1 so bindings like viewModel>/useMCP work here
             try {
                 var oAppView = this.getOwnerComponent().byId("App");
                 var oFCL = oAppView.byId("flexibleColumnLayout");
@@ -71,7 +71,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             ///line height is 1.5 rem which is 24 px;
             var lineHeight = 24;
             var totalLines = Math.floor(remH / lineHeight);
-          
+
             txtArea.setGrowingMaxLines(totalLines + 1);
 
             var name = "";
@@ -156,7 +156,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
 
             var isRagOn = ragModel.getProperty("/currentRagEnabled");
             if (this.keytobeSet == "cdGen" && isRagOn == false) {
-              
+
                 this.getView().byId("cdGenInitText").setVisible(true);
                 this.getView().byId("multipleCodeEd").setVisible(true);
                 this.getView().byId("codeGenCitation").setVisible(true);
@@ -170,7 +170,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             BusyIndicator.show();
             if (!this.histFrg) {
                 this.histFrg = await this.loadFragment({
-                      name: "aicockpitfeq.fragment.HistoryFrg"
+                    name: "aicockpitfeq.fragment.HistoryFrg"
                 }).then(function (oDialog) {
                     this.histFrg = oDialog;
                     oDialog.open();
@@ -211,13 +211,13 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                 lines.push(""); // blank separator
             }
 
-           
-                PdfUtil.createSimplePdf("History.pdf", lines);
-            
-            
+
+            PdfUtil.createSimplePdf("History.pdf", lines);
+
+
         },
 
-         onDownloadPDF: function () {
+        onDownloadPDF: function () {
             // Replace pdfmake with jsPDF export via PdfUtil (CSP-safe)
             var sSysMsg = this.getOwnerComponent().getModel("airesponseDetailModel").getProperty("/sysMsg") || "";
             var aiModelData = this.getOwnerComponent().getModel("airesponseDetailModel").oData || {};
@@ -242,9 +242,9 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             }
 
             var fileName = "Gen AI " + this.selectedTab() + ".pdf";
-            
-                PdfUtil.createSimplePdf(fileName, lines);
-    
+
+            PdfUtil.createSimplePdf(fileName, lines);
+
         },
         selectedTab: function () {
             var name = "";
@@ -292,7 +292,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             }
             return name;
         },
-           
+
         generateWordContent: function () {
             const {
                 AlignmentType,
@@ -376,7 +376,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                 return text.replace(/^[•●∙‣▸►▪]\s*/, "- ");
             }
 
-           
+
             docContent.forEach((rawText, index) => {
                 if (!rawText || typeof rawText !== "string") return;
                 /////let text = rawText.trim();
@@ -672,7 +672,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                 return [new TextRun({ text })];
             }
             Packer.toBlob(doc).then(blob => {
-                sap.ui.core.util.File.save(blob, "GenAI_Doc_"+ this.selectedTab(), "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                sap.ui.core.util.File.save(blob, "GenAI_Doc_" + this.selectedTab(), "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
             });
         },
 
@@ -741,7 +741,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             var that = this;
             var setTitleofDialog = this.getOwnerComponent().getModel("gitModel").getProperty("/gitCommit");
             var existingFileName = this.getOwnerComponent().getModel("gitModel").getProperty("/filePath");
-            var selectedBranchforComm=this.getOwnerComponent().getModel("gitModel").getProperty("/selectedBranch");
+            var selectedBranchforComm = this.getOwnerComponent().getModel("gitModel").getProperty("/selectedBranch");
             if (!this.gitFrg) {
                 this.gitFrg = await this.loadFragment({
                     name: "aicockpitfeq.fragment.addGitDetails"
@@ -855,7 +855,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
 
         },
 
-            onExportTemplate: function () {
+        onExportTemplate: function () {
             var that = this;
             const oModel = this.getView().getModel("airesponseDetailModel");
             const sContent = oModel.getProperty("/resp");
@@ -868,7 +868,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                 "X-XSS-Protection": "0",
                 "X-Content-Type-Options": "nosniff"
             };
-            
+
             if (!sContent) {
                 sap.m.MessageBox.warning("No AI content available");
                 return;
@@ -928,7 +928,7 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
                 }
             });
         },
-           generateWordContent2: function () {
+        generateWordContent2: function () {
             const {
                 AlignmentType,
                 HeadingLevel,
@@ -1790,6 +1790,6 @@ this._sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             }
         }
 
-       
+
     });
 });

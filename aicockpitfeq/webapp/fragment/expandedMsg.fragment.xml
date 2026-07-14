@@ -7,18 +7,20 @@
     xmlns:layout="sap.ui.layout"
 >
     <Dialog
-        resizable="false"
+        resizable="true"
         stretch="false"
         contentWidth="83%"
+        contentHeight="calc(60vh + 2rem)"
         title="{i18n>msgDesc}"
+        verticalScrolling="false"
     >
-        <VBox class="sapUiSmallMargin">
+        <VBox class="sapUiSmallMarginBeginEnd sapUiSmallMarginTop">
             <TextArea
-                maxLength="true"
-                growing="true"
+                growing="false"
                 wrapping="None"
                 value="{expModel>/exTxt}"
                 width="100%"
+                height="60vh"
                 editable="false"
             />
         </VBox>

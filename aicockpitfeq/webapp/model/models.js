@@ -669,7 +669,7 @@ sap.ui.define([
                         presPVis: false
                     };
                 }
-                else if (apiModelName === "gemini-3.1-flash-lite"){
+                else if (apiModelName === "gemini-3.1-flash-lite" || apiModelName === "gemini-2.5-flash-lite") {
                  defaultPayload = {
                       
                         comnPopUpModelParamMaxLength: 39321,
