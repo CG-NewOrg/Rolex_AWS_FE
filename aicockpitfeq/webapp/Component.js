@@ -246,13 +246,142 @@ sap.ui.define([
             });
         },
 
+        // getFoundationModels: function () {
+        //     let sComponentName = this.getManifestObject().getComponentName();
+        //     let sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
+        //     let sUrl = sBasePath + "/lm/scenarios/foundation-models/models";
+
+        //     let that = this;
+
+        //     return fetch(sUrl, {
+        //         method: "GET",
+        //         headers: this.defaultHeaders,
+        //         credentials: "same-origin"
+        //     })
+        //         .then(function (response) {
+        //             if (!response.ok) {
+        //                 throw new Error("API Error: " + response.status + " " + response.statusText);
+        //             }
+        //             return response.json();
+        //         })
+        //         .then(function (data) {
+        //             let tokenData = {};
+
+        //             if (Array.isArray(data.resources)) {
+        //                 data.resources.forEach(function (modelInfo) {
+        //                     if (modelInfo.model && modelInfo.versions[0].contextLength) {
+        //                         tokenData[modelInfo.model] = {
+        //                             UsageToken: 0,
+        //                             TotalToken: modelInfo.versions[0].contextLength
+        //                         };
+        //                     }
+        //                 });
+        //             }
+
+        //             const allModels = data?.resources || data?.models || data || [];
+        //             let orchestrationModels = [];
+        //             if (Array.isArray(allModels)) {
+        //                 orchestrationModels = allModels
+        //                     .filter(function (model) {
+        //                         const modelName = (model.model || model.name || "").toLowerCase();
+        //                         const isEmbeddingModel = modelName.includes("embed") || modelName.includes("embedding");
+
+        //                         const versions = Array.isArray(model.versions) ? model.versions : [];
+        //                         const hasNonDeprecatedVersion = versions.some(function (v) {
+        //                             return v && (v.deprecated === false || v.deprecated === "false");
+        //                         });
+
+        //                         const allowed = Array.isArray(model.allowedScenarios) ? model.allowedScenarios : [];
+        //                         const isOrchestrationAllowed = allowed.some(function (s) {
+        //                             if (!s) { return false; }
+        //                             if (typeof s === "string") {
+        //                                 return s.toLowerCase() === "orchestration";
+        //                             }
+        //                             const sid = (s.scenarioId || s.id || "").toLowerCase();
+        //                             return sid === "orchestration";
+        //                         });
+
+        //                         return !isEmbeddingModel && hasNonDeprecatedVersion && isOrchestrationAllowed;
+        //                     })
+        //                     .map(function (model) {
+        //                         const nonDeprecatedVersions = (Array.isArray(model.versions) ? model.versions : []).filter(function (v) {
+        //                             return v && (v.deprecated === false || v.deprecated === "false");
+        //                         });
+
+        //                         const firstVer = nonDeprecatedVersions && nonDeprecatedVersions[0] ? (nonDeprecatedVersions[0].name || nonDeprecatedVersions[0].version || "") : "";
+        //                         const sModelName = model.model || model.name || model.modelName || "";
+        //                         const key = sModelName;
+        //                         const label = sModelName;
+
+        //                         const sModelNameLower = sModelName.toLowerCase();
+        //                         const sExecIdLower = (model.executableId || "").toLowerCase();
+        //                         let aiType = "Others";
+        //                         if (sModelNameLower.includes("gpt") || sModelNameLower.includes("o3") || sModelNameLower.includes("o4")) {
+        //                             aiType = "GPT";
+        //                         } else if (sModelNameLower.includes("mistral")) {
+        //                             aiType = "Mistral";
+        //                         } else if (sModelNameLower.includes("claude") || sModelNameLower.includes("anthropic")) {
+        //                             aiType = "Anthropic";
+        //                         } else if (sModelNameLower.includes("amazon") || sModelNameLower.includes("nova")) {
+        //                             aiType = "Amazon";
+        //                         } else if (sModelNameLower.includes("gemini")) {
+        //                             aiType = "Google";
+        //                         } else if (sModelNameLower.includes("sonar") || sExecIdLower.includes("perplexity")) {
+        //                             aiType = "Perplexity";
+        //                         } else if (sModelNameLower.includes("cohere")) {
+        //                             aiType = "Cohere";
+        //                         } else if (sModelNameLower.includes("sap")) {
+        //                             aiType = "SAP";
+        //                         }
+
+        //                         return {
+        //                             key: key,
+        //                             text: label,
+        //                             label: label,
+        //                             aiType: aiType,
+        //                             name: sModelName,
+        //                             executableId: model.executableId,
+        //                             description: model.description,
+        //                             versions: nonDeprecatedVersions,
+        //                             provider: model.provider,
+        //                             displayName: model.displayName,
+        //                             isOrchestrationCompatible: true,
+        //                             contextLength: nonDeprecatedVersions[0] ? nonDeprecatedVersions[0].contextLength : 0,
+        //                             streamingSupported: nonDeprecatedVersions[0] ? !!nonDeprecatedVersions[0].streamingSupported : false
+        //                         };
+        //                     })
+        //                     .filter(function (m) { return m.name; });
+        //             }
+
+        //             let sDefaultKey = "";
+        //             if (orchestrationModels.length > 0) {
+        //                 let gpt4oModel = orchestrationModels.find(function (m) {
+        //                     return (m.key || "").toLowerCase() === "gpt-4o";
+        //                 });
+        //                 sDefaultKey = gpt4oModel ? gpt4oModel.key : orchestrationModels[0].key;
+        //             }
+
+        //             that.setModel(new sap.ui.model.json.JSONModel({ items: orchestrationModels, selectedKey: sDefaultKey }), "OrchestrationModels");
+
+        //             const apiVersion = (data && data.sqlResponse && data.sqlResponse.APIVERSION) || data?.APIVERSION || "";
+        //             that.setModel(new sap.ui.model.json.JSONModel({ apiVersion: apiVersion }), "LMApiInfo");
+
+        //             that.foundationModelTabs(tokenData,data);
+                    
+        //         })
+        //         .catch(function (error) {
+        //             console.error("API Error:", error);
+        //             throw error;
+        //         });
+        // },
+
         getFoundationModels: function () {
             let sComponentName = this.getManifestObject().getComponentName();
             let sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
             let sUrl = sBasePath + "/lm/scenarios/foundation-models/models";
-
+ 
             let that = this;
-
+ 
             return fetch(sUrl, {
                 method: "GET",
                 headers: this.defaultHeaders,
@@ -266,7 +395,7 @@ sap.ui.define([
                 })
                 .then(function (data) {
                     let tokenData = {};
-
+ 
                     if (Array.isArray(data.resources)) {
                         data.resources.forEach(function (modelInfo) {
                             if (modelInfo.model && modelInfo.versions[0].contextLength) {
@@ -277,20 +406,22 @@ sap.ui.define([
                             }
                         });
                     }
-
+ 
                     const allModels = data?.resources || data?.models || data || [];
                     let orchestrationModels = [];
                     if (Array.isArray(allModels)) {
+                        const HIDDEN_MODELS = ["anthropic--claude-4.8-opus", "sap-abap-1"];
+ 
                         orchestrationModels = allModels
                             .filter(function (model) {
                                 const modelName = (model.model || model.name || "").toLowerCase();
                                 const isEmbeddingModel = modelName.includes("embed") || modelName.includes("embedding");
-
+ 
                                 const versions = Array.isArray(model.versions) ? model.versions : [];
                                 const hasNonDeprecatedVersion = versions.some(function (v) {
                                     return v && (v.deprecated === false || v.deprecated === "false");
                                 });
-
+ 
                                 const allowed = Array.isArray(model.allowedScenarios) ? model.allowedScenarios : [];
                                 const isOrchestrationAllowed = allowed.some(function (s) {
                                     if (!s) { return false; }
@@ -300,19 +431,20 @@ sap.ui.define([
                                     const sid = (s.scenarioId || s.id || "").toLowerCase();
                                     return sid === "orchestration";
                                 });
-
-                                return !isEmbeddingModel && hasNonDeprecatedVersion && isOrchestrationAllowed;
+                                const isHiddenModel = HIDDEN_MODELS.indexOf(modelName) !== -1;
+ 
+                                return !isEmbeddingModel && hasNonDeprecatedVersion && isOrchestrationAllowed && !isHiddenModel;
                             })
                             .map(function (model) {
                                 const nonDeprecatedVersions = (Array.isArray(model.versions) ? model.versions : []).filter(function (v) {
                                     return v && (v.deprecated === false || v.deprecated === "false");
                                 });
-
+ 
                                 const firstVer = nonDeprecatedVersions && nonDeprecatedVersions[0] ? (nonDeprecatedVersions[0].name || nonDeprecatedVersions[0].version || "") : "";
                                 const sModelName = model.model || model.name || model.modelName || "";
                                 const key = sModelName;
                                 const label = sModelName;
-
+ 
                                 const sModelNameLower = sModelName.toLowerCase();
                                 const sExecIdLower = (model.executableId || "").toLowerCase();
                                 let aiType = "Others";
@@ -333,7 +465,7 @@ sap.ui.define([
                                 } else if (sModelNameLower.includes("sap")) {
                                     aiType = "SAP";
                                 }
-
+ 
                                 return {
                                     key: key,
                                     text: label,
@@ -352,7 +484,7 @@ sap.ui.define([
                             })
                             .filter(function (m) { return m.name; });
                     }
-
+ 
                     let sDefaultKey = "";
                     if (orchestrationModels.length > 0) {
                         let gpt4oModel = orchestrationModels.find(function (m) {
@@ -360,21 +492,22 @@ sap.ui.define([
                         });
                         sDefaultKey = gpt4oModel ? gpt4oModel.key : orchestrationModels[0].key;
                     }
-
+ 
                     that.setModel(new sap.ui.model.json.JSONModel({ items: orchestrationModels, selectedKey: sDefaultKey }), "OrchestrationModels");
-
+ 
                     const apiVersion = (data && data.sqlResponse && data.sqlResponse.APIVERSION) || data?.APIVERSION || "";
                     that.setModel(new sap.ui.model.json.JSONModel({ apiVersion: apiVersion }), "LMApiInfo");
-
+ 
                     that.foundationModelTabs(tokenData,data);
-                    
+                   
                 })
                 .catch(function (error) {
                     console.error("API Error:", error);
                     throw error;
                 });
         },
-         foundationModelTabs: function(tokenData,data){
+         
+        foundationModelTabs: function(tokenData,data){
             let that=this;
                 const tabs = [
                         "BS", "User", "fstoconf", "fstots", "tstocode", "tstocodeGit",

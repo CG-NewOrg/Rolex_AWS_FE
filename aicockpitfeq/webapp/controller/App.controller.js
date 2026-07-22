@@ -72,46 +72,83 @@ sap.ui.define([
                 return "";
             };
         },
-        getLogoutTime: function () {
+        // getLogoutTime: function () {
 
+        //     var that = this;
+        //     var mailId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserEmailId");
+        //     var date = new Date().toISOString();
+        //     var logout_time = date.slice(0, date.indexOf("."));
+        //     logout_time = logout_time + "Z";
+        //     var sessionId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/sessionId");
+        //     var oPayload = {
+        //         Email_Id: mailId,
+        //         logout_time: logout_time,
+        //         session_id: sessionId
+        //     };
+        //     let oHeader = {
+        //         "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //         "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //         "X-Frame-Options": "DENY",
+        //         "X-XSS-Protection": "0",
+        //         "X-Content-Type-Options": "nosniff"
+        //     };
+        //     var payload = {};
+
+        //     payload["payload"] = oPayload;
+        //     $.ajax({
+        //         url: this._sBasePath + '/cockpit/saveLogout',
+        //         type: "POST",
+        //         headers: oHeader,
+        //         contentType: "application/json",
+        //         data: JSON.stringify(payload),
+        //         success: function (data, status, xhr) {
+        //             console.log("logout time recorded");
+        //             console.log(data.value.message);
+        //         },
+        //         error: function (jqXhr, textStatus, errorMessage) {
+        //             console.log("Error");
+        //             console.log(JSON.parse(jqXhr.responseText).error.message);
+        //         }
+        //     });
+        // },
+        //For chatbot RAG citations by Aishwarya
+        
+        getLogoutTime: function () {
             var that = this;
             var mailId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserEmailId");
             var date = new Date().toISOString();
-            var logout_time = date.slice(0, date.indexOf("."));
-            logout_time = logout_time + "Z";
+            var logout_time = date.slice(0, date.indexOf(".")) + "Z";
             var sessionId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/sessionId");
             var oPayload = {
                 Email_Id: mailId,
                 logout_time: logout_time,
                 session_id: sessionId
             };
-            let oHeader = {
-                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+            var sUrl = this._sBasePath + "/cockpit/saveLogout";
+            var payload = JSON.stringify({ payload: oPayload });
+            let oHeaders = {
                 "X-Frame-Options": "DENY",
                 "X-XSS-Protection": "0",
-                "X-Content-Type-Options": "nosniff"
+                "X-Content-Type-Options": "nosniff",
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
             };
-            var payload = {};
-
-            payload["payload"] = oPayload;
-            $.ajax({
-                url: this._sBasePath + '/cockpit/saveLogout',
-                type: "POST",
-                headers: oHeader,
-                contentType: "application/json",
-                data: JSON.stringify(payload),
-                success: function (data, status, xhr) {
-                    console.log("logout time recorded");
-                    console.log(data.value.message);
-                },
-                error: function (jqXhr, textStatus, errorMessage) {
-                    console.log("Error");
-                    console.log(JSON.parse(jqXhr.responseText).error.message);
+ 
+            // Synchronous XHR completes BEFORE the browser navigates to the logout URL,
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", sUrl, false); // false = synchronous
+            xhr.setRequestHeader("Content-Type", "application/json");
+            try {
+                xhr.send(payload);
+            } catch (e) {
+                // Sync XHR blocked (strict browser policy)
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(sUrl, new Blob([payload], { type: "application/json" }));
                 }
-            });
+                console.warn("saveLogout sync XHR failed, used sendBeacon instead", e);
+            }
         },
-        //For chatbot RAG citations by Aishwarya
+
         isCitationsVisible: function (citations) {
             return Array.isArray(citations) && citations.length > 0;
         },

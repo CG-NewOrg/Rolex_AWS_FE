@@ -73,7 +73,7 @@ sap.ui.define([
             var oViewModel = models.createViewModel(sSelectedProject);
 
             this.getView().setModel(oViewModel, "viewModel");
-            console.log("ViewModel:", oViewModel.getData()); 2
+            console.log("ViewModel:", oViewModel.getData()); 
             this.getView().getModel("viewModel").setProperty("/templateToggle", false);
             ////models
             var oModel = models.createJSONModel(this, "appFileModel");
@@ -103,12 +103,24 @@ sap.ui.define([
                 selectedObjectType: "PROG",
                 selectedSapSystem: "DEV",
                 searchPattern: "Z*",
-                sourceMode: -1,
+                sourceMode: 0,
                 uploadCodeEnabled: false,
                 uploadedSourceCode: "",
                 sourceInputType: "selection",
                 retroTemplateToggle: false,
-                searchSuggestions: []
+                searchSuggestions: [],
+                searchResults: [],
+                searchResultsCount: 0,
+                searchResultsVisible: false,
+                documentModeEnabled: false,
+                documentMode: "create",
+                hasExistingFS: false,
+                hasExistingTS: false,
+                createFS: false,
+                createTS: false,
+                updateFS: false,
+                updateTS: false,
+                buttonsEnabled: false
             });
             this.getView().setModel(retroDoc, "retroDocModel");
             // Initialize retroTemplateModel for Template Dialog functionality
@@ -217,6 +229,39 @@ sap.ui.define([
                 this.getView().setModel(oMcpToolsModel, "mcpToolsModel");
             }
         },
+        // getLogoutTime: function () {
+        //     var that = this;
+        //     var mailId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserEmailId");
+        //     var date = new Date().toISOString();
+        //     var logout_time = date.slice(0, date.indexOf(".")) + "Z";
+        //     var sessionId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/sessionId");
+        //     var oPayload = {
+        //         Email_Id: mailId,
+        //         logout_time: logout_time,
+        //         session_id: sessionId
+        //     };
+        //     var sUrl = this._sBasePath + "/cockpit/saveLogout";
+        //     var payload = JSON.stringify({ payload: oPayload });
+        //     let oHeaders = {
+        //         "X-Frame-Options": "DENY",
+        //         "X-XSS-Protection": "0",
+        //         "X-Content-Type-Options": "nosniff",
+        //         "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //         "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
+        //     };
+        //     // Use sendBeacon so the request survives page unload without timing out (no 504)
+        //     if (navigator.sendBeacon) {
+        //         navigator.sendBeacon(sUrl, new Blob([payload], oHeaders, { type: "application/json" }));
+        //     } else {
+        //         // Fallback for browsers without sendBeacon (synchronous XHR)
+        //         var xhr = new XMLHttpRequest();
+        //         xhr.open("POST", sUrl, false); // synchronous
+        //         xhr.setRequestHeader("Content-Type", "application/json");
+        //         try { xhr.send(payload); } catch (e) { console.warn("saveLogout XHR failed", e); }
+        //     }
+        // },
+        //Start of Aishwarya
+        
         getLogoutTime: function () {
             var that = this;
             var mailId = that.getOwnerComponent().getModel("NetworkGraphModel").getProperty("/loggedInUserEmailId");
@@ -237,18 +282,23 @@ sap.ui.define([
                 "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
                 "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
             };
-            // Use sendBeacon so the request survives page unload without timing out (no 504)
-            if (navigator.sendBeacon) {
-                navigator.sendBeacon(sUrl, new Blob([payload], oHeaders, { type: "application/json" }));
-            } else {
-                // Fallback for browsers without sendBeacon (synchronous XHR)
-                var xhr = new XMLHttpRequest();
-                xhr.open("POST", sUrl, false); // synchronous
-                xhr.setRequestHeader("Content-Type", "application/json");
-                try { xhr.send(payload); } catch (e) { console.warn("saveLogout XHR failed", e); }
+ 
+            // Synchronous XHR completes BEFORE the browser navigates to the logout URL,
+            
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", sUrl, false); // false = synchronous
+            xhr.setRequestHeader("Content-Type", "application/json");
+            try {
+                xhr.send(payload);
+            } catch (e) {
+                // Sync XHR blocked (strict browser policy) 
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(sUrl, new Blob([payload], { type: "application/json" }));
+                }
+                console.warn("saveLogout sync XHR failed, used sendBeacon instead", e);
             }
         },
-        //Start of Aishwarya
+
         _refreshRagStateForKey: function (key) {
             //// need to review function
             var ragModel = this.getView().getModel("ragModel");
@@ -548,7 +598,7 @@ sap.ui.define([
             this.closeSysKeyFr();
 
             this.updateProjectDetails(oEvent);
-            this.getFiles();
+          //  this.getFiles();
         },
 
         onAfterRendering: function () {
@@ -813,46 +863,46 @@ sap.ui.define([
                 } else if (eveKey.getParameters().item.getProperty("key") == "bdPMO") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+                 //   this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
                 } else if (eveKey.getParameters().item.getProperty("key") == "usrCr") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+                 //   this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "fcFSD") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+                //    this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
 
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "osdTSD") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+                //    this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
 
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "cdGen") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+               //     this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
 
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "cdRem") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+               //     this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
 
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "cdSum") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+              //      this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
 
                 }
@@ -863,13 +913,13 @@ sap.ui.define([
                     this.getView().byId("branchSel").setVisible(true);
                     this.getView().byId("branchLabel").setVisible(true);
 
-                    this.getFiles();
+                //    this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "tutKey") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+               //     this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "tcgKey") {
@@ -881,13 +931,13 @@ sap.ui.define([
                     this.getView().byId("sysAdd").setEnabled(false);
                     this.getView().byId("addExBtn").setEnabled(false);
                     this.getView().byId("openTCGTemp").setVisible(true);
-                    this.getFiles();
+               //     this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
                 }
                 else if (eveKey.getParameters().item.getProperty("key") == "pctKey") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
-                    this.getFiles();
+                 //   this.getFiles();
                     //   this.getView().byId("openAIeditLabel").setVisible(true);
                     this.getView().byId("openAiEdit").setVisible(true);
                     this.getView().byId("sysAdd").setEnabled(false);
@@ -908,7 +958,7 @@ sap.ui.define([
                     this.getView().byId("sapDocSel").setVisible(true);
                     this.getView().byId("sysAdd").setEnabled(false);
                     this.getView().byId("addExBtn").setEnabled(false);
-                    this.getFiles();
+              ////      this.getFiles();
                     this.getView().byId("navigationList").setSelectedKey(eveKey.getParameters().item.getProperty("key"));
                 } else if (eveKey.getParameters().item.getProperty("key") == "retroDocKey") {
                     var oOrchModel = this.getOwnerComponent().getModel("OrchestrationModels");
@@ -2879,6 +2929,21 @@ sap.ui.define([
             this.getView().byId("TemplateUploader").setValue("");
             this.getView().byId("selectedTemplateName").setVisible(false);
             this.getView().byId("viewTemplateBtn").setVisible(false);
+            this.getView().getModel("viewModel").setProperty("/templateToggle", false);
+            this._selectedTemplateKey = null;
+            if (this.byId("selTemplateList")) {
+                this.byId("selTemplateList").setValue("");
+            }
+            if (this.byId("templateInfoBox")) {
+                this.byId("templateInfoBox").setVisible(false);
+            }
+            if (this.byId("selectedTemplateName")) {
+                this.byId("selectedTemplateName").setText("");
+            }
+            var aiResModel = this.getOwnerComponent().getModel("airesponseDetailModel");
+            if (aiResModel) {
+                aiResModel.setProperty("/templateKey", null);
+            }
             var sTab = this.selectedKeyFunct();
             this.getView().getModel("fileModel").setProperty("/" + sTab, []);
             if (sTab == "DocGen") {
@@ -3518,7 +3583,7 @@ sap.ui.define([
                                 that.getView().byId("multiInputSystem").setEnabled(true);
                                 that.getView().byId("editSys").setVisible(true);
                                 ///       that.disableInputsysmsg(that.getView().byId("multiInputSystem"));
-                                that.getFiles();
+                               //// that.getFiles();
                             }
                         },
                         error: function (jqXhr, textStatus, errorMessage) {
@@ -6134,7 +6199,7 @@ sap.ui.define([
                     this.handleUploadContentPress(); //first time
                     _this.executedOnce = true;
                 }
-                this.getFiles();
+          ////      this.getFiles();
 
             }
             var oResponseModel = this.getView().getModel("responseModel");
@@ -6850,7 +6915,7 @@ sap.ui.define([
                 sap.m.MessageBox.warning(oBundle.getText("warningSystemMessage"));
             }
 
-            that.getFiles();
+          ////  that.getFiles();
             this.onRefresh();
             that.getOwnerComponent().getModel("historyModel").refresh();
 
@@ -6996,6 +7061,12 @@ sap.ui.define([
                 ]);
                 return;
             }
+            if (sPopup === "promptsUsed" && sPath === "token_consumed") {
+                oBinding.sort([new sap.ui.model.Sorter("token_consumed", bDescending, false, function (a, b) {
+                    return (parseFloat(a) || 0) - (parseFloat(b) || 0);
+                })]);
+                return;
+            }
             oBinding.sort([new sap.ui.model.Sorter(sPath, bDescending)]);
         },
         _getActivePopupTableBinding: function () {
@@ -7051,13 +7122,8 @@ sap.ui.define([
 
             if (sPopup === "promptsUsed") {
                 return [
-                    // { text: "User ID", key: "user_id", selected: true },
-                    // { text: "Date", key: "date" },
-                    // { text: "Project", key: "project" },
-                    { text: "Total Tokens", key: "tokens_used" },
-                    // { text: "Prompts", key: "prompts" },
-                    // { text: "System Key", key: "ids" }
-                    // { text: "Model Name", key: "model_name" }
+                    { text: "System Key", key: "system_id" },
+                    { text: "Consumption Token per Prompt", key: "token_consumed", selected: true }
                 ];
             }
 
@@ -7368,7 +7434,7 @@ sap.ui.define([
                             that.getView().byId("docNameText").setText(name);
                             busyDialog.close();
                             sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                            that.getFiles();
+                         ///   that.getFiles();
                         })
                         .catch(function (err) {
                             busyDialog.close();
@@ -7514,7 +7580,7 @@ sap.ui.define([
                                 that.getView().byId("docNameText").setText(name);
                                 busyDialog.close();
                                 sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                                that.getFiles();
+                              ///  that.getFiles();
                             })
                             .catch(function (err) {
                                 busyDialog.close();
@@ -7528,11 +7594,11 @@ sap.ui.define([
                 else if (oFile.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
                     this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
                     this.handleExcelUpload(oFile, sSelectedIconTab, this.getView().getModel("appmodel"), aMessages);
-                    that.getFiles();
+               ////     that.getFiles();
                 }
                 else {
                     this.handleUploadPress(oFile);
-                    that.getFiles();
+                 ////   that.getFiles();
                 }
             }
             let fileContent = oModel.getProperty("/BSContent");
@@ -7596,7 +7662,7 @@ sap.ui.define([
                     that.getView().byId("docNameText").setText(name);
                     busyDialog.close();
                     sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                    that.getFiles();
+                   // that.getFiles();
                 })
                 .catch(function (err) {
                     busyDialog.close();
@@ -8133,6 +8199,7 @@ sap.ui.define([
             var sSelectedIconTab = this.selectedKeyFunct();
             var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
         },
+
         reUploadContentResponse: async function () {
             var that = this;
             const view = this.getView();
@@ -8145,7 +8212,7 @@ sap.ui.define([
             var busyDialog = new sap.m.BusyDialog();
             var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
-
+ 
             var finalText = "";
             var aiSelected = that.getView().byId("selModel").getSelectedKey();
             var aiModelName = that.getView().byId("selModel").getValue();
@@ -8163,15 +8230,14 @@ sap.ui.define([
                 oViewModel,
                 oResponseModel
             });
-
-            /////////userInput being replaced by promptMsgData
+ 
             if (!isUserContent && (!promptMsgData || promptMsgData === "") && this.step == "Step1") {
                 MessageBox.warning(oBundle.getText("userInputMsg"));
                 this.getView().byId("multiInputPrompt").setValueState("Error");
                 this.getView().byId("multiInputPrompt").setValueStateText("Enter/Select Prompt ID");
                 return;
             }
-
+ 
             const localData = oPromptModel.getData();
             const existsInLocalData = isUserContent ? true : localData.some(item => {
                 return item.PROMPT_TEMPLATE?.toLowerCase() === promptMsgData?.toLowerCase();
@@ -8190,11 +8256,12 @@ sap.ui.define([
             var oModel = this.getView().getModel("appmodel");
             var updatedaMsgs = [];
             var contentPath = "/BSContent";
+            var oContent = "";
             var sContent = oModel.getProperty(contentPath);
             if (sContent == undefined) {
                 sContent = null;
             }
-            var aMsgModel = this.getView().getModel("msgModel");   //// aMsgs formed in first call with assistant role added
+            var aMsgModel = this.getView().getModel("msgModel");  
             if (promptMsgData !== "") {
                 if (this.isImage && Array.isArray(sContent)) {
                     for (let f = sContent.length - 1; f >= 0; f--) {
@@ -8221,7 +8288,7 @@ sap.ui.define([
                     updatedThread[0].content = sContent;
                 }
             }
-           
+ 
             if (sSelectedIconTab == "TCG" || sSelectedIconTab == "BPM" || sSelectedIconTab == "PCT") {
                 var reupload = true;
                 var airesp = this.getView().getModel("airesponseDetailModel").getProperty("/resp");
@@ -8236,31 +8303,26 @@ sap.ui.define([
             } else {
                 aMsgModel.oData.aMsg.push(updatedThread[0]);
             }
-
+ 
             updatedaMsgs = aMsgModel.oData.aMsg;
             if (aiModelName == "gpt-5" && sSelectedIconTab == "tstocode") {
                 updatedaMsgs.push({ "role": "user", "content": "Give ``` before code language as indicator that after this line code is being provided" });
             }
-
+ 
             this.getView().getModel("msgModel").setProperty("/aMsg", updatedaMsgs);
             busyDialog.open();
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/downloadVis", false);
-
+ 
             this.getOwnerComponent().getModel("airesponseDetailModel").setProperty("/sysMsg", aMsgContentSystemDesc);
             this.getOwnerComponent().getModel("airesponseDetailModel").refresh();
             var keytoSend = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
             var selectedAI = this.getView().byId("selModel").getSelectedItem().mProperties.text;
-
+ 
             this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
             let sett = this.getView().getModel("settingsModel");
             let payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, updatedaMsgs, sett, this);
             const payload = Utility.createPayloadBasedOnModel(aiModelName, updatedaMsgs, sett, this);
-
-
-            // var payloadNonStream = Utility.createPayloadBasedOnModelNonStream(aiModelName, updatedaMsgs, oViewModel, this);
-
-            // const payload = Utility.createPayloadBasedOnModel(aiModelName, updatedaMsgs, oViewModel, this);
-
+ 
             try {
                 const response = await fetch(apiUrl4, {
                     method: "POST",
@@ -8275,13 +8337,10 @@ sap.ui.define([
                     },
                     body: JSON.stringify(payload)
                 });
-
+ 
                 const { message: oResMsg, usedTokens: oUsedToken, rawText: sResponse } =
                     await Utility.processAPIResponse(this, payloadNonStream, response, aiModelName, busyDialog, apiUrl4);
                 if (that.step == "Step2" && sSelectedIconTab == "PCT") {
-                    // that.getView().byId("prgIndicator").setPercentValue("60%");
-                    // that.getView().byId("prgIndicator").setDisplayValue("Step3");
-                    // that.step = "Step3";
                     MessageBox.information(oBundle.getText("nextMsg"));
                 } else if (that.step == "Step3" && sSelectedIconTab == "PCT") {
                     that.getView().byId("prgIndicator").setPercentValue("100%");
@@ -8289,7 +8348,6 @@ sap.ui.define([
                     that.getView().byId("nextBtn").setVisible(false);
                     // that.onPctStepOutput(reAMessages);
                     MessageBox.success("All Steps Completed!");
-                    // that.step = "Step1"; ///initializing again
                 }
                 const tokenData = oTokenModel.getProperty(`/${sSelectedIconTab}/${aiModelName}`);
                 let oToken = tokenData?.TotalToken ?? 0;
@@ -8308,11 +8366,10 @@ sap.ui.define([
                     oViewModel,
                     fileCont
                 );
-
+ 
                 this.sendTokenUsageLog(oUsedToken, promptMsgData);
-
+ 
             } catch (error) {
-                // busyDialog.close();
                 try {
                     busyDialog.close();
                     if (error && error._isStreamError) {
@@ -8336,8 +8393,9 @@ sap.ui.define([
             } finally {
                 busyDialog.close();
             }
-
+ 
         },
+
 
         // onAIselect: function (eve) {
         //     var sSelectedIconTab = this.selectedKeyFunct();
@@ -9890,9 +9948,16 @@ sap.ui.define([
 
             var oAppModel = this.getView().getModel("appmodel");
             var oFileVM = this.getView().getModel("fileViewModel");
+            if (oFileVM) {
+               
+                oState.fileKey = oFileVM.getProperty("/Key") || "";
+                oState.fileName = oFileVM.getProperty("/Name") || "";
+                oState.fileSrcUrl = oFileVM.getProperty("/srcUrl") || "";
+                oState.fileViewContent = oFileVM.getProperty("/content") || "";
+            }
             // Save BSContent text & fileViewModel object for this tab
             oState.BSContent = oAppModel.getProperty("/BSContent") ?? "";
-            oState.fileViewData = oFileVM.getData() ?? {};
+            // oState.fileViewData = oFileVM.getData() ?? {};
 
             // ── Retro Documentation: save full model snapshot ──
             if (sKey === "retroDocKey") {
@@ -10122,8 +10187,11 @@ sap.ui.define([
                 }
 
                 if (oFileVM) {
-                    oFileVM.setData(oState.fileViewData ?? {});
-                    oFileVM.refresh(true);
+
+                    oFileVM.setProperty("/Key", oState.fileKey || "");
+                    oFileVM.setProperty("/Name", oState.fileName || "");
+                    oFileVM.setProperty("/srcUrl", oState.fileSrcUrl || "");
+                    oFileVM.setProperty("/content", oState.fileViewContent || "");
                 }
                 // ---- if we have saved state, apply it ----
                 this.executedOnce = oState.excOnce || false;
@@ -11801,9 +11869,9 @@ sap.ui.define([
                 this.byId("templateInfoBox").setVisible(false);
                 this.byId("selectedTemplateName").setVisible(false);
                 this.byId("viewTemplateBtn").setVisible(false);
-                this.getOwnerComponent()
-                    .getModel("airesponseDetailModel")
-                    .setProperty("/downloadVis", false);
+                // this.getOwnerComponent()
+                //     .getModel("airesponseDetailModel")
+                //     .setProperty("/downloadVis", false);
                 this.getView().getModel("airesponseDetailModel").setProperty("/templateKey", null);
             }
         },

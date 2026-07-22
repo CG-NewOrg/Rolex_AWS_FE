@@ -188,10 +188,10 @@
                             level="H4"
                         />
                         <HBox alignItems="Center">
-                            <Text
+                            <!-- <Text
                                 text="{i18n>retroConnectedTo} {retroDocModel>/selectedSapSystem}"
                                 class="sapUiSmallMarginEnd"
-                            />
+                            /> -->
                             <!-- AI Model selector for Retro Documentation -->
                               <ComboBox
                                     tooltip="Select AI Model"
@@ -238,9 +238,14 @@
                             <VBox visible="{= ${retroDocModel>/sourceMode} === 1}" class="sapUiSmallMarginBottom sapUiSmallMargin">
                                 <HBox alignItems="Center">
                                     <unified:FileUploader id="retroCodeUploader" placeholder="Choose source file..." width="300px" fileType="txt,abap" change=".onRetroCodeFileChange" class="sapUiSmallMarginEnd" buttonText="Browse" />
-                                    <Button text="Upload and Generate" icon="sap-icon://upload" type="Emphasized" press=".onRetroUploadCodePress" enabled="{retroDocModel>/uploadCodeEnabled}" />
+                                    <Button text="Upload and Generate" icon="sap-icon://upload" type="Emphasized" press=".onRetroUploadCodePress" enabled="{retroDocModel>/uploadCodeEnabled}" class="sapUiSmallMarginEnd" />
+                                    <core:Icon
+                                        src="sap-icon://message-information"
+                                        color="#0A6ED1"
+                                        tooltip="Upload your ABAP source code file (.txt or .abap) to generate FS/TS documents directly."
+                                        class="sapUiTinyMarginBegin" />
                                 </HBox>
-                                <MessageStrip text="Upload your ABAP source code file (.txt or .abap) to generate FS/TS documents directly." type="Information" showIcon="true" class="sapUiSmallMarginTop" />
+                                <!-- <MessageStrip text="Upload your ABAP source code file (.txt or .abap) to generate FS/TS documents directly." type="Information" showIcon="true" class="sapUiSmallMarginTop" /> -->
                                 <!-- Document Mode for Upload Code -->
                                 <VBox class="sapUiSmallMarginTop" visible="{retroDocModel>/documentModeEnabled}">
                                     <HBox class="sapUiTinyMarginBottom">
@@ -643,7 +648,7 @@
                                         <core:Icon src="sap-icon://activity-items" class="sapUiSmallMarginEnd" />
                                         <Title text="{i18n>processLog}" />
                                         <ToolbarSpacer />
-                                        <CheckBox text="{i18n>autoScroll}" selected="true" id="autoScrollCheckbox" />
+                                        <!-- <CheckBox text="{i18n>autoScroll}" selected="true" id="autoScrollCheckbox" /> -->
                                     </OverflowToolbar>
                                 </headerToolbar>
                                 <content>
@@ -1148,6 +1153,7 @@
                                                 id="sysAdd"
                                                 class="sapUiTinyMarginBegin"
                                                 press=".addKey"
+                                                enabled="{= !${viewModel>/isDocGen}}"
                                             />
                                         </HBox>
                                     </VBox>

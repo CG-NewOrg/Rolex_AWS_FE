@@ -166,7 +166,7 @@ sap.ui.define([], () => {
             return typeof value === "string" && value.trim().length > 0;
         },
         enableSys: function (isAdmin, isSys) {
-            return !isSys;
+            return isAdmin && !isSys;
         },
         isImageContent: function (value) {
             return typeof value === "string" && value.startsWith("data:image");
