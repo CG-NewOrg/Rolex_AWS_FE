@@ -1788,8 +1788,45 @@ sap.ui.define([
             } catch (e) {
                 return { code: code, fixed: false };
             }
+        },
+        onEditAIResponse: function () {
+            this.getView().byId("aiRespTxtArea").setEditable(true);
+            this.getView().byId("aiRespHtml").setVisible(false);
+            this.getView().byId("cancelResponse").setVisible(true);
+            this.getView().byId("aiRespTxtArea").setVisible(true);
+            this.getView().byId("saveResponse").setVisible(true);
+            this.getView().byId("editResponse").setVisible(false);
+        },
+        onSaveAIResponse: function () {
+            let newResponse = this.getView().byId("aiRespTxtArea").getValue();
+            this.getView().getModel("airesponseDetailModel").setProperty("/resp", newResponse);
+            let aiContent = this.formatter.mdToHTML(newResponse);
+            this.getView().byId("aiRespHtml").setContent(aiContent);
+            this.getView().byId("aiRespHtml").setVisible(true);
+            this.getView().byId("aiRespTxtArea").setVisible(false);
+            this.getView().byId("aiRespTxtArea").setEditable(false);
+            this.getView().byId("editResponse").setVisible(true);
+            this.getView().byId("cancelResponse").setVisible(false);
+            this.getView().byId("saveResponse").setVisible(false);
+        },
+        onCancelAIResponse: function () {
+            //   let oldResponse = this.getView().getModel("airesponseDetailModel").getProperty("/resp");
+            let oldResponse = this.fixed;
+            this.getView().byId("aiRespTxtArea").setValue(oldResponse);
+            let aiContent = this.formatter.mdToHTML(oldResponse);
+            this.getView().byId("aiRespHtml").setContent(aiContent);
+            this.getView().byId("aiRespHtml").setVisible(true);
+            this.getView().byId("aiRespTxtArea").setVisible(false);
+            this.getView().byId("aiRespTxtArea").setEditable(false);
+            this.getView().byId("cancelResponse").setVisible(false);
+            this.getView().byId("saveResponse").setVisible(false);
+            this.getView().byId("editResponse").setVisible(true);
+        },
+        handleLiveChangeTxtArea: function (oEvent) {
+            let typed, fixed;
+            this.typed = oEvent.getParameter("newValue");
+            this.fixed = oEvent.getSource().getProperty("value");
         }
-
 
     });
 });

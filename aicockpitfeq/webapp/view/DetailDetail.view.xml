@@ -5,6 +5,7 @@
     xmlns:mvc="sap.ui.core.mvc"
     xmlns:core="sap.ui.core"
     xmlns:ce="sap.ui.codeeditor"
+    xmlns:pf="sap.suite.ui.commons"
 >
     <Page
         id="dyID"
@@ -64,11 +65,17 @@
                                 text="{i18n>aiResponse}"
                                 showColon="true"
                             />
-                            <!-- class="sapUiTinyMarginTop" -->
+                             <HBox>
+                              <Button id="editResponse" icon="sap-icon://edit" press="onEditAIResponse" enabled="{airesponseDetailModel>/downloadVis}"/>
+                              <Button id="cancelResponse" icon="sap-icon://decline" press="onCancelAIResponse" visible="false"/>
+                              <Button id="saveResponse" class="sapUiTinyMarginBegin" icon="sap-icon://save" press="onSaveAIResponse" visible="false"/>
+           
+                         </HBox>
                         </HBox>
                         <core:HTML
                             id="aiRespHtml"
                             sanitizeContent="false"
+                            preferDOM="false"
                             content="{ path: 'airesponseDetailModel>/resp', formatter: '.formatter.mdToHTML' }"
                         />
                         <TextArea
@@ -200,33 +207,39 @@
                         press=".dislikeH"
                         class="sapUiTinyMarginTop"
                     />
-                     <Button 
-                       tooltip="Download Template"
-                       icon = "sap-icon://document-text"
-                       press=".onExportTemplate" 
-                       enabled="{airesponseDetailModel>/downloadVis}" 
-                        visible="{parts: [
-                        {path: 'viewModel>/templateToggle'},
-                        {path: 'airesponseDetailModel>/downloadVis'}
-                        ],
-                        formatter: '.formatter.formatTemplateDownloadVisibility'
-                        }"
-                        class="sapUiTinyMarginTop"
-                   />
-                    <Button
-                        tooltip="Download PDF"
-                        icon="sap-icon://pdf-attachment"
-                        press=".onDownloadPDF"
+                    <MenuButton
+                        icon="sap-icon://download"
+                        tooltip="Download Options"
+                        type="Transparent"
                         class="sapUiTinyMarginTop"
                         enabled="{airesponseDetailModel>/downloadVis}"
-                    />
-                    <Button
-                        tooltip="Download Word Document"
-                        icon="sap-icon://document"
-                        press=".generateWordContent2"
-                        class="sapUiTinyMarginTop"
-                        enabled="{airesponseDetailModel>/downloadVis}"
-                    />
+                    >
+                        <menu>
+                            <Menu>
+                                <MenuItem
+                                    text="Download Template"
+                                    icon="sap-icon://document-text"
+                                    press=".onExportTemplate"
+                                    visible="{parts: [
+                                        {path: 'viewModel>/templateToggle'},
+                                        {path: 'airesponseDetailModel>/downloadVis'}
+                                        ],
+                                        formatter: '.formatter.formatTemplateDownloadVisibility'
+                                    }"
+                                />
+                                <MenuItem
+                                    text="Download PDF"
+                                    icon="sap-icon://pdf-attachment"
+                                    press=".onDownloadPDF"
+                                />
+                                <MenuItem
+                                    text="Download Word Document"
+                                    icon="sap-icon://document"
+                                    press=".generateWordContent2"
+                                />
+                            </Menu>
+                        </menu>
+                    </MenuButton>
                     <Button
                         tooltip="Refresh"
                         icon="sap-icon://synchronize"

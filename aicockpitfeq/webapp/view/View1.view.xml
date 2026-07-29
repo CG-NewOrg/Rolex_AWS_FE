@@ -92,6 +92,21 @@
                             icon="sap-icon://legend"
                         />
                         <tnt:NavigationListItem
+                            text="{i18n>codeSum}"
+                            key="cdSum"
+                            icon="sap-icon://doc-attachment"
+                        />
+                        <tnt:NavigationListItem
+                            text="{i18n>retroDoc}"
+                            key="retroDocKey"
+                            icon="sap-icon://documents"
+                        />
+                        </tnt:NavigationListGroup>
+                        <tnt:NavigationListGroup
+                        id="navlistgrpCodeGen"
+                        text="{i18n>codeGenGrp}"
+                        >
+                        <tnt:NavigationListItem
                             text="{i18n>codegen}"
                             key="cdGen"
                             icon="sap-icon://detail-more"
@@ -101,33 +116,22 @@
                             key="cdRem"
                             icon="sap-icon://detail-view"
                         />
-                        <tnt:NavigationListItem
-                            text="{i18n>codeSum}"
-                            key="cdSum"
-                            icon="sap-icon://doc-attachment"
-                        />
 
                         <tnt:NavigationListItem
                             text="{i18n>git}"
                             key="gitKey"
                             icon="sap-icon://split"
                         />
-                        <tnt:NavigationListItem
-                            text="{i18n>tut}"
-                            key="tutKey"
-                            icon="sap-icon://inspection"
-                        />
-                        <!-- Retro Documentation navigation item - Added for retrospective documentation feature -->
-                        <tnt:NavigationListItem
-                            text="{i18n>retroDoc}"
-                            key="retroDocKey"
-                            icon="sap-icon://documents"
-                        />
                     </tnt:NavigationListGroup>
                     <tnt:NavigationListGroup
                         id="navlistgrp3"
                         text="{i18n>sapTest}"
                     >
+                        <tnt:NavigationListItem
+                            text="{i18n>tut}"
+                            key="tutKey"
+                            icon="sap-icon://inspection"
+                        />
                         <tnt:NavigationListItem
                             text="{i18n>tcg}"
                             key="tcgKey"

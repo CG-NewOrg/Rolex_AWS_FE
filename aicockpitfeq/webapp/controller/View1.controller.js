@@ -208,6 +208,21 @@ sap.ui.define([
             if (tab == "DocGen") {
                 this.getView().getModel("viewModel").setProperty("/isDocGen", true);
             }
+            // Handle retroDocKey initialization
+            if (tab === "retroDocKey") {
+                this.getView().getModel("retroDocModel").setProperty("/isRetroDocVisible", true);
+                // Initialize default model for panel visibility
+                var oDefaultModel = this.getView().getModel();
+                if (!oDefaultModel) {
+                    oDefaultModel = new sap.ui.model.json.JSONModel({});
+                    this.getView().setModel(oDefaultModel);
+                }
+                oDefaultModel.setProperty("/agentPipelineVisible", false);
+                oDefaultModel.setProperty("/logPanelVisible", true);
+                oDefaultModel.setProperty("/downloadPanelVisible", false);
+                oDefaultModel.setProperty("/logEntries", []);
+                oDefaultModel.setProperty("/downloadItems", []);
+            }
             this.getView().byId("navigationList").setSelectedKey(tab);
             this.getView().getModel("selKeyForDetailDetail").setProperty("/keyD", tab);
             // Initialize currentKey in tabState to match the initial tab from URL hash
@@ -8261,7 +8276,11 @@ sap.ui.define([
             if (sContent == undefined) {
                 sContent = null;
             }
-            var aMsgModel = this.getView().getModel("msgModel");  
+            var aMsgModel = this.getView().getModel("msgModel"); 
+             let totalLength = aMsgModel.oData.aMsg.length;
+            if (aMsgModel.oData.aMsg[totalLength - 1].role == "assistant") {
+                aMsgModel.oData.aMsg[totalLength - 1].content = this.getView().getModel("airesponseDetailModel").oData.resp;
+            } 
             if (promptMsgData !== "") {
                 if (this.isImage && Array.isArray(sContent)) {
                     for (let f = sContent.length - 1; f >= 0; f--) {
@@ -11758,8 +11777,48 @@ sap.ui.define([
             sap.m.MessageToast.show(
                 "Template selected: " + oData.Name
             );
-
+            this._extractTemplateStructure(oData.Key);
             this._oTemplateDialog.close();
+        },
+
+        _extractTemplateStructure: function (sTemplateKey) {
+            if (!sTemplateKey) return;
+            let that = this;
+            let sUrl = this._sBasePath + "/cockpit/extractTemplateStructure(key='" + encodeURIComponent(sTemplateKey) + "')";
+
+            $.ajax({
+                url: sUrl,
+                method: "GET",
+                headers: that.defaultHeaders,
+                success: function (response) {
+                    try {
+                        let data = typeof response === "string" ? JSON.parse(response) : response;
+                        if (data.value) {
+                            data = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+                        }
+                        if (data.status === 200 && data.templateDescription) {
+                            // Store the template structure description for injection into system message
+                            that.getView().getModel("viewModel").setProperty("/templateStructure", data.templateDescription);
+                            that.getView().getModel("viewModel").setProperty("/templateHeadings", data.structure?.headings || []);
+                            console.log("[Template] Structure extracted:", data.headingCount, "headings found");
+                            sap.m.MessageToast.show("Template structure loaded (" + data.headingCount + " sections)");
+                        } else {
+                            console.warn("[Template] Structure extraction returned non-200:", data);
+                            that.getView().getModel("viewModel").setProperty("/templateStructure", "");
+                            that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
+                        }
+                    } catch (e) {
+                        console.error("[Template] Error parsing structure response:", e);
+                        that.getView().getModel("viewModel").setProperty("/templateStructure", "");
+                        that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
+                    }
+                },
+                error: function (err) {
+                    console.error("[Template] Error fetching template structure:", err);
+                    that.getView().getModel("viewModel").setProperty("/templateStructure", "");
+                    that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
+                }
+            });
         },
 
         onTemplateFileDelete: function (oEvent) {
@@ -11812,7 +11871,7 @@ sap.ui.define([
                     if (oAction === sap.m.MessageBox.Action.OK) {
                         $.ajax({
                             url: this._sBasePath + `/cockpit/deleteFiles`,
-                            type: "DELETE",
+                            type: "POST",
                             contentType: "application/json",
                             headers: oHeader,
                             data: JSON.stringify(oPayload),
@@ -12005,6 +12064,7 @@ sap.ui.define([
                             that.getView().byId("selectedTemplateName").setVisible(true);
                             that.getView().byId("viewTemplateBtn").setVisible(true);
                             sap.m.MessageToast.show("Template uploaded successfully");
+                            that._extractTemplateStructure(templateKey);
                         },
                         error: function (xhr) {
                             busy.close();
@@ -14154,6 +14214,8 @@ sap.ui.define([
             var oResultsTable = this.byId("retroSearchResultsTable");
             if (oResultsTable) {
                 oResultsTable.setVisible(true);
+                // Clear any previous selection so new search results are not pre-selected
+                oResultsTable.removeSelections(true);
                 // Clear any type filter left from onRetroObjectTypeChange so fresh results are always shown
                 if (oResultsTable.getBinding("items")) {
                     oResultsTable.getBinding("items").filter([]);
