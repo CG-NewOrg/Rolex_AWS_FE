@@ -110,12 +110,21 @@
                 </HBox>
             </VBox>
         </content>
-        <!-- Dialog Footer with Close button - Added for Retro Documentation -->
+        <!-- Dialog Footer -->
+        <beginButton>
+            <Button
+                id="retroTemplateConfirmBtn"
+                text="Confirm"
+                type="Emphasized"
+                icon="sap-icon://accept"
+                press=".onRetroTemplateDialogConfirm"
+            />
+        </beginButton>
         <endButton>
             <Button
                 id="retroTemplateCloseBtn"
                 text="{i18n>retroClose}"
-                type="Emphasized"
+                type="Transparent"
                 press=".onRetroTemplateDialogClose"
             />
         </endButton>

@@ -77,19 +77,17 @@
 
           <Label text="Options" />
           <HBox renderType="Bare" justifyContent="SpaceBetween">
-            <CheckBox text="Overwrite if exists" selected="{abapCreateModel>/overwrite}" />
             <CheckBox text="Activate after create" selected="{abapCreateModel>/activate}" />
           </HBox>
 
           <Title text="Source" level="H5" />
           <RadioButtonGroup
-            columns="3"
+            columns="2"
             selectedIndex="{abapCreateModel>/sourceIndex}"
             select=".onAbapCreateSourceChange">
             <buttons>
               <RadioButton text="None" />
               <RadioButton text="AI Response" />
-              <RadioButton text="Editor Content" />
             </buttons>
           </RadioButtonGroup>
 

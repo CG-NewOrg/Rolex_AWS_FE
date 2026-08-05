@@ -628,8 +628,15 @@ sap.ui.define([
       }
 
       // Title
+      var bSuppressTitle = false;
+      if (parsedLines.length > 0 && parsedLines[0].trim() === "__PDF_NOTITLE__") {
+        bSuppressTitle = true;
+        parsedLines.shift();
+      }
+      if (!bSuppressTitle) {
       needNewPage(30);
       writeSimple("AI Response", 18, "bold", BLUE, 0, 12);
+      }
 
       while (i < parsedLines.length) {
         var line = parsedLines[i];
@@ -644,6 +651,13 @@ sap.ui.define([
         if (line.trim() === "__PDF_PLAIN_END__") {
           flushPara();
           plainMode = false;
+          i++;
+          continue;
+        }
+        if (line.trim() === "__PDF_PAGEBREAK__") {
+          flushPara();
+          doc.addPage();
+          y = margin;
           i++;
           continue;
         }
@@ -1005,7 +1019,26 @@ sap.ui.define([
 
       flushPara();
 
-      doc.save(filename || "document.pdf");
+      // Instead of jsPDF's doc.save() (which triggers a native "Save As"
+      // dialog on some browsers and desktop apps), generate a Blob and
+      // trigger an anchor click for a direct download. This matches the
+      // Word download behaviour and works for multiple sequential PDFs.
+      try {
+        var sName = filename || "document.pdf";
+        var oBlob = doc.output("blob");
+        var sUrl = URL.createObjectURL(oBlob);
+        var oLink = document.createElement("a");
+        oLink.href = sUrl;
+        oLink.download = sName;
+        oLink.style.display = "none";
+        document.body.appendChild(oLink);
+        oLink.click();
+        document.body.removeChild(oLink);
+        setTimeout(function () { URL.revokeObjectURL(sUrl); }, 1500);
+      } catch (eSave) {
+        // Fallback to jsPDF's own save() if Blob/anchor path fails
+        try { doc.save(filename || "document.pdf"); } catch (e2) { /* ignore */ }
+      }
     }
   };
 });

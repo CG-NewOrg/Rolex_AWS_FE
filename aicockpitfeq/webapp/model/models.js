@@ -177,6 +177,7 @@ sap.ui.define([
                         selectedFileName: "",
                         aFiles: [],
                         aFilesList: [],
+                        allFileContent:[]
                     });
                     return oModel;
                 }
@@ -231,7 +232,8 @@ sap.ui.define([
                         tstocode: [],
                         coderem: [],
                         codesum: [],
-                        TUT: []
+                        TUT: [],
+                        basicFiles: []
                     });
                     return oFileModel;
                 } else if (modelOf === "promptModel") {

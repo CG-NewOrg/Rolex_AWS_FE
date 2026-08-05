@@ -171,7 +171,10 @@ sap.ui.define([], () => {
         isImageContent: function (value) {
             return typeof value === "string" && value.startsWith("data:image");
         },
-        formatTemplateDownloadVisibility: function (bToggle, bDownloadVis) {
+        formatTemplateDownloadVisibility: function (bToggle, bDownloadVis, sKeyTab) {
+            if (sKeyTab === "retroDocKey") {
+                return false;
+            }
             if (!bToggle) {
                 return false;
             }

@@ -10,6 +10,7 @@
     xmlns:core="sap.ui.core"
     height="100%"
     xmlns:unified="sap.ui.unified"
+    xmlns:pf="sap.suite.ui.commons"
 >
     <tnt:ToolPage id="toolPage">
         <tnt:header>
@@ -170,121 +171,205 @@
                 showFooter="true"
                 showHeader="false"
             >
-                <content>
-                 <!-- ============================================================== -->
-                <!-- RETRO DOCUMENTATION SECTION - START -->
-                <!-- Added for Retro Documentation feature -->
-                <!-- This entire section is only visible when retroDocKey is selected -->
+            <content>
                 <!-- ============================================================== -->
-                <VBox
-                    id="retroDocContainer"
-                    visible="{retroDocModel>/isRetroDocVisible}"
-                    class="sapUiSmallMargin"
-                >
-                    <!-- Retro Documentation Header with AI Model selector - Added for Retro Documentation -->
-                    <HBox
-                        alignItems="Center"
-                        justifyContent="SpaceBetween"
-                        class="sapUiSmallMarginBottom"
+                    <!-- RETRO DOCUMENTATION SECTION - START -->
+                    <!-- Added for Retro Documentation feature -->
+                    <!-- This entire section is only visible when retroDocKey is selected -->
+                    <!-- ============================================================== -->
+                    <ScrollContainer
+                        id="retroDocScrollContainer"
+                        horizontal="false"
+                        vertical="true"
+                        height="100%"
+                        visible="{retroDocModel>/isRetroDocVisible}"
                     >
-                        <Title
-                            text="Document Generation"
-                            level="H4"
-                        />
-                        <HBox alignItems="Center">
-                            <!-- <Text
-                                text="{i18n>retroConnectedTo} {retroDocModel>/selectedSapSystem}"
-                                class="sapUiSmallMarginEnd"
-                            /> -->
-                            <!-- AI Model selector for Retro Documentation -->
-                              <ComboBox
+                    <VBox
+                        id="retroDocContainer"
+                        backgroundDesign="Solid"
+                        alignContent="Start"
+                        width="100%"
+                        justifyContent="SpaceBetween"
+                    >
+                        <!-- Header row matching TUT screen layout with borderClass separator -->
+                        <HBox
+                            alignItems="Start"
+                            justifyContent="SpaceBetween"
+                            class="borderClass"
+                        >
+                            <HBox>
+                                <Title
+                                    text="Source Configuration"
+                                    class="sapUiTinyMargin"
+                                />
+                            </HBox>
+                            <HBox>
+                                <ComboBox
                                     tooltip="Select AI Model"
                                     id="selModelRetro"
                                     selectedKey="{OrchestrationModels>/selectedKey}"
                                     items="{
-							path: 'OrchestrationModels>/items',
-                            sorter: {
-                            path: 'aiType',
-                            group: true
-                            }
-						}"
+                                    path: 'OrchestrationModels>/items',
+                                    sorter: {
+                                        path: 'aiType',
+                                        group: true
+                                    }
+                                }"
                                     selectionChange=".onAIselect"
-                                    class=""
                                 >
                                     <core:Item
                                         key="{OrchestrationModels>key}"
                                         text="{OrchestrationModels>text}"
                                     />
                                 </ComboBox>
-                          
-                        </HBox>
-                    </HBox>
-
-                    <!-- Main Content Area - Object Selection, Template Toggle, and Process Log -->
-                    <HBox width="100%">
-
-                        <!-- Content Area - Object Selection first, then Template Toggle, then Process Log -->
-                        <VBox class="sapUiSmallMargin" width="100%">
-
-                            <!-- Source Configuration Heading -->
-                            <Title text="Source Configuration" level="H5" class="sapUiSmallMarginBottom" />
-
-                            <!-- Source Input Mode Selection -->
-                            <HBox class="sapUiSmallMarginBottom sapUiSmallMargin">
-                                <RadioButtonGroup id="retroSourceModeGroup" selectedIndex="{retroDocModel>/sourceMode}" select=".onRetroSourceModeChange" columns="2">
-                                    <RadioButton text="Object Selection" />
-                                    <RadioButton text="Upload Code" />
-                                </RadioButtonGroup>
+                                <Button
+                                    icon="sap-icon://action-settings"
+                                    type="Transparent"
+                                    press=".openSettings"
+                                />
                             </HBox>
+                        </HBox>
 
+                        <VBox height="1.5rem" />
 
-                            <!-- Upload Code Section -->
-                            <VBox visible="{= ${retroDocModel>/sourceMode} === 1}" class="sapUiSmallMarginBottom sapUiSmallMargin">
-                                <HBox alignItems="Center">
-                                    <unified:FileUploader id="retroCodeUploader" placeholder="Choose source file..." width="300px" fileType="txt,abap" change=".onRetroCodeFileChange" class="sapUiSmallMarginEnd" buttonText="Browse" />
-                                    <Button text="Upload and Generate" icon="sap-icon://upload" type="Emphasized" press=".onRetroUploadCodePress" enabled="{retroDocModel>/uploadCodeEnabled}" class="sapUiSmallMarginEnd" />
-                                    <core:Icon
-                                        src="sap-icon://message-information"
-                                        color="#0A6ED1"
-                                        tooltip="Upload your ABAP source code file (.txt or .abap) to generate FS/TS documents directly."
-                                        class="sapUiTinyMarginBegin" />
-                                </HBox>
-                                <!-- <MessageStrip text="Upload your ABAP source code file (.txt or .abap) to generate FS/TS documents directly." type="Information" showIcon="true" class="sapUiSmallMarginTop" /> -->
-                                <!-- Document Mode for Upload Code -->
-                                <VBox class="sapUiSmallMarginTop" visible="{retroDocModel>/documentModeEnabled}">
-                                    <HBox class="sapUiTinyMarginBottom">
-                                        <core:Icon src="sap-icon://document-text" class="sapUiTinyMarginEnd" />
-                                        <Label text="SELECT DOCUMENTS TO CREATE" design="Bold" />
+                        <!-- Source Configuration Dropdown + Dynamic Instructions -->
+                        <fr:SimpleForm
+                            id="SimpleFormRetro"
+                            editable="true"
+                            layout="ResponsiveGridLayout"
+                            title=""
+                            labelSpanXL="12"
+                            labelSpanL="12"
+                            labelSpanM="12"
+                            labelSpanS="12"
+                            adjustLabelSpan="false"
+                            emptySpanXL="0"
+                            emptySpanL="0"
+                            emptySpanM="0"
+                            emptySpanS="0"
+                            columnsXL="1"
+                            columnsL="1"
+                            columnsM="1"
+                            singleContainerFullSize="false"
+                            class="sysClassSimpForm"
+                        >
+                            <fr:content>
+                                <VBox width="100%">
+                                    <HBox
+                                        alignItems="Center"
+                                    >
+                                        <Label
+                                            text="Source Configuration"
+                                            showColon="true"
+                                            required="true"
+                                        />
+                                        <core:Icon
+                                            id="retroDynamicContent"
+                                            src="sap-icon://message-information"
+                                            size="1rem"
+                                            tooltip="{retroDocModel>/sourceConfigContent}"
+                                            class="sapUiTinyMarginBegin"
+                                        />
                                     </HBox>
-                                    <VBox class="sapUiTinyMarginTop">
-                                        <CheckBox text="Create Functional Specification (FS)" selected="{retroDocModel>/createFS}" class="sapUiTinyMarginBottom" />
-                                        <CheckBox text="Create Technical Specification (TS)" selected="{retroDocModel>/createTS}" class="sapUiTinyMarginBottom" />
-                                    </VBox>
+                                    <ComboBox
+                                        id="sourceConfigSelect"
+                                        width="400px"
+                                        placeholder="-- Select --"
+                                        selectedKey="{retroDocModel>/sourceConfigKey}"
+                                        selectionChange=".onSourceConfigChange"
+                                    >
+                                        <core:Item
+                                            key="objectSelection"
+                                            text="Object Selection"
+                                        />
+                                        <core:Item
+                                            key="uploadCode"
+                                            text="Upload Code"
+                                        />
+                                    </ComboBox>
                                 </VBox>
-                            </VBox>
+                            </fr:content>
+                        </fr:SimpleForm>
 
-                            <!-- Object Selection Content - visible when Object Selection radio is selected -->
-                            <VBox
-                                id="retroObjectSelectionPanel"
-                                class="sapUiSmallMarginBottom"
-                                visible="{= ${retroDocModel>/sourceMode} === 0}"
-                            >
-                                    <VBox class="sapUiSmallMargin">
-                                        <!-- Object Selection Form - Reordered: SAP System (System Key) first -->
+                        <!-- Main Content Area - Source-specific inputs (Upload Code / Object Selection) -->
+                        <fr:SimpleForm
+                            id="retroSourceInputsForm"
+                            editable="true"
+                            layout="ResponsiveGridLayout"
+                            title=""
+                            labelSpanXL="12"
+                            labelSpanL="12"
+                            labelSpanM="12"
+                            labelSpanS="12"
+                            adjustLabelSpan="false"
+                            emptySpanXL="0"
+                            emptySpanL="0"
+                            emptySpanM="0"
+                            emptySpanS="0"
+                            columnsXL="1"
+                            columnsL="1"
+                            columnsM="1"
+                            singleContainerFullSize="false"
+                            class="sysClassSimpForm"
+                        >
+                            <fr:content>
+                                <VBox width="100%">
+                                    <!-- Upload Code Section - visible when Upload Code is selected -->
+                                    <VBox
+                                        visible="{= ${retroDocModel>/sourceConfigKey} === 'uploadCode'}"
+                                        width="100%"
+                                    >
+                                        <!-- Section 1: Upload Code -->
                                         <HBox
+                                            alignItems="Center">
+                                            <Label
+                                            text="Source File"
+                                            showColon="true"
+                                            required="true"
+                                            />
+                                            
+                                        <core:Icon
+                                            src="sap-icon://message-information"
+                                            size="1rem"
+                                            tooltip="Upload your ABAP source code file (.txt, .docx) to generate FS/TS documents directly. Press Go to generate."
+                                            class="sapUiTinyMarginBegin"
+                                        />
+                                        </HBox>
+                                            <unified:FileUploader
+                                                id="retroCodeUploader"
+                                                placeholder=""
+                                                width="400px"
+                                                fileType="txt,docx"
+                                                change=".onRetroCodeFileChange"
+                                                class="sapUiSmallMarginEnd"
+                                                buttonText="Browse"
+                                            />
+                                    </VBox>
+
+                                    <!-- Section 1: SAP System Selection - visible only when Object Selection is selected -->
+                                    <VBox
+                                        visible="{= ${retroDocModel>/sourceConfigKey} === 'objectSelection'}"
+                                        width="100%"
+                                    >
+                                        <!-- Object Selection Form - responsive width like standard modules -->
+                                        <HBox
+                                            width="100%"
                                             alignItems="End"
                                             justifyContent="Start"
                                             wrap="Wrap"
                                         >
-                                            <!-- SAP System Field (System Key) - First in sequence -->
-                                            <VBox class="sapUiSmallMarginEnd">
+                                            <!-- SAP System -->
+                                            <VBox
+                                                width="20%"
+                                                class="sapUiSmallMarginEnd"
+                                            >
                                                 <Label
                                                     text="{i18n>retroSapSystem}"
                                                     required="true"
                                                 />
                                                 <ComboBox
-                                                    id="retroSapSystemSelect"
-                                                    width="200px"
+                                                    id="retroSapSystemSelectTop"
+                                                    width="100%"
                                                     selectedKey="{retroDocModel>/selectedSapSystem}"
                                                 >
                                                     <core:Item
@@ -301,15 +386,18 @@
                                                     />
                                                 </ComboBox>
                                             </VBox>
-                                            <!-- Object Type Field -->
-                                            <VBox class="sapUiSmallMarginEnd">
+                                            <!-- Object Type -->
+                                            <VBox
+                                                width="20%"
+                                                class="sapUiSmallMarginEnd"
+                                            >
                                                 <Label
                                                     text="{i18n>retroObjType}"
                                                     required="true"
                                                 />
                                                 <ComboBox
-                                                    id="retroObjectTypeSelect"
-                                                    width="200px"
+                                                    id="retroObjectTypeSelectTop"
+                                                    width="100%"
                                                     selectedKey="{retroDocModel>/selectedObjectType}"
                                                     selectionChange=".onRetroObjectTypeChange"
                                                     required="true"
@@ -332,19 +420,23 @@
                                                     />
                                                 </ComboBox>
                                             </VBox>
-                                            <!-- Search Pattern Field - ComboBox with backend suggestions -->
-                                            <VBox class="sapUiSmallMarginEnd">
+                                            <!-- Search Pattern -->
+                                            <VBox
+                                                width="25%"
+                                                class="sapUiSmallMarginEnd"
+                                            >
                                                 <Label
                                                     text="{i18n>retroSearchPattern}"
                                                     required="true"
                                                 />
                                                 <ComboBox
-                                                    id="retroSearchPatternInput"
-                                                    width="200px"
+                                                    id="retroSearchPatternInputTop"
+                                                    width="100%"
                                                     value="{retroDocModel>/searchPattern}"
                                                     placeholder="Z*"
                                                     items="{retroDocModel>/searchSuggestions}"
                                                     selectionChange=".onRetroSearchPatternSelect"
+                                                    change=".onRetroSearchPress"
                                                 >
                                                     <core:Item
                                                         key="{retroDocModel>key}"
@@ -352,398 +444,633 @@
                                                     />
                                                 </ComboBox>
                                             </VBox>
-                                            <!-- Search Button -->
-                                            <HBox alignItems="End">
-                                                <Button
-                                                    icon="sap-icon://search"
-                                                    type="Transparent"
-                                                    press=".onRetroSearchPress"
-                                                    class="sapUiTinyMarginEnd"
+                                            <!-- Released Transport Request -->
+                                            <VBox width="28%">
+                                                <Label
+                                                    text="Released Transport Request"
+                                                    required="true"
                                                 />
-                                            </HBox>
+                                                <Input
+                                                    id="retroTRInputTop"
+                                                    width="100%"
+                                                    placeholder="S4TK123456"
+                                                    enabled="{= ${retroDocModel>/documentMode} === 'update'}"
+                                                />
+                                            </VBox>
                                         </HBox>
-
-                                        <!-- ============================================================== -->
-                                        <!-- SEARCH RESULTS TABLE - Shows objects matching the search pattern -->
-                                        <!-- Visible after search is performed and results are found -->
-                                        <!-- ============================================================== -->
-                                        <VBox 
-                                            class="sapUiSmallMarginTop sapUiSmallMarginBottom" 
-                                            visible="{= ${retroDocModel>/searchResultsVisible} &amp;&amp; ${retroDocModel>/searchResultsCount} > 0}"
-                                        >
-                                            <HBox class="sapUiTinyMarginBottom" alignItems="Center">
-                                                <core:Icon src="sap-icon://list" class="sapUiTinyMarginEnd" />
-                                                <Label text="SEARCH RESULTS" design="Bold" class="sapUiTinyMarginEnd" />
-                                                <Label text="({retroDocModel>/searchResultsCount} objects found)" class="sapUiTinyMarginBegin" />
-                                            </HBox>
-                                            <Table
-                                                id="retroSearchResultsTable"
-                                                items="{retroDocModel>/searchResults}"
-                                                mode="SingleSelectMaster"
-                                                selectionChange=".onRetroSearchResultSelectionChange"
-                                                growing="true"
-                                                growingThreshold="20"
-                                                class="sapUiTinyMarginTop"
-                                            >
-                                                <columns>
-                                                    <Column width="25%">
-                                                        <Text text="Object Name" />
-                                                    </Column>
-                                                    <Column width="15%">
-                                                        <Text text="Type" />
-                                                    </Column>
-                                                    <Column width="40%">
-                                                        <Text text="Description" />
-                                                    </Column>
-                                                    <Column width="20%">
-                                                        <Text text="Package" />
-                                                    </Column>
-                                                </columns>
-                                                <items>
-                                                    <ColumnListItem>
-                                                        <cells>
-                                                            <Text text="{retroDocModel>objectName}" />
-                                                            <Text text="{retroDocModel>objectType}" />
-                                                            <Text text="{retroDocModel>description}" />
-                                                            <Text text="{retroDocModel>package}" />
-                                                        </cells>
-                                                    </ColumnListItem>
-                                                </items>
-                                            </Table>
-                                            <MessageStrip
-                                                text="Select an object from the list above to enable document generation options."
-                                                type="Information"
-                                                showIcon="true"
-                                                class="sapUiSmallMarginTop"
-                                            />
-                                        </VBox>
-
-                                        <!-- ============================================================== -->
-                                        <!-- DOCUMENT MODE SECTION - Enabled after search pattern resolution -->
-                                        <!-- This section allows users to select Create New or Update Existing mode -->
-                                        <!-- Visible only after search is performed (on retro searchpress) -->
-                                        <!-- ============================================================== -->
-                                        <VBox class="sapUiSmallMarginTop sapUiSmallMarginBottom" visible="{retroDocModel>/documentModeEnabled}">
-                                            <HBox class="sapUiTinyMarginBottom">
-                                                <core:Icon src="sap-icon://document-text" class="sapUiTinyMarginEnd" />
-                                                <Label text="DOCUMENT MODE" design="Bold" />
-                                            </HBox>
-                                            <HBox class="sapUiTinyMarginBottom">
-                                                <Button
-                                                    id="retroCreateNewBtn"
-                                                    text="Create New"
-                                                    icon="{= ${retroDocModel>/documentMode} === 'create' ? 'sap-icon://accept' : ''}"
-                                                    type="{= ${retroDocModel>/documentMode} === 'create' ? 'Emphasized' : 'Default'}"
-                                                    press=".onRetroDocumentModeChange"
-                                                    class="sapUiTinyMarginEnd">
-                                                    <customData>
-                                                        <core:CustomData key="mode" value="create" />
-                                                    </customData>
-                                                </Button>
-                                                <Button
-                                                    id="retroUpdateExistingBtn"
-                                                    text="Update Existing"
-                                                    icon="{= ${retroDocModel>/documentMode} === 'update' ? 'sap-icon://accept' : ''}"
-                                                    type="{= ${retroDocModel>/documentMode} === 'update' ? 'Emphasized' : 'Default'}"
-                                                    press=".onRetroDocumentModeChange"
-                                                    enabled="{= ${retroDocModel>/hasExistingFS} || ${retroDocModel>/hasExistingTS}}">
-                                                    <customData>
-                                                        <core:CustomData key="mode" value="update" />
-                                                    </customData>
-                                                </Button>
-                                            </HBox>
-                                            <!-- Info message when no existing documents for Update mode -->
-                                            <MessageStrip
-                                                text="No existing documents found in Object Store for this program. Only 'Create New' mode is available."
-                                                type="Information"
-                                                showIcon="true"
-                                                visible="{= !${retroDocModel>/hasExistingFS} &amp;&amp; !${retroDocModel>/hasExistingTS} &amp;&amp; ${retroDocModel>/documentModeEnabled}}"
-                                                class="sapUiTinyMarginTop" />
-                                        </VBox>
-
-                                        <!-- UPDATE EXISTING MODE - Document Selection with Checkboxes and Hyperlinks -->
-                                        <VBox class="sapUiSmallMarginTop sapUiSmallMarginBottom" visible="{= ${retroDocModel>/documentModeEnabled} &amp;&amp; ${retroDocModel>/documentMode} === 'update'}">
-                                            <HBox class="sapUiTinyMarginBottom">
-                                                <Label text="SELECT DOCUMENTS TO UPDATE" design="Bold" />
-                                            </HBox>
-
-                                            <VBox class="sapUiTinyMarginTop">
-                                                <HBox alignItems="Center" class="sapUiTinyMarginBottom">
-                                                    <CheckBox
-                                                        id="retroUpdateFSCheckbox"
-                                                        text="Update Functional Specification (FS)"
-                                                        selected="{retroDocModel>/updateFS}"
-                                                        enabled="{retroDocModel>/hasExistingFS}" />
-                                                   <Link
-    text="{retroDocModel>/existingFSFileName}"
-    press=".onRetroDownloadExistingFS"
-    visible="{retroDocModel>/hasExistingFS}"
-    class="sapUiSmallMarginBegin" />
-                                                </HBox>
-                                                <HBox alignItems="Center" class="sapUiTinyMarginBottom">
-                                                    <CheckBox
-                                                        id="retroUpdateTSCheckbox"
-                                                        text="Update Technical Specification (TS)"
-                                                        selected="{retroDocModel>/updateTS}"
-                                                        enabled="{retroDocModel>/hasExistingTS}" />
-                                                  <Link
-    text="{retroDocModel>/existingTSFileName}"
-    press=".onRetroDownloadExistingTS"
-    visible="{retroDocModel>/hasExistingTS}"
-    class="sapUiSmallMarginBegin" />
-                                                </HBox>
-                                            </VBox>
-                                            <!-- Info MessageStrip for Update mode -->
-                                            <MessageStrip
-                                                text="Update mode will analyze Transport Requests and append only changed behavior (delta) to the selected documents."
-                                                type="Information"
-                                                showIcon="true"
-                                                class="sapUiSmallMarginTop" />
-                                        </VBox>
-
-                                        <!-- CREATE NEW MODE - Document Selection with Checkboxes -->
-                                        <VBox class="sapUiSmallMarginTop sapUiSmallMarginBottom" visible="{= ${retroDocModel>/documentModeEnabled} &amp;&amp; ${retroDocModel>/documentMode} === 'create'}">
-                                            <HBox class="sapUiTinyMarginBottom">
-                                                <Label text="SELECT DOCUMENTS TO CREATE" design="Bold" />
-                                            </HBox>
-                                            <VBox class="sapUiTinyMarginTop">
-                                                <CheckBox
-                                                    id="retroCreateFSCheckbox"
-                                                    text="Create Functional Specification (FS)"
-                                                    selected="{retroDocModel>/createFS}"
-                                                    class="sapUiTinyMarginBottom" />
-                                                <CheckBox
-                                                    id="retroCreateTSCheckbox"
-                                                    text="Create Technical Specification (TS)"
-                                                    selected="{retroDocModel>/createTS}"
-                                                    class="sapUiTinyMarginBottom" />
-                                            </VBox>
-                                            <!-- Warning if documents already exist -->
-                                            <MessageStrip
-                                                id="retroExistingDocsWarning"
-                                                text="Documents already exist for this program. Use 'Update Existing' mode to modify them."
-                                                type="Warning"
-                                                showIcon="true"
-                                                visible="{= (${retroDocModel>/hasExistingFS} || ${retroDocModel>/hasExistingTS}) &amp;&amp; ${retroDocModel>/documentMode} === 'create'}"
-                                                class="sapUiSmallMarginTop" />
-                                        </VBox>
-                                        <!-- ============================================================== -->
-                                        <!-- END OF DOCUMENT MODE SECTION -->
-                                        <!-- ============================================================== -->
-
                                     </VBox>
-                            </VBox>
+                                </VBox>
+                            </fr:content>
+                        </fr:SimpleForm>
 
-                            <!-- ============================================================== -->
-                            <!-- TEMPLATE TOGGLE SECTION - FSD and TSD -->
-                            <!-- Toggle switch similar to other tabs for template selection -->
-                            <!-- ============================================================== -->
-                            <VBox class="sapUiSmallMarginBottom sapUiSmallMargin">
-                                <HBox alignItems="Center" width="100%">
-                                    <Label text="Template :" design="Bold" class="sapUiTinyMarginEnd" />
-                                    <Switch
-                                        id="retroTemplateToggle"
-                                        state="{retroDocModel>/retroTemplateToggle}"
-                                        change=".onRetroTemplateToggle"
-                                        class="sapUiTinyMarginEnd"
-                                    />
-                                </HBox>
-                                <!-- Template options visible when toggle is ON -->
-                                <VBox visible="{retroDocModel>/retroTemplateToggle}" class="sapUiSmallMarginTop">
+                        <HBox class="borderClass"></HBox>
+
+                        <!-- Section 2: Template & Documents - Always visible regardless of dropdown selection -->
+                        <fr:SimpleForm
+                            id="retroTemplateForm"
+                            editable="true"
+                            layout="ResponsiveGridLayout"
+                            title=""
+                            labelSpanXL="12"
+                            labelSpanL="12"
+                            labelSpanM="12"
+                            labelSpanS="12"
+                            adjustLabelSpan="false"
+                            emptySpanXL="0"
+                            emptySpanL="0"
+                            emptySpanM="0"
+                            emptySpanS="0"
+                            columnsXL="1"
+                            columnsL="1"
+                            columnsM="1"
+                            singleContainerFullSize="false"
+                        >
+                            <fr:content>
+                                <VBox width="100%">
+                                    
+
+                                    <!-- Template Toggle Row -->
                                     <HBox alignItems="Center" class="sapUiTinyMarginBottom">
-                                        <Label text="FSD Template:" class="sapUiSmallMarginEnd" width="120px" />
-                                        <Button
-                                            id="retroFuncSpecBtn"
-                                            text="{i18n>retroFuncSpec}"
-                                            icon="sap-icon://document"
-                                            type="Transparent"
-                                            press=".onRetroFuncSpecPress"
-                                            class="sapUiTinyMarginEnd"
+                                        <Label
+                                            text="Template:"
+                                            width="80px"
+                                            design="Bold"
+                                        />
+                                        <Switch
+                                            id="retroTemplateToggle"
+                                            state="{retroDocModel>/templateEnabled}"
+                                            change=".onRetroTemplateToggle"
                                         />
                                     </HBox>
-                                    <HBox alignItems="Center" class="sapUiTinyMarginBottom">
-                                        <Label text="TSD Template:" class="sapUiSmallMarginEnd" width="120px" />
-                                        <Button
-                                            id="retroTechSpecBtn"
-                                            text="{i18n>retroTechSpec}"
-                                            icon="sap-icon://document"
-                                            type="Transparent"
-                                            press=".onRetroTechSpecPress"
+
+                                    <!-- FS Template Row - visible only when toggle is ON -->
+                                    <HBox alignItems="Center" class="sapUiTinyMarginBottom" visible="{= ${retroDocModel>/templateEnabled} === true}">
+                                        <Label
+                                            text="Functional Specification Template:"
+                                            width="240px"
+                                            design="Bold"
+                                        />
+                                        <Input
+                                            id="retroFSTemplateInput"
+                                            width="300px"
+                                            placeholder="Select or upload FS Template"
+                                            value="{retroDocModel>/fsTemplateFileName}"
+                                            showValueHelp="true"
+                                            valueHelpRequest=".onRetroFuncSpecPress"
+                                            editable="false"
                                             class="sapUiTinyMarginEnd"
+                                        />
+                                        <unified:FileUploader
+                                            id="retroFSTemplateUploader"
+                                            buttonOnly="true"
+                                            iconOnly="true"
+                                            icon="sap-icon://upload"
+                                            style="Emphasized"
+                                            tooltip="Upload FS Template (.docx)"
+                                            fileType="docx"
+                                            change=".onRetroFSTemplateUpload"
+                                        />
+                                        <Button
+                                            id="retroViewFSTemplateBtn"
+                                            icon="sap-icon://show"
+                                            type="Transparent"
+                                            tooltip="View / Download FS Template"
+                                            press=".onRetroViewFSTemplate"
+                                            enabled="{= !!${retroDocModel>/fsTemplateFileName}}"
+                                            class="sapUiTinyMarginBegin"
+                                        />
+                                    </HBox>
+
+                                    <!-- TS Template Row - visible only when toggle is ON -->
+                                    <HBox alignItems="Center" class="sapUiTinyMarginBottom" visible="{= ${retroDocModel>/templateEnabled} === true}">
+                                        <Label
+                                            text="Technical Specification Template:"
+                                            width="240px"
+                                            design="Bold"
+                                        />
+                                        <Input
+                                            id="retroTSTemplateInput"
+                                            width="300px"
+                                            placeholder="Select or upload TS Template"
+                                            value="{retroDocModel>/tsTemplateFileName}"
+                                            showValueHelp="true"
+                                            valueHelpRequest=".onRetroTechSpecPress"
+                                            editable="false"
+                                            class="sapUiTinyMarginEnd"
+                                        />
+                                        <unified:FileUploader
+                                            id="retroTSTemplateUploader"
+                                            buttonOnly="true"
+                                            iconOnly="true"
+                                            icon="sap-icon://upload"
+                                            style="Emphasized"
+                                            tooltip="Upload TS Template (.docx)"
+                                            fileType="docx"
+                                            change=".onRetroTSTemplateUpload"
+                                        />
+                                        <Button
+                                            id="retroViewTSTemplateBtn"
+                                            icon="sap-icon://show"
+                                            type="Transparent"
+                                            tooltip="View / Download TS Template"
+                                            press=".onRetroViewTSTemplate"
+                                            enabled="{= !!${retroDocModel>/tsTemplateFileName}}"
+                                            class="sapUiTinyMarginBegin"
+                                        />
+                                    </HBox>
+                                    <VBox height="1.5rem" />
+                                    <Label
+                                        text="Documents"
+                                        design="Bold"
+                                        class="retroDocSectionTitle"
+                                    />
+
+                                    <!-- Document Mode Section - visible only for Object Selection -->
+                                    <HBox
+                                        alignItems="Center"
+                                        class="sapUiSmallMarginTop sapUiTinyMarginBottom"
+                                        visible="{= ${retroDocModel>/sourceConfigKey} === 'objectSelection'}"
+                                    >
+                                        <Label
+                                            text="Document Mode:"
+                                            width="160px"
+                                        />
+                                        <RadioButtonGroup
+                                            id="retroDocumentModeRadioGroup"
+                                            columns="2"
+                                            selectedIndex="{= ${retroDocModel>/documentMode} === 'update' ? 1 : 0}"
+                                            select=".onRetroDocumentModeChange"
+                                        >
+                                            <RadioButton
+                                                id="retroCreateNewRadio"
+                                                text="Create New"
+                                            />
+                                            <RadioButton
+                                                id="retroUpdateExistingRadio"
+                                                text="Update Existing"
+                                                enabled="{= ${retroDocModel>/hasExistingFS} || ${retroDocModel>/hasExistingTS}}"
+                                            />
+                                        </RadioButtonGroup>
+                                    </HBox>
+
+                                    <!-- Documents Section - always visible, synced with templates -->
+                                    <HBox alignItems="Center" class="sapUiSmallMarginTop sapUiTinyMarginBottom">
+                                        <Label
+                                            text="Select Documents:"
+                                            width="160px"
+                                        />
+                                        <VBox width="250px">
+                                            <CheckBox
+                                                text="{= ${retroDocModel>/documentMode} === 'update' &amp;&amp; ${retroDocModel>/hasExistingFS} ? 'Update Functional Specification' : 'Create Functional Specification'}"
+                                                selected="{retroDocModel>/createFS}"
+                                            />
+                                        </VBox>
+                                        <VBox width="250px">
+                                            <CheckBox
+                                                text="{= ${retroDocModel>/documentMode} === 'update' &amp;&amp; ${retroDocModel>/hasExistingTS} ? 'Update Technical Specification' : 'Create Technical Specification'}"
+                                                selected="{retroDocModel>/createTS}"
+                                            />
+                                        </VBox>
+                                    </HBox>
+
+                                    <!-- Existing Documents Section - visible only in Update Existing mode and NOT in Upload Code mode -->
+                                    <HBox
+                                        alignItems="Start"
+                                        class="sapUiSmallMarginTop sapUiTinyMarginBottom"
+                                        visible="{= ${retroDocModel>/sourceConfigKey} !== 'uploadCode' &amp;&amp; ${retroDocModel>/documentMode} === 'update' &amp;&amp; (${retroDocModel>/hasExistingFS} || ${retroDocModel>/hasExistingTS})}"
+                                    >
+                                        <Label
+                                            text="Existing Documents"
+                                            width="160px"
+                                        />
+                                        <VBox>
+                                            <HBox
+                                                alignItems="Center"
+                                                visible="{retroDocModel>/hasExistingFS}"
+                                                class="sapUiTinyMarginBottom"
+                                            >
+                                                <core:Icon
+                                                    src="sap-icon://document"
+                                                    class="sapUiTinyMarginEnd"
+                                                    color="#0a6ed1"
+                                                />
+                                                <Link
+                                                    text="{= ${retroDocModel>/existingFSFileName} ? ${retroDocModel>/existingFSFileName} : 'Functional Specification'}"
+                                                    press=".onRetroDownloadExistingFS"
+                                                    tooltip="{= ${retroDocModel>/existingFSFileName} ? 'Click to download: ' + ${retroDocModel>/existingFSFileName} : 'Download existing Functional Specification'}"
+                                                />
+                                            </HBox>
+                                            <HBox
+                                                alignItems="Center"
+                                                visible="{retroDocModel>/hasExistingTS}"
+                                            >
+                                                <core:Icon
+                                                    src="sap-icon://document"
+                                                    class="sapUiTinyMarginEnd"
+                                                    color="#0a6ed1"
+                                                />
+                                                <Link
+                                                    text="{= ${retroDocModel>/existingTSFileName} ? ${retroDocModel>/existingTSFileName} : 'Technical Specification'}"
+                                                    press=".onRetroDownloadExistingTS"
+                                                    tooltip="{= ${retroDocModel>/existingTSFileName} ? 'Click to download: ' + ${retroDocModel>/existingTSFileName} : 'Download existing Technical Specification'}"
+                                                />
+                                            </HBox>
+                                        </VBox>
+                                    </HBox>
+                                </VBox>
+                            </fr:content>
+                        </fr:SimpleForm>
+
+                        <!-- Process Log moved to DetailDetail.view.xml (right/detail screen) -->
+
+                        <!-- Object Selection Content - visible when Object Selection is selected -->
+                        <VBox
+                            id="retroObjectSelectionPanel"
+                            class="sapUiSmallMarginBottom"
+                            width="100%"
+                            visible="{= ${retroDocModel>/sourceConfigKey} === 'objectSelection'}"
+                        >
+                            <VBox>
+                                <!-- Search Results Table -->
+                                <VBox
+                                    class="sapUiSmallMarginTop sapUiSmallMarginBottom"
+                                    visible="false"
+                                >
+                                    <HBox
+                                        class="sapUiTinyMarginBottom"
+                                        alignItems="Center"
+                                    >
+                                        <core:Icon
+                                            src="sap-icon://list"
+                                            class="sapUiTinyMarginEnd"
+                                        />
+                                        <Label
+                                            text="SEARCH RESULTS"
+                                            design="Bold"
+                                            class="sapUiTinyMarginEnd"
+                                        />
+                                        <Label
+                                            text="({retroDocModel>/searchResultsCount} objects found)"
+                                            class="sapUiTinyMarginBegin"
+                                        />
+                                    </HBox>
+                                    <Table
+                                        id="retroSearchResultsTable"
+                                        items="{retroDocModel>/searchResults}"
+                                        mode="SingleSelectMaster"
+                                        selectionChange=".onRetroSearchResultSelectionChange"
+                                        growing="true"
+                                        growingThreshold="20"
+                                        class="sapUiTinyMarginTop"
+                                    >
+                                        <columns>
+                                            <Column width="25%">
+                                                <Text
+                                                    text="Object Name"
+                                                />
+                                            </Column>
+                                            <Column width="15%">
+                                                <Text text="Type" />
+                                            </Column>
+                                            <Column width="40%">
+                                                <Text
+                                                    text="Description"
+                                                />
+                                            </Column>
+                                            <Column width="20%">
+                                                <Text text="Package" />
+                                            </Column>
+                                        </columns>
+                                        <items>
+                                            <ColumnListItem>
+                                                <cells>
+                                                    <Text
+                                                        text="{retroDocModel>objectName}"
+                                                    />
+                                                    <Text
+                                                        text="{retroDocModel>objectType}"
+                                                    />
+                                                    <Text
+                                                        text="{retroDocModel>description}"
+                                                    />
+                                                    <Text
+                                                        text="{retroDocModel>package}"
+                                                    />
+                                                </cells>
+                                            </ColumnListItem>
+                                        </items>
+                                    </Table>
+                                </VBox>
+                            </VBox>
+                        </VBox>
+
+                        <!-- Transport Source Results - shown after TR fetch in Object Selection mode -->
+                        <VBox
+                            id="retroTransportRequestSection"
+                            class="sapUiSmallMarginBottom"
+                            width="100%"
+                            visible="{= ${retroDocModel>/sourceConfigKey} === 'transportRequest'}"
+                        >
+                            <HBox
+                                alignItems="End"
+                                width="100%"
+                                wrap="Wrap"
+                            >
+                                <VBox
+                                    width="30%"
+                                    class="sapUiSmallMarginEnd"
+                                >
+                                    <Label
+                                        text="Released Transport Request ID"
+                                        required="true"
+                                    />
+                                    <HBox alignItems="Center">
+                                        <Input
+                                            value="{trSourceModel>/transportId}"
+                                            placeholder="e.g. S4TK......"
+                                            width="220px"
+                                            liveChange=".onTrIdInputChange"
+                                            submit=".onGetTransportSource"
+                                        />
+                                        <Button
+                                            text="Get Source Code"
+                                            type="Emphasized"
+                                            icon="sap-icon://download-from-cloud"
+                                            press=".onGetTransportSource"
+                                            class="sapUiTinyMarginBegin"
+                                            tooltip="Fetch source code of all ABAP objects in this Released Transport Request"
                                         />
                                     </HBox>
                                 </VBox>
-                            </VBox>
-                            <!-- ============================================================== -->
-                            <!-- END OF TEMPLATE TOGGLE SECTION -->
-                            <!-- ============================================================== -->
- 
- 
-                            <!-- Agent Pipeline Visual - Shows icons with arrows -->
-                        <Panel
-                            id="agentPipelineSection"
-                            visible="false"
-                            headerText="{i18n>agentPipeline}"
-                            class="sapUiSmallMarginBottom">
-                            <headerToolbar>
-                                <OverflowToolbar>
-                                    <core:Icon src="sap-icon://process" color="#0A6ED1" class="sapUiSmallMarginEnd" />
-                                    <Title text="{i18n>agentPipeline}" />
-                                    <ToolbarSpacer />
+                                <VBox
+                                    visible="{trSourceModel>/hasSelectedObject}"
+                                    class="sapUiSmallMarginBegin"
+                                    justifyContent="End"
+                                >
+                                    <Label
+                                        text="Selected for Generation:"
+                                        design="Bold"
+                                    />
                                     <ObjectStatus
-                                        text="{/agentPipelineStatus}"
-                                        state="{= ${/agentPipelineComplete} ? 'Success' : 'Warning'}" />
-                                </OverflowToolbar>
-                            </headerToolbar>
-                            <content>
-                                <HBox justifyContent="Center" alignItems="Center" class="sapUiMediumMargin agentPipelineVisual">
-                                    <!-- Step 1: Document/Object Selection -->
-                                    <VBox alignItems="Center" class="agentStep">
-                                        <core:Icon
-                                            src="sap-icon://source-code"
-                                            size="2.5rem"
-                                            color="{= ${/agentSteps/0/status} === 'completed' ? '#107E3E' : (${/agentSteps/0/status} === 'processing' ? '#E9730C' : '#323A')}"
-                                            class="{= ${/agentSteps/0/status} === 'completed' ? 'agentStepCompleted' : (${/agentSteps/0/status} === 'processing' ? 'agentStepProcessing' : 'agentStepPending}" />
-                                    </VBox>
-                                <!-- Arrow 1 -->
-                                <core:Icon src="sap-icon://slim-arrow-right" size="1.5rem" color="{= ${/agentConnectors/0/completed} ? '#107E3E' : '#D9D9D9'}" class="sapUiSmallMarginBeginEnd" />
-                                    <!-- Step 2: Search/Fetch -->
-                                    <VBox alignItems="Center" class="agentStep">
-                                        <core:Icon
-                                            src="sap-icon://documents"
-                                            size="2.5rem"
-                                            color="{= ${/agentSteps/1/status} === 'completed' ? '#107E3E' : (${/agentSteps/1/status} === 'processing' ? '#E9730C' : '#32363A')}"
-                                            class="{= ${/agentSteps/1/status} === 'completed' ? 'agentStepCompleted' : (${/agentSteps/1/status} === 'processing' ? 'agentStepProcessing' : 'agentStepPending')}" />
-                                    </VBox>
-                                <!-- Arrow 2 -->
-                                <core:Icon src="sap-icon://slim-arrow-right" size="1.5rem" color="{= ${/agentConnectors/1/completed} ? '#107E3E' : '#D9DD9'}" class="sapUiSmallMarginBeginEnd" />
-                                    <!-- Step 3: Tech Spec -->
-                                    <VBox alignItems="Center" class="agentStep">
-                                        <core:Icon
-                                            src="sap-icon://measurement-document"
-                                            size="2.5rem"
-                                            color="{= ${/agentSteps/2/status} === 'completed' ? '#107E3E' : (${/agentSteps/2/status} === 'processing' ? '#E9730C' : '#32363A')}"
-                                            class="{= ${/agentSteps/2/status} === 'completed' ? 'agentStepCompleted' : (${/agentSteps/2/status} === 'processing' ? 'agentStepProcessing' : 'agentStepPending')}" />
-                                    </VBox>
-                                <!-- Arrow 3 -->
-                                <core:Icon src="sap-icon://slim-arrow-right" size="1.5rem" color="{= ${/agentConnectors/2/completed} ? '#107E3E' : '#D9D9D9'}" class="sapUiSmallMarginBeginEnd" />
-                                    <!-- Step 4: Func Spec -->
-                                    <VBox alignItems="Center" class="agentStep">
-                                        <core:Icon
-                                            src="sap-icon://download"
-                                            size="2.5rem"
-                                            color="{= ${/agentSteps/3/status} === 'completed' ? '#107E3E' : (${/agentSteps/3/status} === 'processing' ? '#E9730C' : '#32363A')}"
-                                            class="{= ${/agentSteps/3/status} === 'completed' ? 'agentStepCompleted' : (${/agentSteps/3/status} === 'processing' ? 'agentStepProcessing' : 'agentStepPending}" />
-                                    </VBox>
-                                </HBox>
-                            </content>
-                        </Panel>
- 
-                            <!-- Process Log Panel -->
-                            <Panel
-                                id="logPanel"
-                                visible="{/logPanelVisible}"
-                                headerText="{i18n>processLog}"
-                                expandable="true"
-                                expanded="true"
-                                class="sapUiSmallMarginBottom">
-                                <headerToolbar>
-                                    <OverflowToolbar>
-                                        <core:Icon src="sap-icon://activity-items" class="sapUiSmallMarginEnd" />
-                                        <Title text="{i18n>processLog}" />
-                                        <ToolbarSpacer />
-                                        <!-- <CheckBox text="{i18n>autoScroll}" selected="true" id="autoScrollCheckbox" /> -->
-                                    </OverflowToolbar>
-                                </headerToolbar>
-                                <content>
-                                    <List
-                                        id="processLogList"
-                                        items="{/logEntries}"
-                                        showSeparators="Inner"
-                                        class="processLogBody">
-                                        <CustomListItem>
-                                            <HBox alignItems="Center" width="100%" class="sapUiTinyMarginBeginEnd sapUiTinyMarginTopBottom logItem">
-                                                <Text text="#{seq}" class="logSeq sapUiTinyMarginEnd" wrapping="false" width="32px" />
-                                                <core:Icon
-                                                    src="{= ${type} === 'success' ? 'sap-icon://accept' : (${type} === 'error' ? 'sap-icon://error' : (${type} === 'processing' ? 'sap-icon://synchronize' : 'sap-icon://hint'))}"
-                                                    color="{= ${type} === 'success' ? '#107E3E' : (${type} === 'error' ? '#BB0000' : (${type} === 'processing' ? '#E9730C' : '#0A6ED1'))}"
-                                                    class="sapUiTinyMarginEnd" />
-                                                <Text text="{title}" class="logTitle sapUiTinyMarginEnd" wrapping="false" width="85px" />
-                                                <Text text="{content}" class="logDetails sapUiTinyMarginEnd" wrapping="false">
-                                                    <layoutData><FlexItemData growFactor="1" shrinkFactor="1" /></layoutData>
-                                                </Text>
-                                                <Text text="{time}" class="logTime sapUiTinyMarginBegin" wrapping="false" width="110px">
-                                                    <layoutData><FlexItemData shrinkFactor="0" /></layoutData>
-                                                </Text>
-                                                <!-- Fixed-width placeholder keeps timestamp column aligned on ALL rows -->
-                                                <HBox width="36px" alignItems="Center" justifyContent="Center">
-                                                    <layoutData><FlexItemData shrinkFactor="0" /></layoutData>
-                                                    <Button
-                                                        visible="{hasViewButton}"
-                                                        icon="sap-icon://display"
-                                                        type="Transparent"
-                                                        tooltip="View Document"
-                                                        press=".onViewLogItem" />
-                                                </HBox>
-                                            </HBox>
-                                        </CustomListItem>
-                                    </List>
-                                </content>
-                            </Panel>
-
-                            <!-- Download Panel -->
-                            <Panel
-                                id="downloadPanel"
-                                visible="{/downloadPanelVisible}"
-                                headerText="{i18n>documentsReady}"
-                                class="sapUiSmallMarginBottom downloadPanel">
-                                <headerToolbar>
-                                    <OverflowToolbar>
-                                        <core:Icon src="sap-icon://accept" color="#107E3E" class="sapUiSmallMarginEnd" />
-                                        <Title text="{i18n>documentsReady}" />
-                                    </OverflowToolbar>
-                                </headerToolbar>
-                                <content>
-                                    <List
-                                        id="downloadList"
-                                        items="{/downloadItems}"
-                                        showSeparators="Inner">
-                                        <CustomListItem>
-                                            <HBox alignItems="Center" class="sapUiSmallMargin downloadItem">
-                                                <core:Icon src="sap-icon://document" size="1.5rem" class="sapUiSmallMarginEnd" />
-                                                <VBox class="sapUiSmallMarginEnd" width="100%">
-                                                    <Text text="{name}" class="downloadName" />
-                                                    <Text text="{filename}" class="downloadFile" />
-                                                </VBox>
-                                                <Button
-                                                    text="View"
-                                                    type="Transparent"
-                                                    press=".onViewDocument" />
-                                                <Button
-                                                    text="Download"
-                                                    icon="sap-icon://download"
-                                                    type="Emphasized"
-                                                    press=".onDownloadDocument"
-                                                    class="sapUiTinyMarginBegin" />
-                                            </HBox>
-                                        </CustomListItem>
-                                    </List>
-                                    <OverflowToolbar class="sapUiSmallMarginTop">
-                                        <ToolbarSpacer />
-                                        <Button
-                                            text="{i18n>downloadAll}"
-                                            icon="sap-icon://download"
-                                            type="Accept"
-                                            press=".onDownloadAll" />
-                                    </OverflowToolbar>
-                                </content>
-                            </Panel>
+                                        icon="sap-icon://source-code"
+                                        text="{= ${trSourceModel>/selectedObjectType} + ' / ' + ${trSourceModel>/selectedObjectName}}"
+                                        state="Success"
+                                        class="sapUiTinyMarginBottom"
+                                    />
+                                    <HBox alignItems="Center">
+                                        <CheckBox
+                                            text="Functional Specification (FS)"
+                                            selected="{retroDocModel>/createFS}"
+                                            class="sapUiSmallMarginEnd"
+                                        />
+                                        <CheckBox
+                                            text="Technical Specification (TS)"
+                                            selected="{retroDocModel>/createTS}"
+                                        />
+                                    </HBox>
+                                </VBox>
+                            </HBox>
                         </VBox>
-                    </HBox>
-                </VBox>
-                <!-- ============================================================== -->
-                <!-- RETRO DOCUMENTATION SECTION - END -->
-                <!-- ============================================================== -->
+
+                        <!-- Transport Source Results - shown after TR fetch in Object Selection or Transport Request mode -->
+                        <VBox
+                            id="retroTransportRequestPanel"
+                            class="sapUiSmallMarginBottom"
+                            width="100%"
+                            visible="{= (${retroDocModel>/sourceConfigKey} === 'objectSelection' || ${retroDocModel>/sourceConfigKey} === 'transportRequest') &amp;&amp; (${trSourceModel>/isLoading} || ${trSourceModel>/hasError} || ${trSourceModel>/hasResult})}"
+                        >
+                            <VBox class="sapUiSmallMarginTop">
+                                <!-- Loading state -->
+                                <HBox
+                                    visible="{trSourceModel>/isLoading}"
+                                    alignItems="Center"
+                                    class="sapUiSmallMarginBottom"
+                                >
+                                    <BusyIndicator
+                                        size="0.5rem"
+                                        class="sapUiTinyMarginEnd"
+                                    />
+                                    <Text
+                                        text="Fetching transport source code..."
+                                    />
+                                </HBox>
+
+                                <!-- Error state -->
+                                <MessageStrip
+                                    visible="{trSourceModel>/hasError}"
+                                    text="{trSourceModel>/errorMessage}"
+                                    type="Error"
+                                    showIcon="true"
+                                    class="sapUiSmallMarginBottom"
+                                />
+
+                                <!-- Result section -->
+                                <VBox
+                                    visible="{trSourceModel>/hasResult}"
+                                >
+                                    <!-- Transport header details -->
+                                    <Panel
+                                        headerText="Transport Details"
+                                        expandable="true"
+                                        expanded="true"
+                                        class="sapUiSmallMarginBottom"
+                                    >
+                                        <content>
+                                            <VBox
+                                                class="sapUiSmallMargin"
+                                            >
+                                                <HBox
+                                                    class="sapUiTinyMarginBottom"
+                                                    wrap="Wrap"
+                                                >
+                                                    <Label
+                                                        text="Transport ID:"
+                                                        design="Bold"
+                                                        class="trTransportInfoLabel sapUiTinyMarginEnd"
+                                                    />
+                                                    <Text
+                                                        text="{trSourceModel>/result/transportId}"
+                                                    />
+                                                </HBox>
+                                                <HBox
+                                                    class="sapUiTinyMarginBottom"
+                                                    wrap="Wrap"
+                                                >
+                                                    <Label
+                                                        text="Description:"
+                                                        design="Bold"
+                                                        class="trTransportInfoLabel sapUiTinyMarginEnd"
+                                                    />
+                                                    <Text
+                                                        text="{trSourceModel>/result/description}"
+                                                    />
+                                                </HBox>
+                                                <HBox
+                                                    class="sapUiTinyMarginBottom"
+                                                    wrap="Wrap"
+                                                >
+                                                    <Label
+                                                        text="Status:"
+                                                        design="Bold"
+                                                        class="trTransportInfoLabel sapUiTinyMarginEnd"
+                                                    />
+                                                    <ObjectStatus
+                                                        text="{trSourceModel>/result/statusText}"
+                                                        state="{= ${trSourceModel>/result/status} === 'R' ? 'Success' : 'Warning'}"
+                                                    />
+                                                </HBox>
+                                                <HBox
+                                                    class="sapUiTinyMarginBottom"
+                                                    wrap="Wrap"
+                                                >
+                                                    <Label
+                                                        text="Owner:"
+                                                        design="Bold"
+                                                        class="trTransportInfoLabel sapUiTinyMarginEnd"
+                                                    />
+                                                    <Text
+                                                        text="{trSourceModel>/result/owner}"
+                                                    />
+                                                </HBox>
+                                                <HBox
+                                                    class="sapUiTinyMarginBottom"
+                                                    wrap="Wrap"
+                                                >
+                                                    <Label
+                                                        text="Target System:"
+                                                        design="Bold"
+                                                        class="trTransportInfoLabel sapUiTinyMarginEnd"
+                                                    />
+                                                    <Text
+                                                        text="{trSourceModel>/result/target}"
+                                                    />
+                                                </HBox>
+                                                <HBox wrap="Wrap">
+                                                    <Label
+                                                        text="Total Objects:"
+                                                        design="Bold"
+                                                        class="trTransportInfoLabel sapUiTinyMarginEnd"
+                                                    />
+                                                    <Text
+                                                        text="{trSourceModel>/result/totalObjects}"
+                                                    />
+                                                </HBox>
+                                            </VBox>
+                                        </content>
+                                    </Panel>
+
+                                    <!-- Empty state -->
+                                    <MessageStrip
+                                        visible="{= ${trSourceModel>/result/totalObjects} === 0}"
+                                        text="This transport request contains no objects."
+                                        type="Information"
+                                        showIcon="true"
+                                        class="sapUiSmallMarginBottom"
+                                    />
+
+                                    <!-- Objects list -->
+                                    <VBox
+                                        visible="{= ${trSourceModel>/result/totalObjects} > 0}"
+                                    >
+                                        <List
+                                            showSeparators="None"
+                                            items="{trSourceModel>/result/objects}"
+                                            showNoData="false"
+                                        >
+                                            <CustomListItem>
+                                                <Panel
+                                                    expandable="true"
+                                                    expanded="true"
+                                                    class="trObjectPanel sapUiSmallMarginBottom"
+                                                >
+                                                    <headerToolbar>
+                                                        <Toolbar>
+                                                            <core:Icon
+                                                                src="sap-icon://source-code"
+                                                                class="sapUiTinyMarginEnd"
+                                                            />
+                                                            <Title
+                                                                text="{= ${trSourceModel>pgmid} + ' / ' + ${trSourceModel>type} + ' / ' + ${trSourceModel>name}}"
+                                                                level="H5"
+                                                            />
+                                                            <ToolbarSpacer
+                                                            />
+                                                            <ObjectStatus
+                                                                text="{= ${trSourceModel>status} === 'success' ? 'Success' : (${trSourceModel>status} === 'skipped' ? 'Skipped' : 'Error')}"
+                                                                state="{= ${trSourceModel>status} === 'success' ? 'Success' : (${trSourceModel>status} === 'skipped' ? 'None' : 'Error')}"
+                                                            />
+                                                            <Button
+                                                                text="Select for FS/TS"
+                                                                type="Accept"
+                                                                icon="sap-icon://accept"
+                                                                press=".onTrObjectSelectForFSTS"
+                                                                visible="{= ${trSourceModel>status} === 'success'}"
+                                                                class="sapUiTinyMarginBegin"
+                                                                tooltip="Use this object's source code from the Released TR for FS/TS document generation"
+                                                            />
+                                                        </Toolbar>
+                                                    </headerToolbar>
+                                                    <content>
+                                                        <VBox
+                                                            visible="{= ${trSourceModel>status} === 'success'}"
+                                                            width="100%"
+                                                            class="sapUiSmallMargin"
+                                                        >
+                                                            <!-- sourcedFrom badge: Historical Version (green) or Current Active fallback (amber) -->
+                                                            <HBox
+                                                                alignItems="Center"
+                                                                class="sapUiTinyMarginBottom"
+                                                                visible="{= !!${trSourceModel>sourcedFrom}}"
+                                                            >
+                                                                <ObjectStatus
+                                                                    text="{= ${trSourceModel>sourcedFrom} === 'transport_version' ? 'Historical Version' : 'Current Active (fallback)'}"
+                                                                    state="{= ${trSourceModel>sourcedFrom} === 'transport_version' ? 'Success' : 'Warning'}"
+                                                                    icon="{= ${trSourceModel>sourcedFrom} === 'transport_version' ? 'sap-icon://history' : 'sap-icon://alert'}"
+                                                                    tooltip="{= ${trSourceModel>sourcedFrom} === 'current_active' ? 'No historical version found for this TR — showing current active source' : 'Source code captured at time of TR recording'}"
+                                                                />
+                                                                <Text
+                                                                    visible="{= !!${trSourceModel>versionTimestamp}}"
+                                                                    text="{trSourceModel>versionTimestamp}"
+                                                                    class="sapUiTinyMarginBegin"
+                                                                />
+                                                            </HBox>
+                                                            <TextArea
+                                                                value="{trSourceModel>sourceCode}"
+                                                                editable="false"
+                                                                width="100%"
+                                                                rows="12"
+                                                                growing="false"
+                                                                class="trSourceCodeArea"
+                                                                wrapping="Off"
+                                                            />
+                                                        </VBox>
+                                                        <MessageStrip
+                                                            visible="{= ${trSourceModel>status} === 'skipped'}"
+                                                            text="{= 'Skipped: ' + (${trSourceModel>reason} || 'No readable source code for this object type.')}"
+                                                            type="Information"
+                                                            showIcon="true"
+                                                            class="sapUiSmallMargin"
+                                                        />
+                                                        <MessageStrip
+                                                            visible="{= ${trSourceModel>status} === 'error'}"
+                                                            text="{= 'Error: ' + (${trSourceModel>reason} || 'Failed to retrieve source code.')}"
+                                                            type="Error"
+                                                            showIcon="true"
+                                                            class="sapUiSmallMargin"
+                                                        />
+                                                    </content>
+                                                </Panel>
+                                            </CustomListItem>
+                                        </List>
+                                    </VBox>
+                                </VBox>
+                            </VBox>
+                        </VBox>
+                    </VBox>
+                    </ScrollContainer>
+                    <!-- ============================================================== -->
+                    <!-- RETRO DOCUMENTATION SECTION - END -->
+                    <!-- ============================================================== -->
 
                 <!-- Original Content - Hidden when Retro Documentation is selected -->
                     <ScrollContainer
@@ -1418,7 +1745,7 @@
                                             <unified:FileUploader
                                                 buttonOnly="true"
                                                 id="fileUploader1"
-                                                multiple="{ragModel>/currentRagEnabled}"
+                                                multiple="true"
                                                 name="myFileUpload"
                                                 uploadUrl="upload/"
                                                 iconOnly="true"
@@ -1489,6 +1816,7 @@
                                                 </HBox>
 
                                                 <HBox alignItems="Center">
+                                                <HBox visible="false" >
                                                 <Text
                                                     id="docNameText"
                                                     visible="false"
@@ -1502,6 +1830,7 @@
                                                     tooltip="View Document"
                                                     class="sapUiMarginBegin"
                                                 />
+                                                </HBox>
                                                 <List
                                                     id="ragFileList"
                                                     items="{ragModel>/ragFiles}"
@@ -1532,6 +1861,37 @@
                                                         </HBox>
                                                     </CustomListItem>
                                                 </List>
+                                                <!-- Basic file list -->
+                                                    <List
+                                                        id="basicFileList"
+                                                        items="{fileModel>/basicFiles}"
+                                                        showNoData="false"
+                                                        visible="{= !${ragModel>/currentRagEnabled} }"
+                                                        class="sapUiTinyMarginTop"
+                                                    >
+                                                        <CustomListItem>
+                                                            <HBox
+                                                                width="100%"
+                                                                justifyContent="SpaceBetween"
+                                                                alignItems="Center"
+                                                                class="sapUiTinyMargin"
+                                                            >
+                                                                <Text
+                                                                    text="{fileModel>filename}"
+                                                                    wrapping="false"
+                                                                    maxLines="1"
+                                                                    class="sapUiSmallMarginEnd"
+                                                                />
+                                                                <Button
+                                                                    icon="sap-icon://vds-file"
+                                                                    type="Transparent"
+                                                                    tooltip="View Document"
+                                                                    press=".onRagPreviewPress"
+                                                                    class="sapUiTinyMarginEnd"
+                                                                />
+                                                            </HBox>
+                                                        </CustomListItem>
+                                                    </List>
                                             </HBox>
                                         </HBox>
                                         </VBox>
@@ -1667,22 +2027,20 @@
                         <ToolbarSpacer />
                         <!-- Retro Documentation Footer Buttons - visible when retro doc is active -->
                         <Button
+                            id="retroFooterRefreshBtn"
+                            text="{i18n>refresh}"
+                            press=".onRetroResetPress"
+                            class="sapUiTinyMarginEnd sapUiTinyMarginTop"
+                            visible="{retroDocModel>/isRetroDocVisible}"
+                        />
+                        <Button
                             id="retroFooterGenerateBtn"
-                            text="Generate Document"
-                            icon="sap-icon://document"
+                            text="Go"
                             press=".onRetroGenerateDocsPress"
                             type="Emphasized"
                             class="sapUiTinyMarginEnd sapUiTinyMarginTop"
                             visible="{retroDocModel>/isRetroDocVisible}"
-                            enabled="{retroDocModel>/buttonsEnabled}"
-                        />
-                        <Button
-                            id="retroFooterRefreshBtn"
-                            text="{i18n>refresh}"
-                            icon="sap-icon://refresh"
-                            press=".onRetroResetPress"
-                            class="sapUiTinyMarginEnd sapUiTinyMarginTop"
-                            visible="{retroDocModel>/isRetroDocVisible}"
+                            enabled="{= ${retroDocModel>/sourceConfigKey} === 'uploadCode' ? (${retroDocModel>/uploadCodeEnabled} &amp;&amp; (${retroDocModel>/createFS} || ${retroDocModel>/createTS})) : ${retroDocModel>/buttonsEnabled}}"
                         />
                         <!-- Original Footer Buttons - visible when retro doc is NOT active -->
                         <Button

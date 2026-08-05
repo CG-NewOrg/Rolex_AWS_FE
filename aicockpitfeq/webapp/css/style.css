@@ -1,4 +1,50 @@
 /* Enter your custom styles here */
+
+/* File Preview dialog – TextArea: vertical scroll only, no horizontal scrollbar */
+.noHorizontalScrollTextArea {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    flex: 1 0 0 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+.noHorizontalScrollTextArea .sapMTextAreaInner {
+    flex: 1 0 0 !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    height: 100% !important;
+}
+.noHorizontalScrollTextArea .sapMTextAreaInner textarea {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    word-break: break-word !important;
+    resize: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    height: 100% !important;
+}
+
+/* File Preview dialog – make content area fill full dialog height */
+[id$="viewDocumentDialog"] .sapMDialogScrollCont {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+[id$="viewDocumentDialog"] .sapMDialogScrollCont > .sapMVBox {
+    flex: 1 0 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
 .paddingClassBtm{
     padding-bottom: 70px;
 }
@@ -403,12 +449,6 @@ z-index: 10 !important;
     margin: 1em 0;
 }
 
-/* ============================================================
- * Retro Documentation - Template Buttons
- * Suppress the default focus / pressed border highlight so the
- * Technical / Functional Specification Template buttons render
- * cleanly without the blue rectangle around the active one.
- * ============================================================ */
 .retroTemplateBtn .sapMBtnInner,
 .retroTemplateBtn .sapMBtnHoverable,
 .retroTemplateBtn:focus .sapMBtnInner,
@@ -427,7 +467,7 @@ z-index: 10 !important;
     outline: none !important;
 }
 
-/* ✅ Main markdown container */
+/* Main markdown container */
 .aiRespMd {
     font-family: SAP72, Arial, sans-serif;
     font-size: 14.5px;
@@ -503,12 +543,12 @@ z-index: 10 !important;
     font-family: Consolas, monospace;
 }
 
-/* ✅ Section wrapper */
+/* Section wrapper */
 .pdfSection {
     margin-bottom: 22px;
 }
 
-/* ✅ Section title (System Message / AI Response) */
+/* Section title (System Message / AI Response) */
 .pdfSectionTitle {
     font-size: 20px;
     font-weight: 700;
@@ -518,7 +558,7 @@ z-index: 10 !important;
     color: #2a4d76;
 }
 
-/* ✅ Outer PDF container */
+/* Outer PDF container */
 .pdfContainer {
     width: 800px;
     padding: 24px;
@@ -567,4 +607,386 @@ z-index: 10 !important;
     font-size: 0.75rem;
     color: #6a6d70;
     font-style: italic;
+}
+.retroSectionDivider {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+}
+/* Process Flow Lane Colors */
+/* Success - Green */
+.sapSuiteUiCommonsProcessFlowLaneHeaderStatePositive .sapSuiteUiCommonsProcessFlowLaneHeaderCircle {
+    background: #107e3e !important;
+    border-color: #107e3e !important;
+}
+/* Processing - Orange */
+.sapSuiteUiCommonsProcessFlowLaneHeaderStateCritical .sapSuiteUiCommonsProcessFlowLaneHeaderCircle {
+    background: #e9730c !important;
+    border-color: #e9730c !important;
+}
+/* Error - Red */
+.sapSuiteUiCommonsProcessFlowLaneHeaderStateNegative .sapSuiteUiCommonsProcessFlowLaneHeaderCircle {
+    background: #bb0000 !important;
+    border-color: #bb0000 !important;
+}
+/* Skipped - Grey */
+.sapSuiteUiCommonsProcessFlowLaneHeaderStateNeutral .sapSuiteUiCommonsProcessFlowLaneHeaderCircle {
+    background: #bfbfbf !important;
+    border-color: #bfbfbf !important;
+}
+/* Smaller ProcessFlow node cards */
+.sapSuiteUiCommonsProcessFlowNode .sapSuiteUiCommonsProcessFlowNode3Row {
+    padding: 4px 6px !important;
+}
+.sapSuiteUiCommonsProcessFlowNode .sapSuiteUiCommonsProcessFlowNodeTitle {
+    font-size: 0.75rem !important;
+    line-height: 1.2 !important;
+}
+.sapSuiteUiCommonsProcessFlowNode .sapSuiteUiCommonsProcessFlowNodeState {
+    font-size: 0.7rem !important;
+    padding: 2px 4px !important;
+}
+.sapSuiteUiCommonsProcessFlowNode .sapSuiteUiCommonsProcessFlowNodeText {
+    font-size: 0.7rem !important;
+}
+/* Reduce lane header circle size */
+.sapSuiteUiCommonsProcessFlowLaneHeaderCircle {
+    width: 32px !important;
+    height: 32px !important;
+}
+.sapSuiteUiCommonsProcessFlowLaneHeaderSymbol {
+    font-size: 1rem !important;
+}
+/* Reduce lane spacing */
+.sapSuiteUiCommonsProcessFlowLane {
+    min-width: 90px !important;
+}
+.sapSuiteUiCommonsProcessFlowLaneHeaderText {
+    font-size: 0.75rem !important;
+}
+/* ── Transport Source Code Feature ── */
+.trSourceCodeArea textarea {
+    font-family: Consolas, "Courier New", monospace !important;
+    font-size: 0.8125rem !important;
+    background: #f6f8fa !important;
+    color: #24292e !important;
+    line-height: 1.45 !important;
+    white-space: pre !important;
+}
+.trSourceCodeArea {
+    border: 1px solid #e1e4e8;
+    border-radius: 4px;
+    background: #f6f8fa;
+}
+.trObjectPanel {
+    margin-bottom: 0.5rem;
+}
+.trObjectPanel .sapMPanelHdr {
+    background-color: #f0f4f8;
+    font-weight: 600;
+}
+.trStatusBadge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+.trTransportInfoLabel {
+    font-weight: 600;
+    color: #32363a;
+    min-width: 140px;
+}
+.trTransportInfoRow {
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.retroProcessFlowNoCards .sapSuiteUiCommonsPFNode,
+.retroProcessFlowNoCards .sapSuiteUiCommonsPFNodeWrapper,
+.retroProcessFlowNoCards .sapSuiteUiCommonsPFRow:not(:first-child),
+.retroProcessFlowNoCards .sapSuiteUiCommonsPFArrow {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+/* Collapse container height so no empty space is left behind the hidden cards */
+.retroProcessFlowNoCards .sapSuiteUiCommonsPFContainer,
+.retroProcessFlowNoCards .sapSuiteUiCommonsPF {
+    min-height: auto !important;
+}
+/* Make the lane headers (circles + labels) look clean */
+.retroProcessFlowNoCards .sapSuiteUiCommonsPFHeader {
+    padding-bottom: 8px !important;
+}
+/* Retro Documentation Full White Background */
+.retroWhiteBg {
+    background-color: #ffffff !important;
+}
+.retroDocPanel {
+    width: 100% !important;
+    margin-bottom: 0.5rem;
+}
+.retroDocPanel .sapMPanelContent {
+    padding: 0.5rem 1rem !important;
+}
+.retroDocPanel .sapMPanelContent > .sapMVBox,
+.retroDocPanel .sapMPanelContent > .sapMFlexBox {
+    width: 100% !important;
+}
+.retroDocPanel .sapMPanelContent .aiRespMd,
+.retroDocPanel .sapMPanelContent > div {
+    width: 100% !important;
+}
+/* Remove SAP grey page background */
+.sapMPageBgStandard,
+.sapMPageBgSolid,
+.sapMPageBgList {
+    background-color: #ffffff !important;
+}
+.sapSuiteUiCommonsProcessFlowNode0 {
+    width: auto !important;
+}
+.sapSuiteUiCommonsBorderBottom {
+    border-bottom: none !important;
+}
+
+/* Remove end line after Download */
+.suiteUiProcessFlowLaneHeaderEndSymbol {
+    display: none !important;
+}
+
+/* Hide the horizontal line/border after Download All button */
+.downloadPanel .sapMOverflowToolbar,
+.downloadPanel .sapMOTB,
+.downloadPanel .sapMTB {
+    border: none !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.downloadPanel .sapMList {
+    border-bottom: none !important;
+}
+
+.downloadPanel .sapMListShowSeparators,
+.downloadPanel .sapMListTblRowSeparator {
+    border-bottom: none !important;
+}
+.retroDocSectionTitle,
+.retroDocSectionTitle .sapMLblText,
+.retroDocSectionTitle .sapUiSelectable {
+    color: #000000 !important;
+}
+.sapSuiteUiCommonsProcessFlowNode3 span {
+    display: block !important;
+    text-align: center !important;
+    width: 100% !important;
+}
+/* Reduce ProcessFlow empty area */
+[id$="retroProcessFlow-scroll-content"] {
+    height: 220px !important;
+    min-height: 220px !important;
+}
+
+/* ============================================================
+ * Retro Documentation - Process Log
+ * ============================================================ */
+#__xmlview1--retroProcessLogPanel .sapSuiteUiCommonsPF,
+#__xmlview1--retroProcessLogPanel .sapSuiteUiCommonsPFContainer,
+[id$="retroProcessFlow"],
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPF,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFContainer,
+[id$="retroProcessFlow-scroll"],
+[id$="retroProcessFlow-scroll-content"],
+[id$="retroProcessFlow-scrollable"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Force the scroll content to fill available width so lanes distribute */
+[id$="retroProcessFlow-scroll-content"] {
+    min-width: 100% !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowLane,
+.retroProcessFlowSmallCards .sapSuiteUiCommonsProcessFlowLane {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFHeader,
+.retroProcessFlowSmallCards .sapSuiteUiCommonsPFHeader {
+    display: flex !important;
+    width: 100% !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFZoomIcon,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFArrowScrollerLeft,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFArrowScrollerRight,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFPageIndicator,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFPagingControl,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFArrowScroller,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFHeaderPaging,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFFooter,
+[id$="retroProcessFlow"] [class*="ArrowScroller"],
+[id$="retroProcessFlow"] [class*="PageIndicator"],
+[id$="retroProcessFlow"] [class*="Paging"] {
+    display: none !important;
+    width: 0 !important;
+    visibility: hidden !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode,
+.retroProcessFlowSmallCards .sapSuiteUiCommonsProcessFlowNode {
+    overflow: hidden !important;
+    background: #ffffff !important;
+    border: 1px solid #c6cbd1 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateIcon,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFNodeStateIcon,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeState,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateBar,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeFooter,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStatePositive::before,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStatePositive::after,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateNegative::before,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateNegative::after,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateCritical::before,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateCritical::after,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateNeutral::before,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateNeutral::after,
+[id$="retroProcessFlow"] [class*="ProcessFlowNodeStateIcon"],
+[id$="retroProcessFlow"] [class*="NodeStateBar"] {
+    display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    visibility: hidden !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStatePositive,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateNegative,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateCritical,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeStateNeutral {
+    border-color: #c6cbd1 !important;
+    box-shadow: none !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFRow,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFNodesRow,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFNodeContainer,
+[id$="retroProcessFlow"] [class*="PFNodesRow"],
+[id$="retroProcessFlow"] [class*="NodeContainer"] {
+    position: static !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+    left: 0 !important;
+    top: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+}
+[id$="retroProcessFlow"],
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPF,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFContainer {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFNode,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFNodeWrapper,
+[id$="retroProcessFlow"] [class*="PFNodeWrapper"] {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+    transform: none !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    width: 110px !important;
+    max-width: 110px !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsPFArrow,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsArrowRight,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsArrowNext,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsBoxMiddleBorderHeight,
+[id$="retroProcessFlow"] [class*="PFArrow"] {
+    display: none !important;
+    width: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    visibility: hidden !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode {
+    overflow: hidden !important;
+    padding-bottom: 0 !important;
+    border: 1px solid #c6cbd1 !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Fallback: hide any circular/arc pseudo-elements inside the node card. */
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode::before,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode::after {
+    display: none !important;
+    content: none !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode3State,
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNodeState {
+    display: none !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode0 {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode3 {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+[id$="retroProcessFlow"] .sapSuiteUiCommonsProcessFlowNode0 {
+    margin-left: -22px !important;
 }

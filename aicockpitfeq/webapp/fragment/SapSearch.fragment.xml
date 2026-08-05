@@ -39,18 +39,6 @@
           </Select>
         </VBox>
 
-        <VBox class="sapUiSmallMarginEnd">
-          <layoutData><FlexItemData growFactor="1"/></layoutData>
-          <Label text="SAP System" required="true" class="sapUiTinyMarginBottom"/>
-          <Select
-            selectedKey="{sapSearchModel>/sapSystem}"
-            width="100%">
-            <core:Item key="DEV" text="DEV — Development"/>
-            <core:Item key="QAS" text="QAS — Quality"/>
-            <core:Item key="PRD" text="PRD — Production"/>
-          </Select>
-        </VBox>
-
         <VBox>
           <layoutData><FlexItemData growFactor="2"/></layoutData>
           <Label text="Search Pattern" required="true" class="sapUiTinyMarginBottom"/>

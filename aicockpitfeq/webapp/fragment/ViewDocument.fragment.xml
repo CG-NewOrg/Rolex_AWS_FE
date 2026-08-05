@@ -14,21 +14,29 @@
         title="{i18n>preview}"
         verticalScrolling="false"
     >
-        <VBox class="sapUiSmallMargin">
-            <Label text="{fileViewModel>/Name}" />
-            <!-- <TextArea maxLength="true"  growing="true" wrapping="None" value="{i18n>loremImpsumTxt}" width="100%" height="100%"></TextArea> -->
+        <VBox class="sapUiSmallMarginTopBottom" width="100%" height="100%">
+            <Label text="{fileViewModel>/Name}" class="sapUiTinyMarginBottom" />
+            
             <TextArea
                 value="{appmodel>/BSContent}"
                 visible="{path: 'appmodel>/BSContent', formatter: '.formatter.isTextContent'}"
-                maxLength="true"  growing="true" wrapping="None"
-                rows="18"
+                maxLength="0"
+                growing="false"
+                wrapping="Soft"
                 editable="false"
-                width="100%" height="100%"
+                width="100%"
+                height="100%"
                 valueLiveUpdate="false"
                 change=".onBSFileContentAreaChange"
-            />
+                class="noHorizontalScrollTextArea"
+            >
+                <layoutData>
+                    <FlexItemData growFactor="1" shrinkFactor="0" baseSize="0" />
+                </layoutData>
+            </TextArea>
 
             <PDFViewer
+                width="100%"
                 height="500px"
                 source="{fileViewModel>/srcUrl}"
                 isTrustedSource="true"

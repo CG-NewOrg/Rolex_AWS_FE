@@ -9,7 +9,9 @@
         liveChange=".onFileSearch"
         confirm=".selChangeDoc"
         cancel=".closeSysKeyFr"
-        multiSelect="{appModel>/bAiAssistant}"
+        showClearButton="true"
+        rememberSelections="false"
+        multiSelect="true"
         items="{
             path: 'ObjectFileList>/',
             templateShareable: false
@@ -18,8 +20,8 @@
         <!-- <StandardListItem
             title="{ObjectFileList>Name}"
         /> -->
-        <CustomListItem>
-            <HBox justifyContent="SpaceBetween" width="100%" class="customListItemPadding">
+        <CustomListItem type="Active">
+            <HBox justifyContent="SpaceBetween" width="100%" class="customListItemPadding" alignItems="Center">
                 <VBox  class="fileNamePadding sapUiTinyMarginBegin">
                     <Text  text="{ObjectFileList>Name}" />
                 </VBox>

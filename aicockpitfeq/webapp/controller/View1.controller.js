@@ -25,6 +25,67 @@ sap.ui.define([
 ], (Controller, fioriLibrary, Fragment, formatter, BusyIndicator, models, Utility, Spreadsheet, File, Device, Filter, Sorter, MessageBox, FilterOperator, JSONModel, BusyDialog, MessageToast, PdfUtil, pdfMin, pdfWorkerMin, jszip, xlsx, indexUmd) => {
     "use strict";
     const EdmType = fioriLibrary.EdmType;
+    var _AGENT_FLOW_META = [
+        { id: "s1", title: "Source", abbr: "SRC", icon: "sap-icon://source-code" },
+        { id: "s2", title: "Documents", abbr: "DOC", icon: "sap-icon://documents" },
+        { id: "s3", title: "Specification", abbr: "SPC", icon: "sap-icon://measurement-document" },
+        { id: "s4", title: "Download", abbr: "DL", icon: "sap-icon://download" }
+    ];
+
+    function _mapAgentState(sStatus) {
+        // Map internal pipeline status -> ProcessFlowNode state
+        if (sStatus === "completed") { return "Positive"; }
+        if (sStatus === "processing") { return "Planned"; }
+        if (sStatus === "error") { return "Negative"; }
+        return "Neutral"; // pending / unknown
+    }
+
+    function _mapAgentStateText(sStatus) {
+        if (sStatus === "completed") { return "Completed"; }
+        if (sStatus === "processing") { return "In Progress"; }
+        if (sStatus === "error") { return "Failed"; }
+        return "Pending";
+    }
+
+    function _buildAgentFlowData(aSteps) {
+        // Build ProcessFlow node array from /agentSteps (4-item array of {status})
+        var aNodes = _AGENT_FLOW_META.map(function (m, i) {
+            var sStatus = (aSteps && aSteps[i] && aSteps[i].status) || "pending";
+            return {
+                id: m.id,
+                lane: "0",
+                title: m.title,
+                abbr: m.abbr,
+                state: _mapAgentState(sStatus),
+                stateText: _mapAgentStateText(sStatus),
+                focused: sStatus === "processing",
+                highlighted: sStatus === "processing",
+                // Each node points to the next node in the flow (chevron connector).
+                children: i < _AGENT_FLOW_META.length - 1 ? [_AGENT_FLOW_META[i + 1].id] : []
+            };
+        });
+
+        var aLanes = [{
+            id: "0",
+            icon: "sap-icon://process",
+            text: "Retro Documentation Pipeline",
+            position: 0
+        }];
+
+        return { nodes: aNodes, lanes: aLanes };
+    }
+
+    function _syncAgentFlow(oModel) {
+        // Convenience wrapper: read /agentSteps from the model and push
+        // the derived /agentFlowNodes + /agentFlowLanes so the ProcessFlow
+        // control refreshes automatically.
+        if (!oModel || typeof oModel.setProperty !== "function") { return; }
+        var aSteps = oModel.getProperty("/agentSteps") || [];
+        var oFlow = _buildAgentFlowData(aSteps);
+        oModel.setProperty("/agentFlowNodes", oFlow.nodes);
+        oModel.setProperty("/agentFlowLanes", oFlow.lanes);
+    }
+
     return Controller.extend("aicockpitfeq.controller.View1", {
         formatter: formatter,
         _selectedTemplateKey: null,
@@ -120,7 +181,9 @@ sap.ui.define([
                 createTS: false,
                 updateFS: false,
                 updateTS: false,
-                buttonsEnabled: false
+                buttonsEnabled: false,
+                sourceConfigKey: "",
+                sourceConfigContent: "Select a Source Configuration option above to view the next-step instructions."
             });
             this.getView().setModel(retroDoc, "retroDocModel");
             // Initialize retroTemplateModel for Template Dialog functionality
@@ -134,6 +197,37 @@ sap.ui.define([
                 templates: [{ key: "default", text: "Default" }]
             });
             this.getView().setModel(retroTemplateModel, "retroTemplateModel");
+
+            // Initialize Transport Source model
+            var trSourceModel = new sap.ui.model.json.JSONModel({
+                isVisible: false,
+                transportId: "",
+                isLoading: false,
+                hasError: false,
+                errorMessage: "",
+                hasResult: false,
+                selectedObjectName: "",
+                selectedObjectType: "",
+                selectedObjectSource: "",
+                hasSelectedObject: false,
+                result: {
+                    transportId: "",
+                    description: "",
+                    status: "",
+                    statusText: "",
+                    owner: "",
+                    target: "",
+                    totalObjects: 0,
+                    objects: []
+                }
+            });
+            this.getView().setModel(trSourceModel, "trSourceModel");
+            this.getView().setModel(
+                new sap.ui.model.json.JSONModel({
+                    nodes: []
+                }),
+                "processFlow"
+            );
 
             // start of madhu
             this.oBusyDialog = new sap.m.BusyDialog({
@@ -614,6 +708,47 @@ sap.ui.define([
 
             this.updateProjectDetails(oEvent);
           //  this.getFiles();
+          try {
+                var oNavList = this.getView().byId("navigationList");
+                var sSelectedKey = oNavList ? oNavList.getSelectedKey() : "";
+                if (sSelectedKey === "retroDocKey") {
+                    var oRetroModel = this.getView().getModel("retroDocModel");
+                    if (oRetroModel) {
+                        oRetroModel.setProperty("/isRetroDocVisible", true);
+                        oRetroModel.refresh(true);
+                    }
+                    // Also clear any fragment name so the retro container
+                    // (bound to the main content area) is what renders.
+                    var oSwitchFr = this.getView().getModel("switchFragments");
+                    if (oSwitchFr) {
+                        oSwitchFr.setProperty("/frg/frName", "");
+                        oSwitchFr.refresh(true);
+                    }
+                    // Hide the generic Doc-Gen / message-form panels.
+                    var oViewModel = this.getView().getModel("viewModel");
+                    if (oViewModel) {
+                        oViewModel.setProperty("/isDocGen", false);
+                    }
+                }
+
+                // ============================================================
+                // Fix: if the user lands on the DocGen tab BEFORE selecting a
+                // project, loadDocGenTypes was originally called with an empty
+                // _ProjectDetail and returned no results. Now that a project is
+                // selected, re-load the DocGen document types so the ComboBox
+                // gets populated without requiring the user to switch tabs.
+                // ============================================================
+                if (sSelectedKey === "DocGen") {
+                    try {
+                        this.loadDocGenTypes();
+                    } catch (eDG) {
+                        console.warn("DocGen types reload after project select failed:", eDG);
+                    }
+                }
+            } catch (e) {
+                // Defensive: never let this UX polish break project selection.
+                console.warn("Retro Documentation post-project-select fix skipped:", e);
+            }
         },
 
         onAfterRendering: function () {
@@ -1010,7 +1145,7 @@ sap.ui.define([
                     // Set visibility for Agent Pipeline, Process Log, and Download panels
                     // Pipeline should be shown only after Generate Documents is pressed
                     oDefaultModel.setProperty("/agentPipelineVisible", false);
-                    oDefaultModel.setProperty("/logPanelVisible", true);
+                    oDefaultModel.setProperty("/logPanelVisible", false);
                     oDefaultModel.setProperty("/downloadPanelVisible", false);
 
                     // Initialize agent pipeline steps data
@@ -1022,6 +1157,7 @@ sap.ui.define([
                         { status: "pending" },
                         { status: "pending" }
                     ]);
+                    _syncAgentFlow(oDefaultModel)
                     oDefaultModel.setProperty("/agentConnectors", [
                         { completed: false },
                         { completed: false },
@@ -1486,6 +1622,21 @@ sap.ui.define([
                         BusyIndicator.hide();
                     }.bind(this));
                 } else {
+                    // Clear any existing selection/search filter so the dialog
+                    // is re-opened in a clean state and shows the latest files.
+                    try {
+                        let oList = this.fileFr.getBinding && this.fileFr.getBinding("items");
+                        if (oList) {
+                            oList.filter([]);
+                        }
+                        if (this.fileFr.clearSelection) {
+                            this.fileFr.clearSelection();
+                        }
+                    } catch (e) {
+                        // no-op
+                    }
+                    // Always refresh the file list so newly uploaded files show up.
+                    that.getFiles();
                     BusyIndicator.hide();
                     this.fileFr.open(); // Reuse the existing instance
                 }
@@ -1495,6 +1646,10 @@ sap.ui.define([
             }
 
         },
+        onFileListRefresh: function () {
+            this.getFiles();
+        },
+
         onProjectSearch: function (oEvent) {
             var sQuery = oEvent.getParameter("newValue");
             var oTable = this.byId("idUserLogTable");
@@ -2938,6 +3093,33 @@ sap.ui.define([
             this.getView().getModel("ObjectFileList").setProperty("/", []);
             this.getView().getModel("appmodel").setProperty("/BSContent", "");
             this.getView().getModel("ragModel").setProperty("/ragFiles", []);
+            // Clear the file uploader control so re-selecting the same file re-triggers change
+            try {
+                var oFURefresh = this.getView().byId("fileUploader1");
+                if (oFURefresh) {
+                    oFURefresh.setValue("");
+                    try { oFURefresh.clear(); } catch (eClr) { /* older ui5 */ }
+                }
+            } catch (eFU) { /* no-op */ }
+
+            // Clear the basicFiles list (used to display multi-file uploads or selected saved files)
+            // and all tab-local buckets so files from one tab do not leak into another after Refresh.
+            try {
+                var oFileModelRefresh = this.getView().getModel("fileModel");
+                if (oFileModelRefresh) {
+                    oFileModelRefresh.setProperty("/basicFiles", []);
+                    var oFMData = oFileModelRefresh.getData() || {};
+                    Object.keys(oFMData).forEach(function (sKeyR) {
+                        if (sKeyR && sKeyR.indexOf("_local") !== -1) {
+                            oFileModelRefresh.setProperty("/" + sKeyR, []);
+                        }
+                    });
+                    oFileModelRefresh.refresh(true);
+                }
+            } catch (eFM) { /* no-op */ }
+
+            // Also clear the Select Saved File input value
+            try { this.getView().byId("selDocList").setValue(""); } catch (eSD) { /* no-op */ }
             ///   this.getView().byId("openAIeditLabel").setVisible(false);
             this.getView().byId("openAiEdit").setVisible(false);
             ////template changes
@@ -2958,6 +3140,8 @@ sap.ui.define([
             var aiResModel = this.getOwnerComponent().getModel("airesponseDetailModel");
             if (aiResModel) {
                 aiResModel.setProperty("/templateKey", null);
+                aiResModel.setProperty("/downloadVis", false);
+                aiResModel.setProperty("/resp", "");
             }
             var sTab = this.selectedKeyFunct();
             this.getView().getModel("fileModel").setProperty("/" + sTab, []);
@@ -3021,6 +3205,27 @@ sap.ui.define([
                 tokenMod.setProperty("/tokenVis", false);
                 tokenMod.setProperty("/usedToken", "");
                 tokenMod.refresh();
+            }
+            var oRetroModel = this.getView().getModel("retroDocModel");
+
+            if (oRetroModel) {
+                oRetroModel.setProperty("/sourceConfigKey", "");
+                oRetroModel.setProperty("/templateEnabled", false);
+
+                oRetroModel.setProperty("/createFS", false);
+                oRetroModel.setProperty("/createTS", false);
+
+                oRetroModel.setProperty("/fsTemplateFileName", "");
+                oRetroModel.setProperty("/tsTemplateFileName", "");
+
+                oRetroModel.setProperty("/uploadCodeEnabled", false);
+
+                oRetroModel.refresh(true);
+            }
+
+            // Clear uploaded file
+            if (this.byId("retroCodeUploader")) {
+                this.byId("retroCodeUploader").setValue("");
             }
 
             var keyNeeded = this.getView().getModel("selKeyForDetailDetail").getProperty("/keyD");
@@ -3613,248 +3818,426 @@ sap.ui.define([
             }
         },
 
+        // selChangeDoc: function (eveSelVal) {
+        //     let that = this;
+        //     let _this = this;
+        //     let aiModelName = this.getView().byId("selModel").getValue();
+        //     let apiModel = aiModelName;
+        //     let deploymentName = apiModel.split("/").pop();
+        //     let oFileUploader = this.getView().byId("fileUploader1");
+        //     var busyDialog = new sap.m.BusyDialog();
+        //     var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+        //     if (bRagEnabled) {
+        //         that.KBselChangeDoc(eveSelVal);
+        //     } else {
+        //         busyDialog.open();
+        //         var aContexts = eveSelVal.getParameter("selectedContexts");
+        //         var fileDets = {};
+        //         var oFile = "";
+        //         if (aContexts && aContexts.length) {
+        //             var obj = aContexts[0].getObject();
+        //             var oKey = obj.Key || obj.s3_key || obj.full_path;
+        //             var oFile = obj.Name;
+        //             var encodedKey = encodeURIComponent(oKey);
+        //             var objectStoreUrl = this._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')";
+        //             this.getView().byId("fileUploader1").setValue("");
+        //             this.getView().byId("docNameText").setVisible(true);
+        //             this.getView().byId("viewDocBtn").setVisible(true);
+
+        //             this.getView().byId("docNameText").setText(oFile);
+
+        //             var vector = 0;
+        //             var sSelectedIconTab = this.selectedKeyFunct();
+
+        //             var oModel = this.getView().getModel("appmodel");
+        //             var selItem = eveSelVal.getParameters().selectedItem;
+
+        //             var oBundle = this.getView().getModel("i18n").getResourceBundle();
+        //             var encodedKey = encodeURIComponent(oKey);
+        //             var objectStoreUrl = this._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')";
+        //             var fileExtension = oFile.split('.').pop().toLowerCase();
+        //             fileDets = {
+        //                 Key: oKey,
+        //                 Name: oFile,
+        //                 srcUrl: ""
+        //             };
+
+        //             var xhr = new XMLHttpRequest();
+        //             xhr.open("GET", objectStoreUrl, true);
+        //             xhr.responseType = "arraybuffer";
+
+        //             xhr.onload = function () {
+        //                 if (xhr.status !== 200) {
+        //                     busyDialog.close();
+        //                     sap.m.MessageBox.error("File download failed");
+        //                     return;
+        //                 }
+        //                 var data = xhr.response;
+
+        //                 _this.executedOnce = false;
+        //                 if (fileExtension === "txt") {
+        //                     that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+        //                     _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
+        //                     var text = new TextDecoder("utf-8").decode(data);
+        //                     oModel.setProperty("/BSContent", text);
+        //                     busyDialog.close();
+        //                 } else if (fileExtension === "pdf") {
+
+        //                     that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+        //                     _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
+
+
+        //                     let uint8;
+        //                     try {
+        //                         const text = new TextDecoder("utf-8").decode(data);
+        //                         const json = JSON.parse(text);
+
+        //                         if (json && json.value) {
+        //                             const cleanB64 = json.value
+        //                                 .replace(/\s/g, "")
+        //                                 .replace(/^data:application\/pdf;base64,/, "");
+
+        //                             const binary = atob(cleanB64);
+        //                             uint8 = new Uint8Array(binary.length);
+        //                             for (let i = 0; i < binary.length; i++) {
+        //                                 uint8[i] = binary.charCodeAt(i);
+        //                             }
+        //                         } else {
+        //                             throw "Not JSON PDF";
+        //                         }
+        //                     } catch (e) {
+
+        //                         uint8 = new Uint8Array(data);
+        //                     }
+
+        //                     pdfjsLib.getDocument({ data: uint8 }).promise
+        //                         .then(pdf => {
+        //                             const promises = [];
+        //                             for (let i = 1; i <= pdf.numPages; i++) {
+        //                                 promises.push(
+        //                                     pdf.getPage(i)
+        //                                         .then(p => p.getTextContent())
+        //                                         .then(tc => tc.items.map(it => it.str).join(" "))
+        //                                 );
+        //                             }
+        //                             return Promise.all(promises);
+        //                         })
+        //                         .then(pages => {
+        //                             oModel.setProperty("/BSContent", pages.join("\n"));
+        //                             busyDialog.close();
+        //                         })
+        //                         .catch(err => {
+        //                             console.error("PDF parse failed", err);
+        //                             busyDialog.close();
+        //                         });
+
+        //                     return;
+        //                 } else if (fileExtension === "docx") {
+        //                     that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+        //                     _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
+        //                     var text = new TextDecoder("utf-8").decode(data);
+        //                     var jsonData = JSON.parse(text);
+        //                     var actualText = jsonData.value;
+        //                     oModel.setProperty("/BSContent", actualText);
+        //                     busyDialog.close();
+
+        //                 }
+        //                 else if (fileExtension === "xlsx" || fileExtension === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+        //                     that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+        //                     _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
+        //                     console.log("XHR response:", data);
+        //                     //Step 1: Convert ArrayBuffer → UTF‑8 text
+        //                     let jsonText = new TextDecoder("utf-8").decode(data);
+
+        //                     //Step 2: Parse JSON containing Base64 Excel
+        //                     let json = JSON.parse(jsonText);
+
+        //                     //Step 3: Base64 → binary string
+        //                     const base64 = json.value;
+        //                     const binary = atob(base64);
+
+        //                     // Step 4: binary string → Uint8Array (required for XLSX)
+        //                     const uint8 = new Uint8Array(binary.length);
+        //                     for (let i = 0; i < binary.length; i++) {
+        //                         uint8[i] = binary.charCodeAt(i);
+        //                     }
+
+        //                     // Step 5: Parse Excel using XLSX.js
+        //                     const workbook = XLSX.read(uint8, { type: "array" });
+
+        //                     // Step 6: Convert all sheets to CSV or text
+        //                     let allText = "";
+        //                     let excelDataAsObjects = {};
+        //                     let sheetName = "";
+        //                     workbook.SheetNames.forEach(name => {
+        //                         allText += `Sheet: ${name}\n`;
+        //                         sheetName = name;
+        //                         allText += XLSX.utils.sheet_to_csv(workbook.Sheets[name]) + "\n\n";
+        //                         excelDataAsObjects[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
+        //                     });
+
+        //                     // Save both raw text + structured JSON
+        //                     that.getView().getModel("fileViewModel").setProperty("/xlsJsonData", excelDataAsObjects[sheetName]);
+        //                     oModel.setProperty("/BSContent", allText);
+
+        //                     busyDialog.close();
+        //                     return;
+        //                 } else if (fileExtension === "png" || fileExtension === "jpeg" || fileExtension === "jpg") {
+        //                     if (deploymentName !== "gpt-4o" &&
+        //                         !deploymentName.includes("anthropic") &&
+        //                         !deploymentName.includes("gemini") &&
+        //                         !deploymentName.includes("mistralai") &&
+        //                         sSelectedIconTab !== "PCT" &&
+        //                         sSelectedIconTab !== "BPM") {
+
+        //                         oFileUploader.clear();
+        //                         that.getView().byId("docNameText").setVisible(false);
+        //                         that.getView().byId("viewDocBtn").setVisible(false);
+        //                         sap.m.MessageBox.information(
+        //                             oBundle.getText("imageProcessingSupported")
+        //                         );
+        //                         that.getView().getModel("fileViewModel").setData([]);
+        //                         that.getView().getModel("fileViewModel").refresh();
+        //                         busyDialog.close();
+        //                     } else {
+        //                         that.getView().getModel("tcgModel").setProperty("/wordorExcel", "image");
+        //                         that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+
+        //                         //  1. Convert ArrayBuffer → Text (UTF‑8)
+        //                         let jsonText = new TextDecoder("utf-8").decode(data);
+
+        //                         //  2. Parse JSON
+        //                         let json;
+        //                         try {
+        //                             json = JSON.parse(jsonText);   // contains { value: "base64-string" }
+        //                         } catch (e) {
+        //                             console.error("Image JSON parse failed", e);
+        //                             busyDialog.close();
+        //                             return;
+        //                         }
+
+        //                         // ✅ 3. Base64 data returned by backend
+        //                         const base64 = json.value;
+
+        //                         // ✅ 4. Create data URL
+        //                         const fileDataUrl = "data:image/" + fileExtension + ";base64," + base64;
+
+        //                         // ✅ 5. Set preview image in UI5 model
+        //                         that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
+
+        //                         // ✅ 6. Create payload object (like you did before)
+        //                         var imageObject = {
+        //                             "type": "image_url",
+        //                             "image_url": {
+        //                                 "url": fileDataUrl
+        //                             }
+        //                         };
+
+        //                         oModel.setProperty("/BSContent", [imageObject]);
+        //                         busyDialog.close();
+        //                     }
+        //                 } else {
+        //                     busyDialog.close();
+        //                 }
+
+        //                 that.closeSysKeyFr();
+        //             };
+        //             xhr.onerror = function () {
+        //                 busyDialog.close();
+        //                 MessageBox.error("Network error");
+        //             };
+
+        //             xhr.send();
+        //         } else {
+        //             busyDialog.close();
+        //             this.closeSysKeyFr();
+        //             MessageBox.warning(oBundle.getText("warningNoItemsSelected"));
+
+        //         }
+        //         this.getView().byId("selDocList").setValueState("None");
+        //         this.getView().byId("multiInputPrompt").setValueState("None");
+        //         this.getView().getModel("fileViewModel").setData(fileDets);
+        //         this.getView().getModel("fileViewModel").refresh();
+        //     }
+        // },
+
         selChangeDoc: function (eveSelVal) {
             let that = this;
             let _this = this;
             let aiModelName = this.getView().byId("selModel").getValue();
             let apiModel = aiModelName;
             let deploymentName = apiModel.split("/").pop();
+            let sSelectedIconTab = this.selectedKeyFunct();
             let oFileUploader = this.getView().byId("fileUploader1");
-            var busyDialog = new sap.m.BusyDialog();
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let oBundle = this.getView().getModel("i18n").getResourceBundle();
+            let busyDialog = new sap.m.BusyDialog();
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             if (bRagEnabled) {
                 that.KBselChangeDoc(eveSelVal);
             } else {
                 busyDialog.open();
-                var aContexts = eveSelVal.getParameter("selectedContexts");
-                var fileDets = {};
-                var oFile = "";
-                if (aContexts && aContexts.length) {
-                    var obj = aContexts[0].getObject();
-                    var oKey = obj.Key || obj.s3_key || obj.full_path;
-                    var oFile = obj.Name;
-                    var encodedKey = encodeURIComponent(oKey);
-                    var objectStoreUrl = this._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')";
-                    this.getView().byId("fileUploader1").setValue("");
-                    this.getView().byId("docNameText").setVisible(true);
-                    this.getView().byId("viewDocBtn").setVisible(true);
 
-                    this.getView().byId("docNameText").setText(oFile);
+                // Reliable multi-select: read directly from the stored dialog's item state
+                // SelectDialog with CustomListItem only passes 1 item in selectedContexts via event
+                var aContexts = [];
+                if (that.fileFr) {
+                    aContexts = that.fileFr.getItems()
+                        .filter(function (item) { return item.isSelected(); })
+                        .map(function (item) { return item.getBindingContext("ObjectFileList"); })
+                        .filter(Boolean);
+                }
+                // Fallback to event parameters if direct access fails
+                if (!aContexts.length) {
+                    var eContexts = eveSelVal.getParameter("selectedContexts") || [];
+                    var eItems = eveSelVal.getParameter("selectedItems") || [];
+                    if (eContexts.length) {
+                        aContexts = eContexts;
+                    } else {
+                        aContexts = eItems.map(function (item) {
+                            return item.getBindingContext("ObjectFileList");
+                        }).filter(Boolean);
+                    }
+                }
 
-                    var vector = 0;
-                    var sSelectedIconTab = this.selectedKeyFunct();
+                let fileDets = {};
+                if (aContexts.length) {
+                    // Build file list from ALL selected contexts
+                    var sTabKey = sSelectedIconTab || that.selectedKeyFunct();
+                    var oFM = that.getView().getModel("fileModel");
+                    var aTabFiles = aContexts.map(function (ctx) {
+                        var o = ctx.getObject();
+                        return { filename: o.Name, content: "", tabKey: sTabKey, key: o.Key || o.s3_key || o.full_path };
+                    });
 
-                    var oModel = this.getView().getModel("appmodel");
-                    var selItem = eveSelVal.getParameters().selectedItem;
+                    that.getView().byId("fileUploader1").setValue("");
+                    that.getView().byId("selDocList").setValue("");
+                    that.getView().byId("docNameText").setVisible(true);
+                    that.getView().byId("viewDocBtn").setVisible(true);
+                    that.getView().byId("docNameText").setText(aTabFiles.map(function (f) { return f.filename; }).join(", "));
 
-                    var oBundle = this.getView().getModel("i18n").getResourceBundle();
-                    var encodedKey = encodeURIComponent(oKey);
-                    var objectStoreUrl = this._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')";
-                    var fileExtension = oFile.split('.').pop().toLowerCase();
-                    fileDets = {
-                        Key: oKey,
-                        Name: oFile,
-                        srcUrl: ""
-                    };
+                    if (oFM) {
+                        oFM.setProperty("/" + sTabKey + "_local", aTabFiles);
+                        oFM.setProperty("/basicFiles", aTabFiles);
+                        oFM.refresh(true);
+                    }
 
-                    var xhr = new XMLHttpRequest();
-                    xhr.open("GET", objectStoreUrl, true);
-                    xhr.responseType = "arraybuffer";
+                    let oModel = this.getView().getModel("appmodel");
+                    fileDets = { Key: aTabFiles[0].key, Name: aTabFiles[0].filename, srcUrl: "" };
 
-                    xhr.onload = function () {
-                        if (xhr.status !== 200) {
-                            busyDialog.close();
-                            sap.m.MessageBox.error("File download failed");
-                            return;
-                        }
-                        var data = xhr.response;
-
-                        _this.executedOnce = false;
-                        if (fileExtension === "txt") {
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
-                            _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
-                            var text = new TextDecoder("utf-8").decode(data);
-                            oModel.setProperty("/BSContent", text);
-                            busyDialog.close();
-                        } else if (fileExtension === "pdf") {
-
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
-                            _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
-
-
-                            let uint8;
-                            try {
-                                const text = new TextDecoder("utf-8").decode(data);
-                                const json = JSON.parse(text);
-
-                                if (json && json.value) {
-                                    const cleanB64 = json.value
-                                        .replace(/\s/g, "")
-                                        .replace(/^data:application\/pdf;base64,/, "");
-
-                                    const binary = atob(cleanB64);
-                                    uint8 = new Uint8Array(binary.length);
-                                    for (let i = 0; i < binary.length; i++) {
-                                        uint8[i] = binary.charCodeAt(i);
-                                    }
+                    // Helper: fetch one file's content
+                    var fetchContent = function (oKey, oFileName) {
+                        var fileExtension = oFileName.split('.').pop().toLowerCase();
+                        var objectStoreUrl = that._sBasePath + "/cockpit/getFileDetails(key='" + encodeURIComponent(oKey) + "')";
+                        return new Promise(function (resolve) {
+                            var xhr = new XMLHttpRequest();
+                            xhr.open("GET", objectStoreUrl, true);
+                            xhr.responseType = "arraybuffer";
+                            xhr.onload = function () {
+                                if (xhr.status !== 200) { resolve(""); return; }
+                                var data = xhr.response;
+                                var text = new TextDecoder("utf-8").decode(data);
+                                if (fileExtension === "txt") {
+                                    resolve(text);
+                                } else if (fileExtension === "docx") {
+                                    try { resolve(JSON.parse(text).value || ""); } catch (e) { resolve(""); }
+                                } else if (fileExtension === "pdf") {
+                                    var uint8;
+                                    try {
+                                        var json = JSON.parse(text);
+                                        if (json && json.value) {
+                                            var cleanB64 = json.value.replace(/\s/g, "").replace(/^data:application\/pdf;base64,/, "");
+                                            var binary = atob(cleanB64);
+                                            uint8 = new Uint8Array(binary.length);
+                                            for (var k = 0; k < binary.length; k++) uint8[k] = binary.charCodeAt(k);
+                                        } else { throw "Not JSON PDF"; }
+                                    } catch (e) { uint8 = new Uint8Array(data); }
+                                    pdfjsLib.getDocument({ data: uint8 }).promise
+                                        .then(function (pdf) {
+                                            var pages = [];
+                                            for (var pi = 1; pi <= pdf.numPages; pi++) {
+                                                pages.push(pdf.getPage(pi).then(function (p) { return p.getTextContent(); }).then(function (tc) { return tc.items.map(function (it) { return it.str; }).join(" "); }));
+                                            }
+                                            return Promise.all(pages);
+                                        })
+                                        .then(function (pages) { resolve(pages.join("\n")); })
+                                        .catch(function () { resolve(""); });
+                                } else if (fileExtension === "xlsx") {
+                                    try {
+                                        var json = JSON.parse(text);
+                                        var binary = atob(json.value);
+                                        var uint8 = new Uint8Array(binary.length);
+                                        for (var k = 0; k < binary.length; k++) uint8[k] = binary.charCodeAt(k);
+                                        var workbook = XLSX.read(uint8, { type: "array" });
+                                        var allText = "";
+                                        workbook.SheetNames.forEach(function (name) {
+                                            allText += "Sheet: " + name + "\n" + XLSX.utils.sheet_to_csv(workbook.Sheets[name]) + "\n\n";
+                                        });
+                                        resolve(allText);
+                                    } catch (e) { resolve(""); }
                                 } else {
-                                    throw "Not JSON PDF";
+                                    resolve(text);
                                 }
-                            } catch (e) {
+                            };
+                            xhr.onerror = function () { resolve(""); };
+                            xhr.send();
+                        });
+                    };
 
-                                uint8 = new Uint8Array(data);
-                            }
-
-                            pdfjsLib.getDocument({ data: uint8 }).promise
-                                .then(pdf => {
-                                    const promises = [];
-                                    for (let i = 1; i <= pdf.numPages; i++) {
-                                        promises.push(
-                                            pdf.getPage(i)
-                                                .then(p => p.getTextContent())
-                                                .then(tc => tc.items.map(it => it.str).join(" "))
-                                        );
-                                    }
-                                    return Promise.all(promises);
-                                })
-                                .then(pages => {
-                                    oModel.setProperty("/BSContent", pages.join("\n"));
-                                    busyDialog.close();
-                                })
-                                .catch(err => {
-                                    console.error("PDF parse failed", err);
-                                    busyDialog.close();
-                                });
-
-                            return;
-                        } else if (fileExtension === "docx") {
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
-                            _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
-                            var text = new TextDecoder("utf-8").decode(data);
-                            var jsonData = JSON.parse(text);
-                            var actualText = jsonData.value;
-                            oModel.setProperty("/BSContent", actualText);
-                            busyDialog.close();
-
-                        }
-                        else if (fileExtension === "xlsx" || fileExtension === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
-                            _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
-                            console.log("XHR response:", data);
-                            //Step 1: Convert ArrayBuffer → UTF‑8 text
-                            let jsonText = new TextDecoder("utf-8").decode(data);
-
-                            //Step 2: Parse JSON containing Base64 Excel
-                            let json = JSON.parse(jsonText);
-
-                            //Step 3: Base64 → binary string
-                            const base64 = json.value;
-                            const binary = atob(base64);
-
-                            // Step 4: binary string → Uint8Array (required for XLSX)
-                            const uint8 = new Uint8Array(binary.length);
-                            for (let i = 0; i < binary.length; i++) {
-                                uint8[i] = binary.charCodeAt(i);
-                            }
-
-                            // Step 5: Parse Excel using XLSX.js
-                            const workbook = XLSX.read(uint8, { type: "array" });
-
-                            // Step 6: Convert all sheets to CSV or text
-                            let allText = "";
-                            let excelDataAsObjects = {};
-                            let sheetName = "";
-                            workbook.SheetNames.forEach(name => {
-                                allText += `Sheet: ${name}\n`;
-                                sheetName = name;
-                                allText += XLSX.utils.sheet_to_csv(workbook.Sheets[name]) + "\n\n";
-                                excelDataAsObjects[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
-                            });
-
-                            // Save both raw text + structured JSON
-                            that.getView().getModel("fileViewModel").setProperty("/xlsJsonData", excelDataAsObjects[sheetName]);
-                            oModel.setProperty("/BSContent", allText);
-
-                            busyDialog.close();
-                            return;
-                        } else if (fileExtension === "png" || fileExtension === "jpeg" || fileExtension === "jpg") {
-                            if (deploymentName !== "gpt-4o" &&
-                                !deploymentName.includes("anthropic") &&
-                                !deploymentName.includes("gemini") &&
-                                !deploymentName.includes("mistralai") &&
-                                sSelectedIconTab !== "PCT" &&
-                                sSelectedIconTab !== "BPM") {
-
-                                oFileUploader.clear();
-                                that.getView().byId("docNameText").setVisible(false);
-                                that.getView().byId("viewDocBtn").setVisible(false);
-                                sap.m.MessageBox.information(
-                                    oBundle.getText("imageProcessingSupported")
-                                );
-                                that.getView().getModel("fileViewModel").setData([]);
-                                that.getView().getModel("fileViewModel").refresh();
-                                busyDialog.close();
-                            } else {
-                                that.getView().getModel("tcgModel").setProperty("/wordorExcel", "image");
-                                that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
-
-                                //  1. Convert ArrayBuffer → Text (UTF‑8)
-                                let jsonText = new TextDecoder("utf-8").decode(data);
-
-                                //  2. Parse JSON
-                                let json;
+                    // Fetch ALL selected files in parallel → combine into BSContent
+                    _this.executedOnce = false;
+                    that.getView().getModel("fileViewModel").setProperty("/srcUrl", "");
+                    _this.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
+                    (async function () {
+                        var aContents = [];
+                        try {
+                            for (var fi = 0; fi < aTabFiles.length; fi++) {
+                                var oF = aTabFiles[fi];
+                                var sTxt = "";
                                 try {
-                                    json = JSON.parse(jsonText);   // contains { value: "base64-string" }
-                                } catch (e) {
-                                    console.error("Image JSON parse failed", e);
-                                    busyDialog.close();
-                                    return;
+                                    sTxt = await fetchContent(oF.key, oF.filename);
+                                } catch (eF) {
+                                    sTxt = "";
                                 }
-
-                                // ✅ 3. Base64 data returned by backend
-                                const base64 = json.value;
-
-                                // ✅ 4. Create data URL
-                                const fileDataUrl = "data:image/" + fileExtension + ";base64," + base64;
-
-                                // ✅ 5. Set preview image in UI5 model
-                                that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
-
-                                // ✅ 6. Create payload object (like you did before)
-                                var imageObject = {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": fileDataUrl
-                                    }
-                                };
-
-                                oModel.setProperty("/BSContent", [imageObject]);
-                                busyDialog.close();
+                                aContents.push(sTxt || "");
                             }
-                        } else {
-                            busyDialog.close();
-                        }
-
-                        that.closeSysKeyFr();
-                    };
-                    xhr.onerror = function () {
+                        // Store individual content per file for correct per-file preview
+                        aContents.forEach(function (content, idx) {
+                            aTabFiles[idx].content = content;
+                        });
+                        if (oFM) {
+                            oFM.setProperty("/" + sTabKey + "_local", aTabFiles);
+                            oFM.setProperty("/basicFiles", aTabFiles);
+                            oFM.refresh(true);
+                            }
+                            // Build a labeled combined payload so the AI can
+                            // clearly see the boundaries between multiple
+                            // uploaded files.
+                            var sCombined = aContents.map(function (c, idx) {
+                                var sName = aTabFiles[idx] && aTabFiles[idx].filename ? aTabFiles[idx].filename : ("File " + (idx + 1));
+                                return "----- File " + (idx + 1) + ": " + sName + " -----\n" + (c || "");
+                            }).join("\n\n");
+                            oModel.setProperty("/BSContent", sCombined);
+                        } catch (eOuter) {
+                            // Swallow – busyDialog will still close below
+                        } finally {
                         busyDialog.close();
-                        MessageBox.error("Network error");
-                    };
-
-                    xhr.send();
+                        that.closeSysKeyFr();
+                    }
+                    })();
                 } else {
                     busyDialog.close();
                     this.closeSysKeyFr();
                     MessageBox.warning(oBundle.getText("warningNoItemsSelected"));
-
                 }
+                // Always clear the saved-file input – the file is displayed in the basicFileList below
+                this.getView().byId("selDocList").setValue("");
                 this.getView().byId("selDocList").setValueState("None");
                 this.getView().byId("multiInputPrompt").setValueState("None");
                 this.getView().getModel("fileViewModel").setData(fileDets);
                 this.getView().getModel("fileViewModel").refresh();
             }
         },
+
         KBselChangeDoc: function (eveSelVal) {
 
             var busyDialog = new sap.m.BusyDialog();
@@ -3871,10 +4254,22 @@ sap.ui.define([
             const objectStoreUrl = obj.view_url || obj.download_url || obj.Key || obj.url;
 
             this.getView().byId("fileUploader1").setValue("");
+            this.getView().byId("selDocList").setValue("");
             this.getView().byId("docNameText").setText(oFile);
             this.getView().byId("docNameText").setVisible(true);
             this.getView().byId("viewDocBtn").setVisible(true);
 
+            try {
+                var oRagModelSel = this.getView().getModel("ragModel");
+                if (oRagModelSel) {
+                    oRagModelSel.setProperty("/ragFiles", [{
+                        filename: oFile,
+                        url: objectStoreUrl,
+                        key: obj.full_path || obj.Key || ""
+                    }]);
+                    oRagModelSel.refresh(true);
+                }
+            } catch (e) { /* no-op */ }
 
             const fileDets = {
                 Key: obj.full_path || obj.Key || "",   // keep your key/path
@@ -3898,13 +4293,143 @@ sap.ui.define([
 
         },
 
-        onFileDelete: function (oEvent) {
-            var _this = this;
-            var sFragmentName = this.getView().getModel("switchFragments").getProperty("/frg/frName");
-            var oSource = oEvent.getSource();
-            var oItem = oSource;
-            var typeDel = "POST";
-            let oHeader = {
+        // onFileDelete: function (oEvent) {
+        //     var _this = this;
+        //     var sFragmentName = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+        //     var oSource = oEvent.getSource();
+        //     var oItem = oSource;
+        //     var typeDel = "POST";
+        //     let oHeader = {
+        //         "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //         "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //         "X-Frame-Options": "DENY",
+        //         "X-XSS-Protection": "0",
+        //         "X-Content-Type-Options": "nosniff"
+        //     };
+        //     while (oItem && !oItem.getBindingContext("ObjectFileList")) {
+        //         oItem = oItem.getParent();
+        //     }
+        //     var oContext = oItem && oItem.getBindingContext("ObjectFileList");
+        //     if (!oContext) {
+        //         sap.m.MessageBox.error("Unable to retrieve file details");
+        //         return;
+        //     }
+
+        //     var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+        //     var sFileRef = "";
+        //     if (sFragmentName === "knowlBAdmin") {
+        //         sFileRef = oContext.getProperty("view_url")
+        //     }
+        //     else {
+        //         sFileRef = oContext.getProperty("Key");
+        //     }
+        //     if (!sFileRef || typeof sFileRef !== "string") {
+        //         sap.m.MessageBox.error("Invalid file reference");
+        //         return;
+        //     }
+        //     var sObjectKey = sFileRef;
+        //     var aParts = [];
+        //     if (sFileRef.startsWith("http")) {
+        //         var oUrl = new URL(sFileRef);
+        //         aParts = oUrl.pathname.replace(/^\/+/, "").split("/");
+
+        //         aParts.shift();
+
+        //         sObjectKey = aParts.join("/");
+        //     } else {
+        //         aParts = sObjectKey.replace(/^\/+/, "").split("/");
+        //     }
+        //     var oPayload = {
+        //         files: [sObjectKey]
+        //     };
+        //     var sUrl = this._sBasePath + "/cockpit/deleteFiles";
+        //     var deleteObjectsUrl = sUrl;
+        //     if (bRagEnabled === true) {
+        //         oPayload.kb = true;
+        //         delete oPayload.files;
+        //         oPayload.filenames = [aParts[3]];
+        //         oPayload.category = this.selectedKeyFunct();
+        //         oPayload.project = this._ProjectDetail;
+        //         // deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore";
+        //         deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFilesFromKB";
+        //         typeDel = "POST";
+        //     }
+        //     if (sFragmentName === "knowlBAdmin") {
+        //         oPayload.kb = true;
+        //         delete oPayload.files;
+        //         oPayload.filenames = [aParts[3]];
+        //         oPayload.category = this.byId("categorySelect").getSelectedKey();
+        //         oPayload.project = this._ProjectDetail;
+        //         //  deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore";
+        //         deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFilesFromKB";
+        //         typeDel = "POST";
+        //     }
+
+        //     MessageBox.confirm(`Are you sure you want to delete this file?`, {
+        //         title: "Confirm Deletion",
+        //         onClose: function (oAction) {
+        //             if (oAction === MessageBox.Action.OK) {
+
+        //                 $.ajax({
+        //                     url: deleteObjectsUrl,
+        //                     type: typeDel,
+        //                     headers: oHeader,
+        //                     contentType: "application/json",
+        //                     data: JSON.stringify(oPayload),
+        //                     success: function (data) {
+        //                         if (data) {
+        //                             var oModel = _this.getView().getModel("ObjectFileList");
+        //                             var sListPath = sFragmentName === "knowlBAdmin" ? "/files" : "/";
+        //                             var sDeletedFileKey = sFragmentName === "knowlBAdmin" ? sFileRef : sObjectKey;
+        //                             var aFileList = oModel.getProperty(sListPath);
+
+        //                             if (Array.isArray(aFileList)) {
+        //                                 var aUpdatedList = aFileList.filter(file => (file.view_url || file.Key) !== sDeletedFileKey);
+        //                                 oModel.setProperty(sListPath, aUpdatedList);
+        //                                 oModel.refresh(true);
+        //                             }
+        //                             if (bRagEnabled === true || sFragmentName === "knowlBAdmin") {
+        //                                 _this.KBGetFiles(_this.selectedKeyFunct());
+        //                             } else {
+        //                                 _this.getFiles(_this.selectedKeyFunct());
+        //                             }
+
+        //                             sap.m.MessageBox.success(data.message || "File deleted successfully", {
+        //                                 title: "Delete File",
+        //                                 actions: [sap.m.MessageBox.Action.OK]
+        //                             });
+        //                         } else {
+        //                             MessageBox.show("Failed to delete file.");
+        //                         }
+        //                     },
+        //                     error: function (xhr, status, error) {
+        //                         let aDependents = _this.getView().getDependents();
+
+        //                         aDependents.forEach(function (oDependent) {
+        //                             let title = oDependent.mProperties.title;
+        //                             if (title.includes("Knowledge Base")) {
+        //                                 bRagEnabled = true;
+        //                             }
+        //                         });
+        //                         MessageBox.error("Error deleting file: " + JSON.parse(xhr.responseText).error.message);
+
+        //                         if (JSON.parse(xhr.responseText).error.code == "403") {
+        //                             _this.getView().getModel("flagModel").setProperty("/isAdmin", false);
+        //                         }
+        //                     }
+        //                 });
+
+        //             }
+        //         }
+        //     });
+        // },
+
+         onFileDelete: function (oEvent) {
+            const sFragmentName = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+            const oSource = oEvent.getSource();
+            let oItem = oSource;
+            let typeDel = "POST";
+            const oHeader = {
                 "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
                 "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
                 "X-Frame-Options": "DENY",
@@ -3914,48 +4439,44 @@ sap.ui.define([
             while (oItem && !oItem.getBindingContext("ObjectFileList")) {
                 oItem = oItem.getParent();
             }
-            var oContext = oItem && oItem.getBindingContext("ObjectFileList");
+            const oContext = oItem?.getBindingContext("ObjectFileList");
             if (!oContext) {
                 sap.m.MessageBox.error("Unable to retrieve file details");
                 return;
             }
 
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-            var sFileRef = "";
+            const bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let sFileRef = "";
             if (sFragmentName === "knowlBAdmin") {
-                sFileRef = oContext.getProperty("view_url")
-            }
-            else {
+                sFileRef = oContext.getProperty("view_url");
+            } else {
                 sFileRef = oContext.getProperty("Key");
             }
             if (!sFileRef || typeof sFileRef !== "string") {
                 sap.m.MessageBox.error("Invalid file reference");
                 return;
             }
-            var sObjectKey = sFileRef;
-            var aParts = [];
+            let sObjectKey = sFileRef;
+            let aParts = [];
             if (sFileRef.startsWith("http")) {
-                var oUrl = new URL(sFileRef);
+                const oUrl = new URL(sFileRef);
                 aParts = oUrl.pathname.replace(/^\/+/, "").split("/");
-
                 aParts.shift();
-
                 sObjectKey = aParts.join("/");
             } else {
                 aParts = sObjectKey.replace(/^\/+/, "").split("/");
             }
-            var oPayload = {
+            const oPayload = {
                 files: [sObjectKey]
             };
-            var sUrl = this._sBasePath + "/cockpit/deleteFiles";
-            var deleteObjectsUrl = sUrl;
+            let deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFiles";
+
             if (bRagEnabled === true) {
                 oPayload.kb = true;
                 delete oPayload.files;
                 oPayload.filenames = [aParts[3]];
                 oPayload.category = this.selectedKeyFunct();
                 oPayload.project = this._ProjectDetail;
-                // deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore";
                 deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFilesFromKB";
                 typeDel = "POST";
             }
@@ -3965,70 +4486,94 @@ sap.ui.define([
                 oPayload.filenames = [aParts[3]];
                 oPayload.category = this.byId("categorySelect").getSelectedKey();
                 oPayload.project = this._ProjectDetail;
-                //  deleteObjectsUrl = this._sBasePath + "/kb-integration/DeleteFromObjectStore";
                 deleteObjectsUrl = this._sBasePath + "/cockpit/deleteFilesFromKB";
                 typeDel = "POST";
             }
 
-            MessageBox.confirm(`Are you sure you want to delete this file?`, {
+            const oDeleteParams = {
+                deleteObjectsUrl: deleteObjectsUrl,
+                typeDel: typeDel,
+                oHeader: oHeader,
+                oPayload: oPayload,
+                sFragmentName: sFragmentName,
+                sFileRef: sFileRef,
+                sObjectKey: sObjectKey,
+                bRagEnabled: bRagEnabled
+            };
+
+            MessageBox.confirm("Are you sure you want to delete this file?", {
                 title: "Confirm Deletion",
-                onClose: function (oAction) {
-                    if (oAction === MessageBox.Action.OK) {
-
-                        $.ajax({
-                            url: deleteObjectsUrl,
-                            type: typeDel,
-                            headers: oHeader,
-                            contentType: "application/json",
-                            data: JSON.stringify(oPayload),
-                            success: function (data) {
-                                if (data) {
-                                    var oModel = _this.getView().getModel("ObjectFileList");
-                                    var sListPath = sFragmentName === "knowlBAdmin" ? "/files" : "/";
-                                    var sDeletedFileKey = sFragmentName === "knowlBAdmin" ? sFileRef : sObjectKey;
-                                    var aFileList = oModel.getProperty(sListPath);
-
-                                    if (Array.isArray(aFileList)) {
-                                        var aUpdatedList = aFileList.filter(file => (file.view_url || file.Key) !== sDeletedFileKey);
-                                        oModel.setProperty(sListPath, aUpdatedList);
-                                        oModel.refresh(true);
-                                    }
-                                    if (bRagEnabled === true || sFragmentName === "knowlBAdmin") {
-                                        _this.KBGetFiles(_this.selectedKeyFunct());
-                                    } else {
-                                        _this.getFiles(_this.selectedKeyFunct());
-                                    }
-
-                                    sap.m.MessageBox.success(data.message || "File deleted successfully", {
-                                        title: "Delete File",
-                                        actions: [sap.m.MessageBox.Action.OK]
-                                    });
-                                } else {
-                                    MessageBox.show("Failed to delete file.");
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                let aDependents = _this.getView().getDependents();
-
-                                aDependents.forEach(function (oDependent) {
-                                    let title = oDependent.mProperties.title;
-                                    if (title.includes("Knowledge Base")) {
-                                        bRagEnabled = true;
-                                    }
-                                });
-                                MessageBox.error("Error deleting file: " + JSON.parse(xhr.responseText).error.message);
-
-                                if (JSON.parse(xhr.responseText).error.code == "403") {
-                                    _this.getView().getModel("flagModel").setProperty("/isAdmin", false);
-                                }
-                            }
-                        });
-
-                    }
-                }
+                onClose: this._handleFileDeleteConfirm.bind(this, oDeleteParams)
             });
         },
 
+         _handleFileDeleteConfirm: function (oParams, oAction) {
+            if (oAction !== MessageBox.Action.OK) {
+                return;
+            }
+
+            $.ajax({
+                url: oParams.deleteObjectsUrl,
+                type: oParams.typeDel,
+                headers: oParams.oHeader,
+                contentType: "application/json",
+                data: JSON.stringify(oParams.oPayload),
+                success: this._onFileDeleteSuccess.bind(this, oParams),
+                error: this._onFileDeleteError.bind(this, oParams)
+            });
+        },
+
+        _onFileDeleteSuccess: function (oParams, data) {
+            if (!data) {
+                MessageBox.show("Failed to delete file.");
+                return;
+            }
+
+            this._updateFileListAfterDelete(oParams);
+            this._refreshFilesAfterDelete(oParams);
+
+            sap.m.MessageBox.success(data.message || "File deleted successfully", {
+                title: "Delete File",
+                actions: [sap.m.MessageBox.Action.OK]
+            });
+        },
+
+        _updateFileListAfterDelete: function (oParams) {
+            const oModel = this.getView().getModel("ObjectFileList");
+            const sListPath = oParams.sFragmentName === "knowlBAdmin" ? "/files" : "/";
+            const sDeletedFileKey = oParams.sFragmentName === "knowlBAdmin" ? oParams.sFileRef : oParams.sObjectKey;
+            const aFileList = oModel.getProperty(sListPath);
+
+            if (Array.isArray(aFileList)) {
+                const aUpdatedList = aFileList.filter(file => (file.view_url || file.Key) !== sDeletedFileKey);
+                oModel.setProperty(sListPath, aUpdatedList);
+                oModel.refresh(true);
+            }
+        },
+
+        _refreshFilesAfterDelete: function (oParams) {
+            if (oParams.bRagEnabled === true || oParams.sFragmentName === "knowlBAdmin") {
+                this.KBGetFiles(this.selectedKeyFunct());
+            } else {
+                this.getFiles(this.selectedKeyFunct());
+            }
+        },
+
+        _onFileDeleteError: function (oParams, xhr, status, error) {
+            let bRagEnabled = oParams.bRagEnabled;
+            const aDependents = this.getView().getDependents();
+
+            aDependents.forEach(function (oDependent) {
+                const title = oDependent.mProperties.title;
+                if (title.includes("Knowledge Base")) {
+                    bRagEnabled = true;
+                }
+            });
+            MessageBox.error("Error deleting file: " + JSON.parse(xhr.responseText).error.message);
+            if (JSON.parse(xhr.responseText).error.code == "403") {
+                this.getView().getModel("flagModel").setProperty("/isAdmin", false);
+            }
+        },
 
         _getViewDocDialog: async function () {
             if (this.viewDocFr && this.viewDocFr.bIsDestroyed) {
@@ -4048,7 +4593,7 @@ sap.ui.define([
             return this.viewDocFr;
         },
 
-        viewDoc: async function () {
+        viewDoc: async function (oEvent) {
             if (this._bViewDocOpening) return;
             this._bViewDocOpening = true;
 
@@ -4089,11 +4634,384 @@ sap.ui.define([
             }
         },
 
+        _extractTextFromPage: function (page) {
+            return page.getTextContent().then(function (textContent) {
+                return textContent.items.map(function (item) {
+                    return item.str;
+                }).join('');
+            });
+        },
+        _processPdfDocument: function (pdf, oModel) {
+            let that = this;
+            let maxPages = pdf.numPages;
+            let countPromises = [];
+            for (let j = 1; j <= maxPages; j++) {
+                let pagePromise = pdf.getPage(j).then(function (page) {
+                    return that._extractPdfPageText(page);
+                });
+                countPromises.push(pagePromise);
+            }
+            Promise.all(countPromises).then(function (pagesText) {
+                let pdfText = pagesText.join('');
+                oModel.setProperty("/BSContent", pdfText);
+                BusyIndicator.hide();
+            });
+        },
+
+        _checkSecurityPatterns: function (pdfText, maliciousPatterns, xssPatterns) {
+            let malPat = false;
+            let xssPat = false;
+
+            for (const pattern of maliciousPatterns) {
+                if (pattern.test(pdfText)) {
+                    malPat = true;
+                    break;
+                }
+            }
+            for (var i = 0; i < xssPatterns.length; i++) {
+                if (xssPatterns[i].pattern.test(pdfText)) {
+                    xssPat = true;
+                    break;
+                }
+            }
+            return { malPat: malPat, xssPat: xssPat };
+        },
+
+        _handlePDFFileRead: function (oFile, busyDialog, maliciousPatterns, xssPatterns) {
+            let that = this;
+            let fileReader = new FileReader();
+
+            fileReader.onload = function (event) {
+                let arrayBuffer = event.target.result;
+                if (!arrayBuffer) {
+                    busyDialog.close();
+                    return;
+                }
+                that._processPDFArrayBuffer(arrayBuffer, busyDialog, maliciousPatterns, xssPatterns);
+            };
+
+            fileReader.onerror = function () {
+                busyDialog.close();
+            };
+
+            fileReader.readAsArrayBuffer(oFile);
+        },
+
+        _processPDFArrayBuffer: function (arrayBuffer, busyDialog, maliciousPatterns, xssPatterns) {
+            let that = this;
+            pdfjsLib.getDocument({ data: arrayBuffer }).promise
+                .then(function (pdf) {
+                    return that._processPDFDocument(pdf);
+                })
+                .then(function (pdfText) {
+                    let oModel = that.getView().getModel("appmodel");
+                    oModel.setProperty("/BSContent", pdfText);
+
+                    let securityCheck = that._checkSecurityPatterns(pdfText, maliciousPatterns, xssPatterns);
+
+                    if (securityCheck.malPat) {
+                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially malicious content.");
+                    }
+                    if (securityCheck.xssPat) {
+                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
+                    }
+
+                    busyDialog.close();
+                })
+                .catch(function () {
+                    busyDialog.close();
+                });
+        },
+
+        _handleFileUploadSuccess: function (result, oFile, busyDialog, oBundle) {
+            let that = this;
+            // Merge upload response into existing fileModel instead of replacing it,
+            // so that basicFiles / <tab>_local buckets (set earlier for the file-list
+            // rendering) are not wiped out. The multi-file branch never hits this path,
+            // which is why only single-file uploads previously "disappeared" from the UI.
+            let oExistingFM = that.getView().getModel("fileModel");
+            if (oExistingFM && result && typeof result === "object") {
+                Object.keys(result).forEach(function (k) {
+                    oExistingFM.setProperty("/" + k, result[k]);
+                });
+                oExistingFM.refresh(true);
+            } else {
+                that.getView().setModel(new sap.ui.model.json.JSONModel(result || {}), "fileModel");
+            }
+            let key = result.objectStoreRefKey || result.ObjectStoreRefKey;
+            let name = result.fileName || result.FileName || oFile.name;
+            that.getView().byId("viewDocBtn").setVisible(true);
+            that.getView().getModel("fileViewModel").setProperty("/Key", key);
+            that.getView().getModel("fileViewModel").setProperty("/Name", name);
+            that.getView().byId("docNameText").setVisible(true);
+            that.getView().byId("docNameText").setText(name);
+            busyDialog.close();
+            sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+            // Refresh the ObjectFileList so the newly uploaded file appears
+            // the next time the SelectFile value help is opened.
+            try {
+                that.getFiles();
+            } catch (e) {
+                // no-op
+            }
+        },
+
+        _handleFileUploadError: function (err, busyDialog) {
+            busyDialog.close();
+            let msg = "";
+            try {
+                msg = JSON.parse(err.responseText).error?.message || "";
+            } catch (e) {
+                console.log(e);
+            }
+            sap.m.MessageBox.error(msg || "File upload failed");
+        },
+
+        _handlePDFFile: function (oFile, sSelectedIconTab, busyDialog, oBundle, maliciousPatterns, xssPatterns) {
+            let that = this;
+            busyDialog.open();
+
+            that.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
+            that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
+                .then(function (result) {
+                    that._handleFileUploadSuccess(result, oFile, busyDialog, oBundle);
+                })
+                .catch(function (err) {
+                    that._handleFileUploadError(err, busyDialog);
+                });
+
+            busyDialog.open();
+            that._handlePDFFileRead(oFile, busyDialog, maliciousPatterns, xssPatterns);
+            busyDialog.close();
+        },
+
+        _handleImageFile: function (oFile, sSelectedIconTab, deploymentName, oFileUploader, busyDialog, oBundle, oModel) {
+            let that = this;
+
+            if (deploymentName !== "gpt-4o" && !deploymentName.includes("anthropic") && !deploymentName.includes("gemini") && !deploymentName.includes("mistralai") && sSelectedIconTab !== "PCT" && sSelectedIconTab !== "BPM") {
+
+                oFileUploader.clear();
+                sap.m.MessageBox.information(oBundle.getText("imageProcessingSupported"));
+                return;
+            }
+
+            // Preview
+            let reader = new FileReader();
+            reader.onload = function (event) {
+                let fileDataUrl = event.target.result;
+                that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
+                let imageObject = {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": fileDataUrl
+                    }
+                };
+                oModel.setProperty("/BSContent", [imageObject]);
+            };
+            reader.readAsDataURL(oFile);
+
+            // Upload file
+            busyDialog.open();
+            that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
+                .then(function (result) {
+                    that._handleFileUploadSuccess(result, oFile, busyDialog, oBundle);
+                })
+                .catch(function (err) {
+                    that._handleFileUploadError(err, busyDialog);
+                });
+        },
+
+
+        _handleTxtFileDisplay: function (data, oModel) {
+            oModel.setProperty("/BSContent", data.value);
+            BusyIndicator.hide();
+        },
+
+
+        _handleDocxFileDisplay: function (data, oModel) {
+            var rawContent = data.value || "";
+            // Strip Word XML markup to extract readable plain text
+            var cleanText = rawContent
+                .replace(/<w:p[^>]*>/g, '\n')
+                .replace(/<w:br[^>]*\/>/g, '\n')
+                .replace(/<w:tab[^>]*\/>/g, '\t')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                .replace(/\n{3,}/g, '\n\n').trim();
+            oModel.setProperty("/BSContent", cleanText || rawContent);
+            BusyIndicator.hide();
+        },
+
+        _handleFileDisplaySuccess: function (data, fileExtension, objectStoreUrl, oModel) {
+            this.executedOnce = false;
+            if (fileExtension === "txt") {
+                this._handleTxtFileDisplay(data, oModel);
+            } else if (fileExtension === "pdf") {
+                this._handlePdfFileDisplay(objectStoreUrl, oModel);
+            } else if (fileExtension === "docx") {
+                this._handleDocxFileDisplay(data, oModel);
+            }
+        },
+
+
+        // fileDisplay: function () {
+        //     var sSelectedIconTab = "BS";  //hardcoded as data is only in BSContent
+        //     ////dont remove this hardcodeded value
+        //     var that = this;
+        //     let oHeader = {
+        //         "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //         "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //         "X-Frame-Options": "DENY",
+        //         "X-XSS-Protection": "0",
+        //         "X-Content-Type-Options": "nosniff"
+        //     };
+        //     var sComponentName = this.getOwnerComponent().getManifestObject().getComponentName();
+        //     var sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
+        //     var oModel = this.getView().getModel("appmodel");
+        //     var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+        //     if (bRagEnabled) {
+        //         that.KBfileDisplay();  //RAG function call
+        //     } else {
+
+        //         var oKey = this.getView().getModel("fileViewModel").oData.Key;
+        //         var oFile = this.getView().getModel("fileViewModel").oData.Name;
+        //         var encodedKey = encodeURIComponent(oKey);
+        //         var sUrl = this._sBasePath + `/cockpit/getFileDetails(key='${encodedKey}')`;
+        //         var objectStoreUrl = sUrl;
+        //         var fileExtension = oFile.split('.').pop().toLowerCase();
+        //         var opdfpreview, oTextArea;
+        //         $.ajax({
+        //             url: objectStoreUrl,
+        //             type: "GET",
+        //             headers: oHeader,
+        //             success: function (data) {
+        //                 that.executedOnce = false;
+        //                 if (fileExtension === "txt") {
+        //                     switch (sSelectedIconTab) {
+        //                         case "BS":
+        //                             oModel.setProperty("/BSContent", data.value);
+        //                             break;
+        //                         case "User":
+        //                             oModel.setProperty("/UserContent", data.value);
+        //                             break;
+        //                         case "fstoconf":
+        //                             oModel.setProperty("/fsconfContent", data.value);
+        //                             break;
+        //                         case "fstots":
+        //                             oModel.setProperty("/fsContent", data.value);
+        //                             break;
+        //                         case "tstocode":
+        //                             oModel.setProperty("/tsContent", data.value);
+        //                             break;
+        //                         case "tstocodeGit":
+        //                             oModel.setProperty("/tsGitContent", data.value);
+        //                             break;
+        //                         case "coderem":
+        //                             oModel.setProperty("/ECCContent", data.value);
+        //                             break;
+        //                         case "codesum":
+        //                             oModel.setProperty("/CodeContent", data.value);
+        //                             break;
+        //                         default:
+        //                             break;
+        //                     }
+        //                     BusyIndicator.hide();
+        //                 } else if (fileExtension === "pdf") {
+        //                     that.getView().getModel("fileViewModel").setProperty("/srcUrl", objectStoreUrl);
+        //                     ///////////////////check
+        //                     pdfjsLib.getDocument(objectStoreUrl).promise.then(function (pdf) {
+        //                         var maxPages = pdf.numPages;
+        //                         var countPromises = [];
+        //                         for (var j = 1; j <= maxPages; j++) {
+        //                             var pagePromise = pdf.getPage(j).then(function (page) {
+        //                                 return page.getTextContent().then(function (textContent) {
+        //                                     return textContent.items.map(function (item) {
+        //                                         return item.str;
+        //                                     }).join('');
+        //                                 });
+        //                             });
+        //                             countPromises.push(pagePromise);
+        //                         }
+
+        //                         Promise.all(countPromises).then(function (pagesText) {
+        //                             var pdfText = pagesText.join('');
+        //                             switch (sSelectedIconTab) {
+        //                                 case "BS":
+        //                                     oModel.setProperty("/BSContent", pdfText);
+        //                                     break;
+        //                                 case "User":
+        //                                     oModel.setProperty("/UserContent", pdfText);
+        //                                     break;
+        //                                 case "fstoconf":
+        //                                     oModel.setProperty("/fsconfContent", pdfText);
+        //                                     break;
+        //                                 case "fstots":
+        //                                     oModel.setProperty("/fsContent", pdfText);
+        //                                     break;
+        //                                 case "tstocode":
+        //                                     oModel.setProperty("/tsContent", pdfText);
+        //                                     break;
+        //                                 case "tstocodeGit":
+        //                                     oModel.setProperty("/tsGitContent", pdfText);
+        //                                     break;
+        //                                 case "coderem":
+        //                                     oModel.setProperty("/ECCContent", pdfText);
+        //                                     break;
+        //                                 case "codesum":
+        //                                     oModel.setProperty("/CodeContent", pdfText);
+        //                                     break;
+        //                                 default:
+        //                                     break;
+        //                             }
+        //                             BusyIndicator.hide();
+        //                         });
+        //                     });
+        //                 } else if (fileExtension === "docx") {
+        //                     switch (sSelectedIconTab) {
+        //                         case "BS":
+        //                             oModel.setProperty("/BSContent", data.value);
+        //                             break;
+        //                         case "User":
+        //                             oModel.setProperty("/UserContent", data.value);
+        //                             break;
+        //                         case "fstoconf":
+        //                             oModel.setProperty("/fsconfContent", data.value);
+        //                             break;
+        //                         case "fstots":
+        //                             oModel.setProperty("/fsContent", data.value);
+        //                             break;
+        //                         case "tstocode":
+        //                             oModel.setProperty("/tsContent", data.value);
+        //                             break;
+        //                         case "tstocodeGit":
+        //                             oModel.setProperty("/tsGitContent", data.value);
+        //                             break;
+        //                         case "coderem":
+        //                             oModel.setProperty("/ECCContent", data.value);
+        //                             break;
+        //                         case "codesum":
+        //                             oModel.setProperty("/CodeContent", data.value);
+        //                             break;
+        //                         default:
+        //                             break;
+        //                     }
+        //                     BusyIndicator.hide();
+        //                     var docxContent = data;
+        //                     var data = {
+        //                         url: objectStoreUrl
+        //                     };
+        //                 }
+        //             }.bind(this),
+        //             error: function (error) {
+        //                 BusyIndicator.hide();
+        //             }
+        //         });
+        //     }
+        // },
 
         fileDisplay: function () {
-            var sSelectedIconTab = "BS";  //hardcoded as data is only in BSContent
             ////dont remove this hardcodeded value
-            var that = this;
+            let that = this;
             let oHeader = {
                 "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
                 "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
@@ -4101,149 +5019,32 @@ sap.ui.define([
                 "X-XSS-Protection": "0",
                 "X-Content-Type-Options": "nosniff"
             };
-            var sComponentName = this.getOwnerComponent().getManifestObject().getComponentName();
-            var sBasePath = sap.ui.require.toUrl(sComponentName.replace(/\./g, "/"));
-            var oModel = this.getView().getModel("appmodel");
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let oModel = this.getView().getModel("appmodel");
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             if (bRagEnabled) {
                 that.KBfileDisplay();  //RAG function call
             } else {
+                let oKey = this.getView().getModel("fileViewModel").oData.Key;
+                let oFile = this.getView().getModel("fileViewModel").oData.Name;
+                let encodedKey = encodeURIComponent(oKey);
+                let sUrl = this._sBasePath + `/cockpit/getFileDetails(key='${encodedKey}')`;
+                let objectStoreUrl = sUrl;
+                let fileExtension = oFile.split('.').pop().toLowerCase();
 
-                var oKey = this.getView().getModel("fileViewModel").oData.Key;
-                var oFile = this.getView().getModel("fileViewModel").oData.Name;
-                var encodedKey = encodeURIComponent(oKey);
-                var sUrl = this._sBasePath + `/cockpit/getFileDetails(key='${encodedKey}')`;
-                var objectStoreUrl = sUrl;
-                var fileExtension = oFile.split('.').pop().toLowerCase();
-                var opdfpreview, oTextArea;
                 $.ajax({
                     url: objectStoreUrl,
                     type: "GET",
                     headers: oHeader,
                     success: function (data) {
-                        that.executedOnce = false;
-                        if (fileExtension === "txt") {
-                            switch (sSelectedIconTab) {
-                                case "BS":
-                                    oModel.setProperty("/BSContent", data.value);
-                                    break;
-                                case "User":
-                                    oModel.setProperty("/UserContent", data.value);
-                                    break;
-                                case "fstoconf":
-                                    oModel.setProperty("/fsconfContent", data.value);
-                                    break;
-                                case "fstots":
-                                    oModel.setProperty("/fsContent", data.value);
-                                    break;
-                                case "tstocode":
-                                    oModel.setProperty("/tsContent", data.value);
-                                    break;
-                                case "tstocodeGit":
-                                    oModel.setProperty("/tsGitContent", data.value);
-                                    break;
-                                case "coderem":
-                                    oModel.setProperty("/ECCContent", data.value);
-                                    break;
-                                case "codesum":
-                                    oModel.setProperty("/CodeContent", data.value);
-                                    break;
-                                default:
-                                    break;
-                            }
-                            BusyIndicator.hide();
-                        } else if (fileExtension === "pdf") {
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", objectStoreUrl);
-                            ///////////////////check
-                            pdfjsLib.getDocument(objectStoreUrl).promise.then(function (pdf) {
-                                var maxPages = pdf.numPages;
-                                var countPromises = [];
-                                for (var j = 1; j <= maxPages; j++) {
-                                    var pagePromise = pdf.getPage(j).then(function (page) {
-                                        return page.getTextContent().then(function (textContent) {
-                                            return textContent.items.map(function (item) {
-                                                return item.str;
-                                            }).join('');
-                                        });
-                                    });
-                                    countPromises.push(pagePromise);
-                                }
-
-                                Promise.all(countPromises).then(function (pagesText) {
-                                    var pdfText = pagesText.join('');
-                                    switch (sSelectedIconTab) {
-                                        case "BS":
-                                            oModel.setProperty("/BSContent", pdfText);
-                                            break;
-                                        case "User":
-                                            oModel.setProperty("/UserContent", pdfText);
-                                            break;
-                                        case "fstoconf":
-                                            oModel.setProperty("/fsconfContent", pdfText);
-                                            break;
-                                        case "fstots":
-                                            oModel.setProperty("/fsContent", pdfText);
-                                            break;
-                                        case "tstocode":
-                                            oModel.setProperty("/tsContent", pdfText);
-                                            break;
-                                        case "tstocodeGit":
-                                            oModel.setProperty("/tsGitContent", pdfText);
-                                            break;
-                                        case "coderem":
-                                            oModel.setProperty("/ECCContent", pdfText);
-                                            break;
-                                        case "codesum":
-                                            oModel.setProperty("/CodeContent", pdfText);
-                                            break;
-                                        default:
-                                            break;
-                                    }
-                                    BusyIndicator.hide();
-                                });
-                            });
-                        } else if (fileExtension === "docx") {
-                            switch (sSelectedIconTab) {
-                                case "BS":
-                                    oModel.setProperty("/BSContent", data.value);
-                                    break;
-                                case "User":
-                                    oModel.setProperty("/UserContent", data.value);
-                                    break;
-                                case "fstoconf":
-                                    oModel.setProperty("/fsconfContent", data.value);
-                                    break;
-                                case "fstots":
-                                    oModel.setProperty("/fsContent", data.value);
-                                    break;
-                                case "tstocode":
-                                    oModel.setProperty("/tsContent", data.value);
-                                    break;
-                                case "tstocodeGit":
-                                    oModel.setProperty("/tsGitContent", data.value);
-                                    break;
-                                case "coderem":
-                                    oModel.setProperty("/ECCContent", data.value);
-                                    break;
-                                case "codesum":
-                                    oModel.setProperty("/CodeContent", data.value);
-                                    break;
-                                default:
-                                    break;
-                            }
-                            BusyIndicator.hide();
-                            var docxContent = data;
-                            var data = {
-                                url: objectStoreUrl
-                            };
-                        }
-                    }.bind(this),
+                        that._handleFileDisplaySuccess(data, fileExtension, objectStoreUrl, oModel);
+                    },
                     error: function (error) {
                         BusyIndicator.hide();
                     }
                 });
             }
         },
+
         //Start of Aishwarya
         KBfileDisplay: function () {
             ///upl/select files of rag preview viewdoc part
@@ -7187,9 +7988,18 @@ sap.ui.define([
                 let popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
                 this.executedOnce = false;
                 let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
-                let fileN = oEvent.mParameters.files[0].name;
+                let aAllFiles = oEvent.mParameters.files;
 
-                let [stopUpload, errMsg] = this.validateFileName(fileN);
+                let stopUpload = false;
+                let errMsg = "";
+                for (let i = 0; i < aAllFiles.length; i++) {
+                    let [stop, msg] = this.validateFileName(aAllFiles[i].name);
+                    if (stop) {
+                        stopUpload = true;
+                        errMsg = msg;
+                        break;
+                    }
+                }
                 if (stopUpload) {
                     sap.m.MessageBox.warning(errMsg);
                 }
@@ -7200,12 +8010,10 @@ sap.ui.define([
                     else if (bRagEnabled) {
                         this.ragHandleUploadPress();
                     }
-                    else if (popUpSel == "") {
+                    else {
                         this.getView().byId("selDocList").setValueState("None");
                         this.getView().byId("multiInputPrompt").setValueState("None");
                         this.extractPDFContent(oEvent);
-                    } else {
-                        MessageBox.information(oBundle.getText("selFuncTabs"));
                     }
 
                     this.getView().byId("selDocList").setSelectedKey("");
@@ -7257,32 +8065,384 @@ sap.ui.define([
             return [stopUpload, errMsg];
         },
 
-        extractPDFContent: function (oEvent) {
-            var that = this;
-            var busyDialog = new sap.m.BusyDialog();
-            var fileReader = new FileReader();
-            var oFileUploader = this.getView().byId("fileUploader1");
-            var sSelectedIconTab = this.selectedKeyFunct();
-            var oResponseModel = this.getView().getModel("responseModel");
-            var aModel = this.getView().getModel("appmodel");
-            // var aMessages = oResponseModel.getProperty("/fsThread");
-            var apiModel;
-            var apiSelect;
-            var fileNames = [];
-            var opdfpreview;
-            var textArea,
-                imagePreview;
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var selectedFiles = oEvent.getParameter("files");
-            var oModel = this.getView().getModel("appmodel");
-            // var contentPath="/BSContent";
-            // var sContent = oModel.getProperty(contentPath); ///file path
-            var finalText = "";
+        // extractPDFContent: function (oEvent) {
+        //     var that = this;
+        //     var busyDialog = new sap.m.BusyDialog();
+        //     var fileReader = new FileReader();
+        //     var oFileUploader = this.getView().byId("fileUploader1");
+        //     var sSelectedIconTab = this.selectedKeyFunct();
+        //     var oResponseModel = this.getView().getModel("responseModel");
+        //     var aModel = this.getView().getModel("appmodel");
+        //     // var aMessages = oResponseModel.getProperty("/fsThread");
+        //     var apiModel;
+        //     var apiSelect;
+        //     var fileNames = [];
+        //     var opdfpreview;
+        //     var textArea,
+        //         imagePreview;
+        //     var oBundle = this.getView().getModel("i18n").getResourceBundle();
+        //     var selectedFiles = oEvent.getParameter("files");
+        //     var oModel = this.getView().getModel("appmodel");
+        //     // var contentPath="/BSContent";
+        //     // var sContent = oModel.getProperty(contentPath); ///file path
+        //     var finalText = "";
 
-            var oPromptModel = this.getView().getModel("BSPromptData");
-            var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
-            var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
-            var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+        //     var oPromptModel = this.getView().getModel("BSPromptData");
+        //     var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+        //     var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
+        //     var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+        //     let malPat = false;
+        //     let xssPat = false;
+        //     const maliciousPatterns = [
+        //         /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+        //         /javascript:/gi,
+        //         /vbscript:/gi,
+        //         /on\w+\s*=\s*["'][^"']*["']/gi,
+        //         /eval\s*\(/gi,
+        //         /document\.write/gi,
+        //         /document\.cookie/gi,
+        //         /window\.location/gi,
+        //         /\.exec\s*\(/gi,
+        //         /new\s+Function\s*\(/gi,
+        //         /fromCharCode/gi,
+        //         /\\x[0-9a-fA-F]{2}/g,
+        //         /\\u[0-9a-fA-F]{4}/g,
+        //         /base64_decode/gi,
+        //         /shell_exec/gi,
+        //         /system\s*\(/gi,
+        //         /passthru/gi,
+        //         /exec\s*\(/gi,
+        //         /popen\s*\(/gi,
+        //         /proc_open/gi,
+        //         /<\?php/gi,
+        //         /<%[\s\S]*?%>/g,
+        //         /powershell/gi,
+        //         /cmd\.exe/gi,
+        //         /\/bin\/sh/gi,
+        //         /\/bin\/bash/gi,
+        //         /wget\s+/gi,
+        //         /curl\s+.*-o/gi,
+        //         /nc\s+-e/gi,
+        //         /rm\s+-rf/gi
+        //     ];
+
+        //     var xssPatterns = [
+        //         // JavaScript execution functions
+        //         { pattern: /\balert\s*\(/gi, name: "alert()" },
+        //         { pattern: /\bconfirm\s*\(/gi, name: "confirm()" },
+        //         { pattern: /\bprompt\s*\(/gi, name: "prompt()" },
+        //         { pattern: /\beval\s*\(/gi, name: "eval()" },
+        //         { pattern: /\bFunction\s*\(/gi, name: "Function()" },
+        //         { pattern: /\bsetTimeout\s*\(/gi, name: "setTimeout()" },
+        //         { pattern: /\bsetInterval\s*\(/gi, name: "setInterval()" },
+        //         { pattern: /\bexecScript\s*\(/gi, name: "execScript()" },
+
+        //         // Script tags and protocols
+        //         { pattern: /<\s*script[^>]*>/gi, name: "<script> tag" },
+        //         { pattern: /<\s*\/\s*script\s*>/gi, name: "</script> tag" },
+        //         { pattern: /javascript\s*:/gi, name: "javascript: protocol" },
+        //         { pattern: /vbscript\s*:/gi, name: "vbscript: protocol" },
+        //         { pattern: /data\s*:\s*text\/html/gi, name: "data: HTML protocol" },
+
+        //         // Event handlers (on* attributes)
+        //         { pattern: /\bon\w+\s*=/gi, name: "Event handler attribute" },
+        //         { pattern: /\bonclick\s*=/gi, name: "onclick handler" },
+        //         { pattern: /\bonerror\s*=/gi, name: "onerror handler" },
+        //         { pattern: /\bonload\s*=/gi, name: "onload handler" },
+        //         { pattern: /\bonmouseover\s*=/gi, name: "onmouseover handler" },
+        //         { pattern: /\bonfocus\s*=/gi, name: "onfocus handler" },
+        //         { pattern: /\bonblur\s*=/gi, name: "onblur handler" },
+        //         { pattern: /\bonsubmit\s*=/gi, name: "onsubmit handler" },
+        //         { pattern: /\bonchange\s*=/gi, name: "onchange handler" },
+        //         { pattern: /\bonkeyup\s*=/gi, name: "onkeyup handler" },
+        //         { pattern: /\bonkeydown\s*=/gi, name: "onkeydown handler" },
+        //         { pattern: /\bonkeypress\s*=/gi, name: "onkeypress handler" },
+
+        //         // DOM manipulation
+        //         { pattern: /\bdocument\s*\.\s*write\s*\(/gi, name: "document.write()" },
+        //         { pattern: /\bdocument\s*\.\s*writeln\s*\(/gi, name: "document.writeln()" },
+        //         { pattern: /\bdocument\s*\.\s*cookie/gi, name: "document.cookie access" },
+        //         { pattern: /\bdocument\s*\.\s*domain/gi, name: "document.domain access" },
+        //         { pattern: /\.innerHTML\s*=/gi, name: "innerHTML assignment" },
+        //         { pattern: /\.outerHTML\s*=/gi, name: "outerHTML assignment" },
+        //         { pattern: /\.insertAdjacentHTML\s*\(/gi, name: "insertAdjacentHTML()" },
+
+        //         // Window/Location manipulation
+        //         { pattern: /\bwindow\s*\.\s*location/gi, name: "window.location access" },
+        //         { pattern: /\blocation\s*\.\s*href\s*=/gi, name: "location.href assignment" },
+        //         { pattern: /\blocation\s*\.\s*replace\s*\(/gi, name: "location.replace()" },
+        //         { pattern: /\blocation\s*\.\s*assign\s*\(/gi, name: "location.assign()" },
+
+        //         // Dangerous HTML elements
+        //         { pattern: /<\s*iframe[^>]*>/gi, name: "<iframe> tag" },
+        //         { pattern: /<\s*embed[^>]*>/gi, name: "<embed> tag" },
+        //         { pattern: /<\s*object[^>]*>/gi, name: "<object> tag" },
+        //         { pattern: /<\s*applet[^>]*>/gi, name: "<applet> tag" },
+        //         { pattern: /<\s*meta[^>]*>/gi, name: "<meta> tag" },
+        //         { pattern: /<\s*link[^>]*>/gi, name: "<link> tag" },
+        //         { pattern: /<\s*base[^>]*>/gi, name: "<base> tag" },
+        //         { pattern: /<\s*form[^>]*>/gi, name: "<form> tag" },
+        //         { pattern: /<\s*input[^>]*>/gi, name: "<input> tag" },
+        //         { pattern: /<\s*img[^>]*onerror/gi, name: "<img> with onerror" },
+        //         { pattern: /<\s*svg[^>]*onload/gi, name: "<svg> with onload" },
+        //         { pattern: /<\s*body[^>]*onload/gi, name: "<body> with onload" },
+
+        //         // Encoding bypass attempts
+        //         { pattern: /&#x?[0-9a-f]+;?/gi, name: "HTML entity encoding" },
+        //         { pattern: /\\u00[0-9a-f]{2}/gi, name: "Unicode escape sequence" },
+        //         { pattern: /%3C|%3E|%22|%27|%3D/gi, name: "URL encoded characters" },
+
+        //         // Expression and binding attacks
+        //         { pattern: /expression\s*\(/gi, name: "CSS expression()" },
+        //         { pattern: /url\s*\(\s*javascript/gi, name: "CSS url(javascript:)" },
+        //         { pattern: /-moz-binding/gi, name: "Mozilla binding" },
+
+        //         // Constructor access
+        //         { pattern: /\bconstructor\s*\[/gi, name: "constructor access" },
+        //         { pattern: /\b__proto__/gi, name: "__proto__ access" },
+        //         { pattern: /\bprototype\s*\./gi, name: "prototype access" }
+        //     ];
+
+        //     // Check each pattern
+
+        //     //   const oContent = sContent + "\n" + promptMsgData;
+        //     var aMessages = [
+        //         {
+        //             "role": "system",
+        //             "content": aMsgContentSystemDesc
+        //         },
+        //         {
+        //             "role": "user",
+        //             "content": promptMsgData
+        //         }
+        //     ];
+        //     var aiSelected = that.getView().byId("selModel").getSelectedKey();
+        //     var aiModelName = that.getView().byId("selModel").getValue();
+        //     var apiSelect = `deployments/${aiSelected}/chat/completions?api-version=${this.sApiUrl}`;
+        //     var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+        //     apiModel = aiModelName;
+        //     ///////not using handleTabApiSetupDynamic utility function
+        //     var vector = bRagEnabled ? 1 : 0;
+        //     var deploymentName = apiModel.split("/").pop();
+        //     var aFiles = oFileUploader.oFileUpload.files;
+        //     if (!aFiles || aFiles.length === 0) {
+        //         sap.m.MessageBox.information(oBundle.getText("fileUpload"));
+        //         return;
+        //     }
+        //     if (bRagEnabled) {
+        //         this.ragHandleUploadPress();
+        //         return;
+        //     } else {
+        //         var oFile = aFiles[0];
+        //         var fFormData = new FormData;
+        //         fFormData.append("file", oFile);
+
+        //         var objectStoreUrl = this._sBasePath + `/cockpit/upload/Category=` + sSelectedIconTab + `/Project=` + this._ProjectDetail + `/Vector=` + vector;
+
+        //         // | oFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        //         if (oFile.type === "application/pdf") {
+        //             busyDialog.open();
+        //             var that = this;
+        //             that.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
+        //             that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
+        //                 .then(function (result) {
+        //                     var fileModel = new sap.ui.model.json.JSONModel(result);
+        //                     that.getView().setModel(fileModel, "fileModel");
+        //                     var key = result.objectStoreRefKey || result.ObjectStoreRefKey;
+        //                     var name = result.fileName || result.FileName || oFile.name;
+        //                     that.getView().byId("viewDocBtn").setVisible(true);
+        //                     that.getView().getModel("fileViewModel").setProperty("/Key", key);
+        //                     that.getView().getModel("fileViewModel").setProperty("/Name", name);
+        //                     that.getView().byId("docNameText").setVisible(true);
+        //                     that.getView().byId("docNameText").setText(name);
+        //                     busyDialog.close();
+        //                     sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+        //                  ///   that.getFiles();
+        //                 })
+        //                 .catch(function (err) {
+        //                     busyDialog.close();
+        //                     var msg = "";
+        //                     try { msg = JSON.parse(err.responseText).error?.message || ""; } catch (e) { }
+        //                     sap.m.MessageBox.error(msg || "File upload failed");
+        //                 });
+
+        //             busyDialog.open();
+        //             fileReader.onload = function (event) {
+        //                 var arrayBuffer = event.target.result;
+        //                 if (arrayBuffer) {
+        //                     pdfjsLib.getDocument({
+        //                         data: arrayBuffer
+        //                     }).promise.then(function (pdf) {
+        //                         var maxPages = pdf.numPages;
+        //                         var countPromises = [];
+        //                         for (var j = 1; j <= maxPages; j++) {
+        //                             var pagePromise = pdf.getPage(j).then(function (page) {
+        //                                 return page.getTextContent().then(function (textContent) {
+        //                                     return textContent.items.map(function (item) {
+        //                                         return item.str;
+        //                                     }).join('');
+        //                                 });
+        //                             });
+        //                             countPromises.push(pagePromise);
+        //                         }
+        //                         Promise.all(countPromises).then(function (pagesText) {
+        //                             var pdfText = pagesText.join();
+        //                             var oModel = this.getView().getModel("appmodel");
+
+        //                             switch (sSelectedIconTab) {
+        //                                 case "BS":
+        //                                     oModel.setProperty("/BSContent", pdfText);
+        //                                     break;
+        //                                 case "User":
+        //                                     oModel.setProperty("/UserContent", pdfText);
+        //                                     break;
+        //                                 case "fstoconf":
+        //                                     oModel.setProperty("/fsconfContent", pdfText);
+        //                                     break;
+        //                                 case "fstots":
+        //                                     oModel.setProperty("/fsContent", pdfText);
+        //                                     break;
+        //                                 case "tstocode":
+        //                                     oModel.setProperty("/tsContent", pdfText);
+        //                                     break;
+        //                                 // case "tstocodeGit":
+        //                                 //     oModel.setProperty("/tsGitContent", pdfText);
+        //                                 //     break;
+        //                                 case "coderem":
+        //                                     oModel.setProperty("/ECCContent", pdfText);
+        //                                     break;
+        //                                 case "codesum":
+        //                                     oModel.setProperty("/CodeContent", pdfText);
+        //                                     break;
+        //                                 default:
+        //                                     break;
+        //                             }
+
+        //                             oModel.setProperty("/BSContent", pdfText);
+        //                             for (const pattern of maliciousPatterns) {
+        //                                 if (pattern.test(pdfText)) {
+        //                                     malPat = true;
+        //                                 }
+        //                             }
+        //                             for (var i = 0; i < xssPatterns.length; i++) {
+        //                                 if (xssPatterns[i].pattern.test(pdfText)) {
+        //                                     xssPat = true;
+        //                                 }
+        //                             }
+        //                             if (malPat) {
+        //                                 sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially malicious content.");
+        //                             }
+        //                             if (xssPat) {
+        //                                 sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
+        //                             }
+
+
+        //                             busyDialog.close();
+        //                         }.bind(this));
+        //                     }.bind(this));
+        //                 } else {
+        //                     busyDialog.close();
+        //                 }
+        //             }.bind(this);
+
+        //             fileReader.onerror = function (event) {
+        //                 busyDialog.close();
+        //             };
+
+        //             fileReader.readAsArrayBuffer(oFile);
+
+
+
+        //             //vbox code
+
+        //             busyDialog.close();
+        //         } else if (oFile.type == "image/png" || oFile.type === "image/jpeg" || oFile.type === "image/jpg") {
+
+        //             if (deploymentName !== "gpt-4o" &&
+        //                 !deploymentName.includes("anthropic") &&
+        //                 !deploymentName.includes("gemini") &&
+        //                 !deploymentName.includes("mistralai") &&
+        //                 sSelectedIconTab !== "PCT" &&
+        //                 sSelectedIconTab !== "BPM") {
+        //                 oFileUploader.clear();
+        //                  that.getView().getModel("fileViewModel").setData([]);
+        //                 that.getView().getModel("fileViewModel").refresh();
+        //                 busyDialog.close();
+        //                 sap.m.MessageBox.information(oBundle.getText("imageProcessingSupported"));
+        //             } else {
+        //                 //preview
+        //                 var reader = new FileReader();
+
+        //                 reader.onload = function (event) {
+        //                     var fileDataUrl = event.target.result;
+        //                     that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
+        //                     var imageObject = {
+        //                         "type": "image_url",
+        //                         "image_url": {
+        //                             "url": fileDataUrl
+        //                         }
+        //                     };
+        //                     oModel.setProperty("/BSContent", [imageObject]);
+
+        //                 };
+
+        //                 reader.readAsDataURL(oFile);
+        //                 //vbox code
+        //                 var that = this;
+        //                 busyDialog.open();
+        //                 that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
+        //                     .then(function (result) {
+        //                         var fileModel = new sap.ui.model.json.JSONModel(result);
+        //                         that.getView().setModel(fileModel, "fileModel");
+        //                         var key = result.objectStoreRefKey || result.ObjectStoreRefKey;
+        //                         var name = result.fileName || result.FileName || oFile.name;
+        //                         that.getView().byId("viewDocBtn").setVisible(true);
+        //                         that.getView().getModel("fileViewModel").setProperty("/Key", key);
+        //                         that.getView().getModel("fileViewModel").setProperty("/Name", name);
+        //                         that.getView().byId("docNameText").setVisible(true);
+        //                         that.getView().byId("docNameText").setText(name);
+        //                         busyDialog.close();
+        //                         sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+        //                       ///  that.getFiles();
+        //                     })
+        //                     .catch(function (err) {
+        //                         busyDialog.close();
+        //                         var msg = "";
+        //                         try { msg = JSON.parse(err.responseText).error?.message || ""; } catch (e) { }
+        //                         sap.m.MessageBox.error(msg || "File upload failed");
+        //                     });
+
+        //             }
+        //         }
+        //         else if (oFile.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+        //             this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
+        //             this.handleExcelUpload(oFile, sSelectedIconTab, this.getView().getModel("appmodel"), aMessages);
+        //        ////     that.getFiles();
+        //         }
+        //         else {
+        //             this.handleUploadPress(oFile);
+        //          ////   that.getFiles();
+        //         }
+        //     }
+        //     let fileContent = oModel.getProperty("/BSContent");
+
+        // },
+
+        extractPDFContent: function () {
+            let that = this;
+            let busyDialog = new sap.m.BusyDialog();
+            let fileReader = new FileReader();
+            let oFileUploader = this.getView().byId("fileUploader1");
+            let sSelectedIconTab = this.selectedKeyFunct();
+            let apiModel;
+
+            let oBundle = this.getView().getModel("i18n").getResourceBundle();
+
+            let oModel = this.getView().getModel("appmodel");
+
+            let promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
+
+            let aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
             let malPat = false;
             let xssPat = false;
             const maliciousPatterns = [
@@ -7395,10 +8555,7 @@ sap.ui.define([
                 { pattern: /\bprototype\s*\./gi, name: "prototype access" }
             ];
 
-            // Check each pattern
-
-            //   const oContent = sContent + "\n" + promptMsgData;
-            var aMessages = [
+            let aMessages = [
                 {
                     "role": "system",
                     "content": aMsgContentSystemDesc
@@ -7408,15 +8565,15 @@ sap.ui.define([
                     "content": promptMsgData
                 }
             ];
-            var aiSelected = that.getView().byId("selModel").getSelectedKey();
-            var aiModelName = that.getView().byId("selModel").getValue();
-            var apiSelect = `deployments/${aiSelected}/chat/completions?api-version=${this.sApiUrl}`;
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let aiSelected = that.getView().byId("selModel").getSelectedKey();
+            let aiModelName = that.getView().byId("selModel").getValue();
+
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
             apiModel = aiModelName;
             ///////not using handleTabApiSetupDynamic utility function
-            var vector = bRagEnabled ? 1 : 0;
-            var deploymentName = apiModel.split("/").pop();
-            var aFiles = oFileUploader.oFileUpload.files;
+
+            let deploymentName = apiModel.split("/").pop();
+            let aFiles = oFileUploader.oFileUpload.files;
             if (!aFiles || aFiles.length === 0) {
                 sap.m.MessageBox.information(oBundle.getText("fileUpload"));
                 return;
@@ -7424,200 +8581,144 @@ sap.ui.define([
             if (bRagEnabled) {
                 this.ragHandleUploadPress();
                 return;
-            } else {
-                var oFile = aFiles[0];
-                var fFormData = new FormData;
+            }
+
+            // Single file: use existing handlers
+            if (aFiles.length === 1) {
+                let oFile = aFiles[0];
+                // Store file in tab-specific list and sync to basicFiles for display
+                var sTabKey = sSelectedIconTab || that.selectedKeyFunct();
+                var oFM = that.getView().getModel("fileModel");
+                var aTabFiles = oFM.getProperty("/" + sTabKey + "_local") || [];
+                aTabFiles = [{ filename: oFile.name, content: "", tabKey: sTabKey }];
+                oFM.setProperty("/" + sTabKey + "_local", aTabFiles);
+                oFM.setProperty("/basicFiles", aTabFiles);
+                oFM.refresh(true);
+                let fFormData = new FormData();
                 fFormData.append("file", oFile);
 
-                var objectStoreUrl = this._sBasePath + `/cockpit/upload/Category=` + sSelectedIconTab + `/Project=` + this._ProjectDetail + `/Vector=` + vector;
-
-                // | oFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 if (oFile.type === "application/pdf") {
-                    busyDialog.open();
-                    var that = this;
-                    that.getView().getModel("tcgModel").setProperty("/wordorExcel", "word");
-                    that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
-                        .then(function (result) {
-                            var fileModel = new sap.ui.model.json.JSONModel(result);
-                            that.getView().setModel(fileModel, "fileModel");
-                            var key = result.objectStoreRefKey || result.ObjectStoreRefKey;
-                            var name = result.fileName || result.FileName || oFile.name;
-                            that.getView().byId("viewDocBtn").setVisible(true);
-                            that.getView().getModel("fileViewModel").setProperty("/Key", key);
-                            that.getView().getModel("fileViewModel").setProperty("/Name", name);
-                            that.getView().byId("docNameText").setVisible(true);
-                            that.getView().byId("docNameText").setText(name);
-                            busyDialog.close();
-                            sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                         ///   that.getFiles();
-                        })
-                        .catch(function (err) {
-                            busyDialog.close();
-                            var msg = "";
-                            try { msg = JSON.parse(err.responseText).error?.message || ""; } catch (e) { }
-                            sap.m.MessageBox.error(msg || "File upload failed");
+                    this._handlePDFFile(oFile, sSelectedIconTab, busyDialog, oBundle, maliciousPatterns, xssPatterns);
+                } else if (oFile.type === "image/png" || oFile.type === "image/jpeg" || oFile.type === "image/jpg") {
+                    this._handleImageFile(oFile, sSelectedIconTab, deploymentName, oFileUploader, busyDialog, oBundle, oModel);
+                } else if (oFile.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+                    this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
+                    this.handleExcelUpload(oFile, sSelectedIconTab, aMessages);
+                } else {
+                    this.handleUploadPress(oFile);
+                }
+            } else {
+                // Multiple files: upload each via _uploadFileNew, extract content, combine
+                busyDialog.open();
+                var aUploadPromises = [];
+                var aAllNames = [];
+
+                for (var fi = 0; fi < aFiles.length; fi++) {
+                    (function (oFile) {
+                        aAllNames.push(oFile.name);
+                        var ext = oFile.name.split('.').pop().toLowerCase();
+
+                        // Content extraction promise
+                        var extractPromise = new Promise(function (resolve) {
+                            var fr = new FileReader();
+                            if (ext === 'txt') {
+                                fr.onload = function (e) { resolve(e.target.result || ""); };
+                                fr.readAsText(oFile);
+                            } else if (ext === 'pdf') {
+                                fr.onload = function (e) {
+                                    pdfjsLib.getDocument({ data: e.target.result.slice(0) }).promise.then(function (pdf) {
+                                        var pagePromises = [];
+                                        for (var p = 1; p <= pdf.numPages; p++) {
+                                            pagePromises.push(pdf.getPage(p).then(function (page) {
+                                                return page.getTextContent().then(function (tc) {
+                                                    return tc.items.map(function (item) { return item.str; }).join(' ');
+                                                });
+                                            }));
+                                        }
+                                        return Promise.all(pagePromises).then(function (pages) { resolve(pages.join('\n\n')); });
+                                    }).catch(function () { resolve(''); });
+                                };
+                                fr.readAsArrayBuffer(oFile);
+                            } else if (ext === 'docx') {
+                                fr.onload = function (e) {
+                                    try {
+                                        var zip = new JSZip(new Uint8Array(e.target.result.slice(0)));
+                                        var xmlFile = zip.file("word/document.xml");
+                                        if (xmlFile) {
+                                            var xmlText = xmlFile.asText()
+                                                .replace(/<w:p[^>]*>/g, '\n')
+                                                .replace(/<w:br[^>]*\/>/g, '\n')
+                                                .replace(/<w:tab[^>]*\/>/g, '\t')
+                                                .replace(/<[^>]+>/g, '')
+                                                .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                                                .replace(/\n{3,}/g, '\n\n').trim();
+                                            resolve(xmlText);
+                                        } else { resolve(''); }
+                                    } catch (err) { resolve(''); }
+                                };
+                                fr.readAsArrayBuffer(oFile);
+                            } else if (ext === 'xlsx') {
+                                fr.onload = function (e) {
+                                    try {
+                                        var wb = XLSX.read(new Uint8Array(e.target.result.slice(0)), { type: 'array' });
+                                        var sheetTexts = [];
+                                        wb.SheetNames.forEach(function (sn) {
+                                            sheetTexts.push('Sheet: ' + sn + '\n' + XLSX.utils.sheet_to_csv(wb.Sheets[sn]));
+                                        });
+                                        resolve(sheetTexts.join('\n\n'));
+                                    } catch (err) { resolve(''); }
+                                };
+                                fr.readAsArrayBuffer(oFile);
+                            } else if (ext === 'png' || ext === 'jpg' || ext === 'jpeg') {
+                                fr.onload = function (e) { resolve(e.target.result); };
+                                fr.readAsDataURL(oFile);
+                            } else {
+                                resolve('');
+                            }
                         });
 
-                    busyDialog.open();
-                    fileReader.onload = function (event) {
-                        var arrayBuffer = event.target.result;
-                        if (arrayBuffer) {
-                            pdfjsLib.getDocument({
-                                data: arrayBuffer
-                            }).promise.then(function (pdf) {
-                                var maxPages = pdf.numPages;
-                                var countPromises = [];
-                                for (var j = 1; j <= maxPages; j++) {
-                                    var pagePromise = pdf.getPage(j).then(function (page) {
-                                        return page.getTextContent().then(function (textContent) {
-                                            return textContent.items.map(function (item) {
-                                                return item.str;
-                                            }).join('');
-                                        });
-                                    });
-                                    countPromises.push(pagePromise);
-                                }
-                                Promise.all(countPromises).then(function (pagesText) {
-                                    var pdfText = pagesText.join();
-                                    var oModel = this.getView().getModel("appmodel");
+                        // Upload promise using existing _uploadFileNew API
+                        var uploadPromise = that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail);
 
-                                    switch (sSelectedIconTab) {
-                                        case "BS":
-                                            oModel.setProperty("/BSContent", pdfText);
-                                            break;
-                                        case "User":
-                                            oModel.setProperty("/UserContent", pdfText);
-                                            break;
-                                        case "fstoconf":
-                                            oModel.setProperty("/fsconfContent", pdfText);
-                                            break;
-                                        case "fstots":
-                                            oModel.setProperty("/fsContent", pdfText);
-                                            break;
-                                        case "tstocode":
-                                            oModel.setProperty("/tsContent", pdfText);
-                                            break;
-                                        // case "tstocodeGit":
-                                        //     oModel.setProperty("/tsGitContent", pdfText);
-                                        //     break;
-                                        case "coderem":
-                                            oModel.setProperty("/ECCContent", pdfText);
-                                            break;
-                                        case "codesum":
-                                            oModel.setProperty("/CodeContent", pdfText);
-                                            break;
-                                        default:
-                                            break;
-                                    }
+                        aUploadPromises.push(Promise.all([extractPromise, uploadPromise]).then(function (results) {
+                            return { content: results[0], ext: ext };
+                        }));
+                    })(aFiles[fi]);
+                }
 
-                                    oModel.setProperty("/BSContent", pdfText);
-                                    for (const pattern of maliciousPatterns) {
-                                        if (pattern.test(pdfText)) {
-                                            malPat = true;
-                                        }
-                                    }
-                                    for (var i = 0; i < xssPatterns.length; i++) {
-                                        if (xssPatterns[i].pattern.test(pdfText)) {
-                                            xssPat = true;
-                                        }
-                                    }
-                                    if (malPat) {
-                                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially malicious content.");
-                                    }
-                                    if (xssPat) {
-                                        sap.m.MessageBox.warning("Make sure the uploaded file does not contain potentially XSS vulnerable content.");
-                                    }
+                Promise.all(aUploadPromises).then(function (results) {
+                    var textParts = results
+                        .filter(function (r) { return r.ext !== 'png' && r.ext !== 'jpg' && r.ext !== 'jpeg'; })
+                        .map(function (r) { return r.content; });
+                    oModel.setProperty('/BSContent', textParts.join('\n\n'));
 
+                    // Store each file per-tab so uploads from one tab do not leak into others
+                    var sTabKeyMulti = sSelectedIconTab || that.selectedKeyFunct();
+                    var aBasicFiles = aAllNames.map(function (n, idx) {
+                        return {
+                            filename: n,
+                            content: results[idx] ? results[idx].content : "",
+                            tabKey: sTabKeyMulti
+                        };
+                    });
+                    var oFM = that.getView().getModel("fileModel");
+                    var aTabLocal = aBasicFiles; // replace, not concat, so each upload is fresh
+                    oFM.setProperty("/" + sTabKeyMulti + "_local", aTabLocal);
+                    oFM.setProperty("/basicFiles", aTabLocal);
+                    oFM.refresh(true);
 
-                                    busyDialog.close();
-                                }.bind(this));
-                            }.bind(this));
-                        } else {
-                            busyDialog.close();
-                        }
-                    }.bind(this);
-
-                    fileReader.onerror = function (event) {
-                        busyDialog.close();
-                    };
-
-                    fileReader.readAsArrayBuffer(oFile);
-
-
-
-                    //vbox code
+                    var names = aAllNames.join(', ');
+                    that.getView().byId("docNameText").setText(names);
+                    that.getView().byId("docNameText").setVisible(true);
+                    that.getView().byId("viewDocBtn").setVisible(true);
 
                     busyDialog.close();
-                } else if (oFile.type == "image/png" || oFile.type === "image/jpeg" || oFile.type === "image/jpg") {
-
-                    if (deploymentName !== "gpt-4o" &&
-                        !deploymentName.includes("anthropic") &&
-                        !deploymentName.includes("gemini") &&
-                        !deploymentName.includes("mistralai") &&
-                        sSelectedIconTab !== "PCT" &&
-                        sSelectedIconTab !== "BPM") {
-                        oFileUploader.clear();
-                         that.getView().getModel("fileViewModel").setData([]);
-                        that.getView().getModel("fileViewModel").refresh();
-                        busyDialog.close();
-                        sap.m.MessageBox.information(oBundle.getText("imageProcessingSupported"));
-                    } else {
-                        //preview
-                        var reader = new FileReader();
-
-                        reader.onload = function (event) {
-                            var fileDataUrl = event.target.result;
-                            that.getView().getModel("fileViewModel").setProperty("/srcUrl", fileDataUrl);
-                            var imageObject = {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": fileDataUrl
-                                }
-                            };
-                            oModel.setProperty("/BSContent", [imageObject]);
-
-                        };
-
-                        reader.readAsDataURL(oFile);
-                        //vbox code
-                        var that = this;
-                        busyDialog.open();
-                        that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
-                            .then(function (result) {
-                                var fileModel = new sap.ui.model.json.JSONModel(result);
-                                that.getView().setModel(fileModel, "fileModel");
-                                var key = result.objectStoreRefKey || result.ObjectStoreRefKey;
-                                var name = result.fileName || result.FileName || oFile.name;
-                                that.getView().byId("viewDocBtn").setVisible(true);
-                                that.getView().getModel("fileViewModel").setProperty("/Key", key);
-                                that.getView().getModel("fileViewModel").setProperty("/Name", name);
-                                that.getView().byId("docNameText").setVisible(true);
-                                that.getView().byId("docNameText").setText(name);
-                                busyDialog.close();
-                                sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                              ///  that.getFiles();
-                            })
-                            .catch(function (err) {
-                                busyDialog.close();
-                                var msg = "";
-                                try { msg = JSON.parse(err.responseText).error?.message || ""; } catch (e) { }
-                                sap.m.MessageBox.error(msg || "File upload failed");
-                            });
-
-                    }
-                }
-                else if (oFile.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
-                    this.getView().getModel("tcgModel").setProperty("/wordorExcel", "excel");
-                    this.handleExcelUpload(oFile, sSelectedIconTab, this.getView().getModel("appmodel"), aMessages);
-               ////     that.getFiles();
-                }
-                else {
-                    this.handleUploadPress(oFile);
-                 ////   that.getFiles();
-                }
+                    sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+                }).catch(function () {
+                    busyDialog.close();
+                    sap.m.MessageBox.error("File upload failed");
+                });
             }
-            let fileContent = oModel.getProperty("/BSContent");
-
         },
 
         handleExcelUpload: function (oFile, sSelectedIconTab, oModel, aMessages) {
@@ -7665,8 +8766,16 @@ sap.ui.define([
             var that = this;
             that._uploadFileNew(oFile, sSelectedIconTab, that._ProjectDetail)
                 .then(function (result) {
-                    var fileModel = new sap.ui.model.json.JSONModel(result);
-                    that.getView().setModel(fileModel, "fileModel");
+                    // Merge into existing fileModel to preserve /basicFiles + tab-local buckets
+                    let oExistingFM = that.getView().getModel("fileModel");
+                    if (oExistingFM && result && typeof result === "object") {
+                        Object.keys(result).forEach(function (k) {
+                            oExistingFM.setProperty("/" + k, result[k]);
+                        });
+                        oExistingFM.refresh(true);
+                    } else {
+                        that.getView().setModel(new sap.ui.model.json.JSONModel(result || {}), "fileModel");
+                    }
                     var key = result.objectStoreRefKey || result.ObjectStoreRefKey;
                     var name = result.fileName || result.FileName || oFile.name;
 
@@ -7880,8 +8989,88 @@ sap.ui.define([
                 });
         },
 
-        _uploadFileNew: function (oFile, category, project) {
-            var that = this;
+        // _uploadFileNew: function (oFile, category, project) {
+        //     var that = this;
+        //     let oHeader = {
+        //         "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //         "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //         "X-Frame-Options": "DENY",
+        //         "X-XSS-Protection": "0",
+        //         "X-Content-Type-Options": "nosniff"
+        //     };
+        //     return new Promise(function (resolve, reject) {
+        //         try {
+        //             var reader = new FileReader();
+        //             reader.onload = function (e) {
+        //                 var result = e.target.result || "";
+        //                 var base64 = "";
+        //                 if (typeof result === "string" && result.indexOf(",") !== -1) {
+        //                     base64 = result.split(",")[1];
+        //                 } else {
+        //                     // ArrayBuffer -> base64
+        //                     var bytes = new Uint8Array(result);
+        //                     var binary = "";
+        //                     for (var i = 0; i < bytes.byteLength; i++) {
+        //                         binary += String.fromCharCode(bytes[i]);
+        //                     }
+        //                     base64 = btoa(binary);
+        //                 }
+        //                 var payload = {
+        //                     payload: {
+        //                         Category: category,
+        //                         Project: project,
+        //                         userId: that._loggedInUser,
+        //                         fileName: oFile.name,
+        //                         mimeType: oFile.type || "application/octet-stream",
+        //                         fileBase64: base64
+        //                     }
+        //                 };
+        //                 $.ajax({
+        //                     url: that._sBasePath + "/cockpit/uploadFile",
+        //                     type: "POST",
+        //                     headers: oHeader,
+        //                     contentType: "application/json",
+        //                     data: JSON.stringify(payload),
+        //                     success: function (res) {
+        //                         // After successful upload, call getFileDetails
+        //                         var key = (res && (res.objectStoreRefKey || res.ObjectStoreRefKey || res.value?.objectStoreRefKey)) || "";
+        //                         if (key) {
+        //                             var encodedKey = encodeURIComponent(key);
+        //                             $.ajax({
+        //                                 url: that._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')",
+        //                                 type: "GET",
+        //                                 headers: oHeader,
+        //                                 success: function (detailsData) {
+        //                                     res.fileDetails = detailsData;
+        //                                     console.log("File details retrieved:", detailsData);
+        //                                     resolve(res);
+        //                                 },
+        //                                 error: function (detailsErr) {
+        //                                     console.warn("getFileDetails failed, continuing with upload response:", detailsErr);
+        //                                     resolve(res || {});
+        //                                 }
+        //                             });
+        //                         } else {
+        //                             console.log("No objectStoreRefKey found in upload response");
+        //                             resolve(res || {});
+        //                         }
+        //                     },
+        //                     error: function (jqXHR) {
+        //                         reject(jqXHR);
+        //                     }
+        //                 });
+        //             };
+        //             // Read as DataURL to easily extract base64
+        //             reader.readAsDataURL(oFile);
+        //         } catch (err) {
+        //             reject(err);
+        //         }
+        //     });
+        // },
+
+
+        _uploadFileNew: function (oFile, category, project, sExistingKey) {
+            let that = this;
             let oHeader = {
                 "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
                 "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
@@ -7891,71 +9080,92 @@ sap.ui.define([
             };
             return new Promise(function (resolve, reject) {
                 try {
-                    var reader = new FileReader();
+                    let reader = new FileReader();
                     reader.onload = function (e) {
-                        var result = e.target.result || "";
-                        var base64 = "";
-                        if (typeof result === "string" && result.indexOf(",") !== -1) {
-                            base64 = result.split(",")[1];
-                        } else {
-                            // ArrayBuffer -> base64
-                            var bytes = new Uint8Array(result);
-                            var binary = "";
-                            for (var i = 0; i < bytes.byteLength; i++) {
-                                binary += String.fromCharCode(bytes[i]);
-                            }
-                            base64 = btoa(binary);
-                        }
-                        var payload = {
-                            payload: {
-                                Category: category,
-                                Project: project,
-                                userId: that._loggedInUser,
-                                fileName: oFile.name,
-                                mimeType: oFile.type || "application/octet-stream",
-                                fileBase64: base64
-                            }
-                        };
-                        $.ajax({
-                            url: that._sBasePath + "/cockpit/uploadFile",
-                            type: "POST",
-                            headers: oHeader,
-                            contentType: "application/json",
-                            data: JSON.stringify(payload),
-                            success: function (res) {
-                                // After successful upload, call getFileDetails
-                                var key = (res && (res.objectStoreRefKey || res.ObjectStoreRefKey || res.value?.objectStoreRefKey)) || "";
-                                if (key) {
-                                    var encodedKey = encodeURIComponent(key);
-                                    $.ajax({
-                                        url: that._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')",
-                                        type: "GET",
-                                        headers: oHeader,
-                                        success: function (detailsData) {
-                                            res.fileDetails = detailsData;
-                                            console.log("File details retrieved:", detailsData);
-                                            resolve(res);
-                                        },
-                                        error: function (detailsErr) {
-                                            console.warn("getFileDetails failed, continuing with upload response:", detailsErr);
-                                            resolve(res || {});
-                                        }
-                                    });
-                                } else {
-                                    console.log("No objectStoreRefKey found in upload response");
-                                    resolve(res || {});
-                                }
-                            },
-                            error: function (jqXHR) {
-                                reject(jqXHR);
-                            }
-                        });
+                        that._handleReaderLoad(e, oFile, category, project, oHeader, resolve, reject, sExistingKey);
                     };
                     // Read as DataURL to easily extract base64
                     reader.readAsDataURL(oFile);
                 } catch (err) {
                     reject(err);
                 }
+            });
+        },
+
+        // Helper: convert FileReader result (DataURL string or ArrayBuffer) to base64
+        _extractBase64: function (result) {
+            if (typeof result === "string" && result.indexOf(",") !== -1) {
+                return result.split(",")[1];
+            }
+            // ArrayBuffer -> base64
+            let bytes = new Uint8Array(result);
+            let binary = "";
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        },
+
+        // Helper: build upload request payload
+        _buildUploadPayload: function (base64, oFile, category, project, sExistingKey) {
+            var oInnerPayload = {
+                Category: category,
+                Project: project,
+                userId: this._loggedInUser,
+                fileName: oFile.name,
+                mimeType: oFile.type || "application/octet-stream",
+                fileBase64: base64
+            };
+            // Pass existing key so backend can overwrite the file in-place
+            if (sExistingKey) {
+                oInnerPayload.existingKey = sExistingKey;
+                oInnerPayload.overwrite = true;
+            }
+            return { payload: oInnerPayload };
+        },
+
+        // Helper: fetch file details after successful upload
+        _fetchFileDetails: function (key, res, oHeader, resolve) {
+            let encodedKey = encodeURIComponent(key);
+            $.ajax({
+                url: this._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')",
+                type: "GET",
+                headers: oHeader,
+                success: function (detailsData) {
+                    res.fileDetails = detailsData;
+                    console.log("File details retrieved:", detailsData);
+                    resolve(res);
+                },
+                error: function (detailsErr) {
+                    console.warn("getFileDetails failed, continuing with upload response:", detailsErr);
+                    resolve(res || {});
+                }
+            });
+        },
+
+        // Helper: handle successful upload response
+        _handleUploadSuccess: function (res, oHeader, resolve) {
+            let key = (res && (res.objectStoreRefKey || res.ObjectStoreRefKey || res.value?.objectStoreRefKey)) || "";
+            if (key) {
+                this._fetchFileDetails(key, res, oHeader, resolve);
+            } else {
+                console.log("No objectStoreRefKey found in upload response");
+                resolve(res || {});
+            }
+        },
+
+        // Helper: handle FileReader onload event
+        _handleReaderLoad: function (e, oFile, category, project, oHeader, resolve, reject, sExistingKey) {
+            let that = this;
+            let base64 = this._extractBase64(e.target.result || "");
+            $.ajax({
+                url: this._sBasePath + "/cockpit/uploadFile",
+                type: "POST",
+                headers: oHeader,
+                contentType: "application/json",
+                data: JSON.stringify(this._buildUploadPayload(base64, oFile, category, project, sExistingKey)),
+                success: function (res) { that._handleUploadSuccess(res, oHeader, resolve); },
+                error: function (jqXHR) { reject(jqXHR); }
             });
         },
 
@@ -8213,6 +9423,85 @@ sap.ui.define([
             this.getView().byId("editPrm").setVisible(false);
             var sSelectedIconTab = this.selectedKeyFunct();
             var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+        },
+
+        /**
+         * Adds an entry to the History dialog for the Retro Documentation tab.
+         * Retro doesn't have a free-text prompt, so we build a synthetic
+         * "prompt" describing the requested action (object + mode + docs) and
+         * store the generated TS / FS markdown as the AI response so users
+         * can review it later via the History (clock) icon.
+         *
+         * @param {object} oInfo
+         * @param {string} oInfo.objectName    ABAP object name (e.g. ZFOO_PROG)
+         * @param {string} oInfo.objectType    ABAP object type (PROG / CLAS / ...)
+         * @param {string} oInfo.mode          "create" | "update"
+         * @param {string} oInfo.tsContent     Generated Technical Spec markdown (may be empty)
+         * @param {string} oInfo.fsContent     Generated Functional Spec markdown (may be empty)
+         * @param {string} [oInfo.transportRequest]  Optional TR reference
+         */
+        _addToRetroHistoryLog: function (oInfo) {
+            try {
+                oInfo = oInfo || {};
+                var sObjectName = oInfo.objectName || "";
+                var sObjectType = oInfo.objectType || "";
+                var sMode = oInfo.mode === "update" ? "Update Existing" : "Create New";
+                var sTs = oInfo.tsContent || "";
+                var sFs = oInfo.fsContent || "";
+                var sTR = oInfo.transportRequest || "";
+
+                // Nothing generated - don't pollute history
+                if (!sTs && !sFs) { return; }
+
+                var aDocs = [];
+                if (sTs) { aDocs.push("Technical Specification"); }
+                if (sFs) { aDocs.push("Functional Specification"); }
+
+                var sPrompt =
+                    "Retro Documentation - " + sMode + "\n" +
+                    "Object: " + sObjectName + " (" + sObjectType + ")\n" +
+                    "Documents: " + (aDocs.join(", ") || "None") +
+                    (sTR ? "\nTransport Request: " + sTR : "");
+
+                // Combine TS + FS markdown for the response side. Use clear
+                // section headings so the History dialog renders them nicely
+                // through the mdToHTML formatter.
+                var aRespParts = [];
+                if (sTs) {
+                    aRespParts.push("# Technical Specification");
+                    aRespParts.push(sTs);
+                }
+                if (sFs) {
+                    if (aRespParts.length) { aRespParts.push(""); }
+                    aRespParts.push("# Functional Specification");
+                    aRespParts.push(sFs);
+                }
+                var sResp = aRespParts.join("\n\n");
+
+                var oHistModel = this.getOwnerComponent().getModel("historyModel");
+                if (!oHistModel) { return; }
+
+                var aHist = oHistModel.getProperty("/historyData") || [];
+                aHist.push({
+                    promptHistory: sPrompt,
+                    aiResponseHistory: sResp
+                });
+                oHistModel.setProperty("/historyData", aHist);
+                oHistModel.refresh(true);
+
+                // Also mirror into the per-tab tabState so switching away and
+                // back to the Retro tab restores the same history entries.
+                var oTabState = this.getView().getModel("tabState");
+                if (oTabState) {
+                    var oTabs = oTabState.getProperty("/tabs") || {};
+                    oTabs["retroDocKey"] = oTabs["retroDocKey"] || {};
+                    oTabs["retroDocKey"].histData = aHist.slice();
+                    oTabState.setProperty("/tabs", oTabs);
+                }
+            } catch (e) {
+                // History logging must never break the pipeline
+                console.warn("Retro history log failed:", e && e.message);
+            }
         },
 
         reUploadContentResponse: async function () {
@@ -9833,7 +11122,176 @@ sap.ui.define([
             });
         },
         //helpers for save and restore
-        _saveTabState: function (sKey) {
+        // _saveTabState: function (sKey) {
+        //     if (!sKey) { return; }
+
+        //     var oView = this.getView();
+        //     var oStateModel = oView.getModel("tabState");
+        //     var oTabs = oStateModel.getProperty("/tabs") || {};
+        //     // keep previous state (important to preserve hasDetail flag)
+        //     var oPrevState = oTabs[sKey] || {};
+        //     // --- RAG ---
+        //     var oRagModel = this.getView().getModel("ragModel");
+        //     var aMsgModel = this.getView().getModel("msgModel");
+        //     var oState = {
+        //         excOnce: this.executedOnce,
+        //         // System message
+        //         systemKey: oView.byId("multiInputSystem") ? oView.byId("multiInputSystem").getValue() : "",
+        //         systemText: oView.byId("descTxtArea") ? oView.byId("descTxtArea").getValue() : "",
+        //         systemTextEditable: oView.byId("descTxtArea") ? oView.byId("descTxtArea").getEditable() : false,
+
+        //         // Prompt
+        //         promptKey: oView.byId("multiInputPrompt") ? oView.byId("multiInputPrompt").getValue() : "",
+        //         promptText: oView.byId("descTxtAreaPrompt") ? oView.byId("descTxtAreaPrompt").getValue() : "",
+        //         promptEditable: oView.byId("descTxtAreaPrompt") ? oView.byId("descTxtAreaPrompt").getEditable() : false,
+        //         // File select
+        //         docKey: oView.byId("selDocList") ? oView.byId("selDocList").getSelectedKey() : "",
+        //         docNameText: oView.byId("docNameText") ? oView.byId("docNameText").getText() : "",
+        //         docNameVisible: oView.byId("docNameText") ? oView.byId("docNameText").getVisible() : false,
+        //         viewDocVisible: oView.byId("viewDocBtn") ? oView.byId("viewDocBtn").getVisible() : false,
+
+        //         //add System
+        //         addSysLabel: oView.byId("addSysPart") ? oView.byId("addSysPart").getVisible() : false,
+        //         // addVb: oView.byId("vbxSysAdd") ? oView.byId("vbxSysAdd").getVisible() : false,
+        //         // addSysInfo:oView.byId("infoSys") ? oView.byId("infoSys").getVisible() : false,
+        //         addSys1st: oView.byId("addSysPrefix") ? oView.byId("addSysPrefix").getValue() : "",
+        //         addSys1stVis: oView.byId("addSysPrefix") ? oView.byId("addSysPrefix").getVisible() : false,
+        //         editSysBtn: oView.byId("editSys") ? oView.byId("editSys").getVisible() : false,
+        //         saveSysBtn: oView.byId("saveSysBtn") ? oView.byId("saveSysBtn").getVisible() : false,
+        //         // addSys2nd: oView.byId("addSysSuffix") ? oView.byId("addSysSuffix").getValue() : "",
+        //         // add Prompt
+        //         addPrLabel: oView.byId("addPrPart") ? oView.byId("addPrPart").getVisible() : false,
+        //         addPromptName: oView.byId("addPrName") ? oView.byId("addPrName").getValue() : "",
+        //         addPromptNameVisible: oView.byId("addPrName") ? oView.byId("addPrName").getVisible() : false,
+        //         editPrmBtn: oView.byId("editPrm") ? oView.byId("editPrm").getVisible() : false,
+        //         cancelPrm: oView.byId("cancelPrmBtn") ? oView.byId("cancelPrmBtn").getVisible() : false,
+        //         savePrmBtn: oView.byId("savePrm") ? oView.byId("savePrm").getVisible() : false,
+        //         /////tcg and bpm
+        //         sapDocSelected: oView.byId("sapDocSel") ? oView.byId("sapDocSel").getValue() : "",
+        //         tcTypeSelected: oView.byId("tcTypeSel") ? oView.byId("tcTypeSel").getValue() : "",
+        //         /////DocGen - Document Type
+        //         docTypeSelected: oView.byId("docTypeSelector") ? oView.byId("docTypeSelector").getSelectedKey() : "",
+        //         ///Rag
+        //         ragSwitchState: oView.byId("RagSwitch") ? oView.byId("RagSwitch").getSelected() : false,
+        //         selDocListKeyView: oView.byId("SelDocList") ? oView.byId("SelDocList").getSelectedKey() : "",
+        //         docNameTextViewVisible: oView.byId("DocNameText") ? oView.byId("DocNameText").getVisible() : false,
+
+        //         /// parameter settings
+        //         parsett: this.savedSettings || false,
+        //         savedTemperature: this._savedTemperature,
+        //         savedTopP: this._savedTopP,
+        //         maxResponse: this._maxResponse,
+        //         freqPenalty: this._freqPenalty,
+        //         prePenalty: this._prePenalty,
+        //         contextHist: this._contextHist,
+        //         // --- New RAG model-backed keys ---
+        //         ragEnabled: (oRagModel) ? !!oRagModel.getProperty("/currentRagEnabled") : false,
+        //         ///  aRagFiles: (oRagModel) ? oRagModel.getProperty("/ragFiles") : [],
+        //         aRagFiles: (oRagModel) ? JSON.parse(JSON.stringify(oRagModel.getProperty("/ragFiles") || [])) : [],
+        //         ///value states
+        //         valStateSys: oView.byId("multiInputSystem") ? oView.byId("multiInputSystem").getValueState() : "None",
+        //         valStatePrompt: oView.byId("multiInputPrompt") ? oView.byId("multiInputPrompt").getValueState() : "None",
+        //         valStateUpl: oView.byId("selDocList") ? oView.byId("selDocList").getValueState() : "None",
+        //         /////git tab
+        //         selectedBranch: oView.byId("branchSel") ? oView.byId("branchSel").getSelectedKey() : "",
+        //         gitTreeVis: oView.byId("gitFileTree") ? oView.byId("gitFileTree").getVisible() : false,
+        //         //     gitGitfileViewVis: oView.byId("viewGitFilebtn") ? oView.byId("viewGitFilebtn").getVisible() : false,
+        //         templateFileName: oView.byId("TemplateUploader") ? oView.byId("TemplateUploader").getValue() : "",
+        //         templateKey: this._selectedTemplateKey || "",
+        //         templateNameText: oView.byId("selectedTemplateName") ? oView.byId("selectedTemplateName").getText() : "",
+        //         templateInfoVisible: oView.byId("templateInfoBox") ? oView.byId("templateInfoBox").getVisible() : false,
+        //         templateToggleState: oView.byId("templateToggle") ? oView.byId("templateToggle").getState() : false,
+        //         // MCP state per tab
+        //         mcpEnabled: this.getView().getModel("viewModel").getProperty("/useMCP") || false,
+        //         mcpSelectedTool: this.getView().getModel("viewModel").getProperty("/selectedMCPTool") || "",
+        //         mcpSelectedAbapObject: JSON.parse(JSON.stringify(this.getView().getModel("viewModel").getProperty("/selectedAbapObject") || {})),
+        //     };
+        //     // STEP 2: also store detail response for this tab
+        //     var oAiRespModel = this.getOwnerComponent().getModel("airesponseDetailModel");
+        //     if (oAiRespModel) {
+        //         oState.detailResp = oAiRespModel.getProperty("/resp") || "";
+        //         oState.detailSys = oAiRespModel.getProperty("/sysMsg") || "";
+        //         // oState.before = oAiRespModel.getProperty("/beforeResult") || "";
+        //         // oState.code = oAiRespModel.getProperty("/codeResult") || "";
+        //         // oState.after = oAiRespModel.getProperty("/afterResult") || "";
+        //         // oState.lang = oAiRespModel.getProperty("/codeType") || "";
+        //         oState.codeEdResp = oAiRespModel.getProperty("/multiCE") || [];
+        //         oState.btnVis = oAiRespModel.getProperty("/downloadVis") || false;
+        //         oState.codeeditorVisible = oAiRespModel.getProperty("/codeEdVis") || false;
+        //         oState.citation = oAiRespModel.getProperty("/citationArr") || [];
+        //     }
+        //     var histM = this.getOwnerComponent().getModel("historyModel");
+        //     if (histM) {
+        //         oState.histData = histM.getProperty("/historyData") || [];
+        //     }
+
+        //     // var ragModel = this.getOwnerComponent().getModel("ragModel");
+        //     // if (ragModel) {
+        //     //     oState.citation = ragModel.getProperty("/citationArr") || [];
+        //     // }
+
+        //     ////msgmodel for reupload
+        //     if (aMsgModel) {
+        //         oState.updMsgs = aMsgModel.getProperty("/aMsg") || [];
+        //     }
+
+        //     var TokenModel = this.getOwnerComponent().getModel("TokenLimit");
+        //     if (TokenModel) {
+        //         oState.currUsedTokens = TokenModel.getProperty("/usedToken");
+        //     }
+        //     ////ai models list
+        //     var oViewModel = this.getView().getModel("viewModel");
+        //     if (oViewModel) {
+        //         oState.aiModels = oViewModel.getProperty("/gptModels");
+        //     }
+        //     // keep the hasDetail flag if it existed before
+        //     if (oPrevState.hasDetail !== undefined) {
+        //         if (oState.detailResp == "") {
+        //             oState.hasDetail = false;
+        //         } else {
+        //             oState.hasDetail = oPrevState.hasDetail;
+        //         }
+        //     }
+
+
+        //     var oAppModel = this.getView().getModel("appmodel");
+        //     var oFileVM = this.getView().getModel("fileViewModel");
+        //     if (oFileVM) {
+               
+        //         oState.fileKey = oFileVM.getProperty("/Key") || "";
+        //         oState.fileName = oFileVM.getProperty("/Name") || "";
+        //         oState.fileSrcUrl = oFileVM.getProperty("/srcUrl") || "";
+        //         oState.fileViewContent = oFileVM.getProperty("/content") || "";
+        //     }
+        //     // Save BSContent text & fileViewModel object for this tab
+        //     oState.BSContent = oAppModel.getProperty("/BSContent") ?? "";
+        //     // oState.fileViewData = oFileVM.getData() ?? {};
+
+        //     // ── Retro Documentation: save full model snapshot ──
+        //     if (sKey === "retroDocKey") {
+        //         var oRetroDocModelSave = this.getView().getModel("retroDocModel");
+        //         if (oRetroDocModelSave) {
+        //             oState.retroDocData = JSON.parse(JSON.stringify(oRetroDocModelSave.getData()));
+        //         }
+        //         var oDefModelSave = this.getView().getModel();
+        //         if (oDefModelSave) {
+        //             oState.retroLogEntries = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/logEntries") || []));
+        //             oState.retroDownloadItems = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/downloadItems") || []));
+        //             oState.retroLogPanelVisible = oDefModelSave.getProperty("/logPanelVisible") !== undefined ? oDefModelSave.getProperty("/logPanelVisible") : true;
+        //             oState.retroDlPanelVisible = !!oDefModelSave.getProperty("/downloadPanelVisible");
+        //             oState.retroPipelineVisible = !!oDefModelSave.getProperty("/agentPipelineVisible");
+        //             oState.retroPipelineStatus = oDefModelSave.getProperty("/agentPipelineStatus") || "In Progress";
+        //             oState.retroPipelineComplete = !!oDefModelSave.getProperty("/agentPipelineComplete");
+        //             oState.retroAgentSteps = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentSteps") || []));
+        //             oState.retroAgentConnectors = JSON.parse(JSON.stringify(oDefModelSave.getProperty("/agentConnectors") || []));
+        //         }
+        //     }
+
+        //     oTabs[sKey] = oState;
+        //     oStateModel.setProperty("/tabs", oTabs);
+        // },
+
+         _saveTabState: function (sKey) {
             if (!sKey) { return; }
 
             var oView = this.getView();
@@ -9968,15 +11426,22 @@ sap.ui.define([
             var oAppModel = this.getView().getModel("appmodel");
             var oFileVM = this.getView().getModel("fileViewModel");
             if (oFileVM) {
-               
+
                 oState.fileKey = oFileVM.getProperty("/Key") || "";
                 oState.fileName = oFileVM.getProperty("/Name") || "";
                 oState.fileSrcUrl = oFileVM.getProperty("/srcUrl") || "";
                 oState.fileViewContent = oFileVM.getProperty("/content") || "";
             }
             // Save BSContent text & fileViewModel object for this tab
-            oState.BSContent = oAppModel.getProperty("/BSContent") ?? "";
+            oState.BSContent = oAppModel ? (oAppModel.getProperty("/BSContent") ?? "") : "";
             // oState.fileViewData = oFileVM.getData() ?? {};
+
+            // Save the tab-local file list so the file row(s) restore when switching back
+            var oFMSave = this.getView().getModel("fileModel");
+            if (oFMSave) {
+                // Deep-copy so later mutations to the model's array don't affect the saved snapshot
+                oState.multiFile = JSON.parse(JSON.stringify(oFMSave.getProperty("/basicFiles") || []));
+            }
 
             // ── Retro Documentation: save full model snapshot ──
             if (sKey === "retroDocKey") {
@@ -10194,6 +11659,12 @@ sap.ui.define([
                         oVM.setProperty("/selectedMCPTool", "");
                         oVM.setProperty("/selectedAbapObject", {});
                     }
+                    // First visit to this tab – clear file list so files from other tabs don't show
+                    var oFMClearFirst = this.getView().getModel("fileModel");
+                    if (oFMClearFirst) {
+                        oFMClearFirst.setProperty("/basicFiles", []);
+                        oFMClearFirst.refresh(true);
+                    }
                     return;
                     return;
                 }
@@ -10322,6 +11793,13 @@ sap.ui.define([
                     histM.setProperty("/historyData", oState.histData || [])
                     // histM.setProperty("/aiResponseHistory", oState.histAIResp || "");
                 }
+                // Restore the tab-local file list so basicFiles only shows files for this tab
+                var oFMRestore = this.getView().getModel("fileModel");
+                if (oFMRestore) {
+                    oFMRestore.setProperty("/basicFiles",
+                        Array.isArray(oState.multiFile) ? JSON.parse(JSON.stringify(oState.multiFile)) : []);
+                    oFMRestore.refresh(true);
+                }
                 /////RAG
                 // var ragModel = this.getOwnerComponent().getModel("ragModel");
                 // if (ragModel) {
@@ -10430,6 +11908,437 @@ sap.ui.define([
                 }
             }
         },
+        
+        // _restoreTabState: function (sKey) {
+        //     var oView = this.getView();
+        //     var oStateModel = oView.getModel("tabState");
+        //     var oTabs = oStateModel.getProperty("/tabs") || {};
+        //     var oState = oTabs[sKey];
+        //     var oViewModel = this.getView().getModel("viewModel");
+        //     var oDetailModel = this.getOwnerComponent().getModel("airesponseDetailModel");
+        //     var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+
+        //     // ── Retro Documentation: restore full model snapshot and exit early ──
+        //     if (sKey === "retroDocKey") {
+        //         if (oState && oState.retroDocData) {
+        //             var oRetroDocModelR = this.getView().getModel("retroDocModel");
+        //             if (oRetroDocModelR) {
+        //                 var oRD = oState.retroDocData;
+        //                 oRD.isRetroDocVisible = true; // always visible when on this tab
+        //                 oRetroDocModelR.setData(oRD);
+        //                 oRetroDocModelR.refresh(true);
+        //             }
+        //             var oDefModelR = this.getView().getModel();
+        //             if (oDefModelR) {
+        //                 oDefModelR.setProperty("/logEntries", oState.retroLogEntries || []);
+        //                 oDefModelR.setProperty("/downloadItems", oState.retroDownloadItems || []);
+        //                 oDefModelR.setProperty("/logPanelVisible", oState.retroLogPanelVisible !== undefined ? oState.retroLogPanelVisible : true);
+        //                 oDefModelR.setProperty("/downloadPanelVisible", !!oState.retroDlPanelVisible);
+        //                 oDefModelR.setProperty("/agentPipelineVisible", !!oState.retroPipelineVisible);
+        //                 oDefModelR.setProperty("/agentPipelineStatus", oState.retroPipelineStatus || "In Progress");
+        //                 oDefModelR.setProperty("/agentPipelineComplete", !!oState.retroPipelineComplete);
+        //                 oDefModelR.setProperty("/agentSteps", oState.retroAgentSteps || []);
+        //                 oDefModelR.setProperty("/agentConnectors", oState.retroAgentConnectors || []);
+        //                 oDefModelR.refresh(true);
+        //             }
+        //         }
+        //         return; // skip regular form-field restore for retro tab
+        //     }
+
+        //     if (!oState || !oState.hasDetail) {
+        //         oDetailModel.setProperty("/resp", "");
+        //         oDetailModel.setProperty("/sysMsg", "");
+        //         // oDetailModel.getProperty("/beforeResult", "");
+        //         // oDetailModel.getProperty("/codeResult", "");
+        //         // oDetailModel.getProperty("/codeType", "");
+        //         // oDetailModel.getProperty("/afterResult", "");
+        //         oDetailModel.getProperty("/multiCE", []);
+        //         oDetailModel.getProperty("/downloadVis", false);
+        //         oDetailModel.getProperty("/codeEdVis", false);
+        //         oDetailModel.refresh(true);
+        //         oDetailModel.setProperty("/citationArr", []);
+        //     }
+        //     if (popUpSel !== "user" && popUpSel !== "admin" && popUpSel !== "knowlB" && popUpSel !== "promptlibpr" && popUpSel !== "feedback") {
+        //         if (!oState) {
+        //             // First time on this tab -> clear the form so it doesn't show previous tab's data
+        //             ////   this.executedOnce=false;
+        //             if (oView.byId("multiInputSystem")) {
+        //                 oView.byId("multiInputSystem").setValue("");
+        //             }
+        //             if (oView.byId("descTxtArea")) {
+        //                 oView.byId("descTxtArea").setValue("");
+        //             }
+        //             if (oView.byId("descTxtArea")) {
+        //                 oView.byId("descTxtArea").setEditable(false);
+        //             }
+        //             if (oView.byId("multiInputPrompt")) {
+        //                 oView.byId("multiInputPrompt").setValue("");
+        //             }
+        //             if (oView.byId("descTxtAreaPrompt")) {
+        //                 oView.byId("descTxtAreaPrompt").setValue("");
+        //             }
+        //             if (oView.byId("descTxtAreaPrompt")) {
+        //                 oView.byId("descTxtAreaPrompt").setEditable(false);
+        //             }
+        //             if (oView.byId("selDocList")) {
+        //                 oView.byId("selDocList").setSelectedKey("");
+        //             }
+        //             if (oView.byId("docNameText")) {
+        //                 oView.byId("docNameText").setText("").setVisible(false);
+        //             }
+        //             if (oView.byId("viewDocBtn")) {
+        //                 oView.byId("viewDocBtn").setVisible(false);
+        //             }
+        //             //add System
+        //             // if (oView.byId("vbxSysAdd")) {
+        //             //     oView.byId("vbxSysAdd").setVisible(false);
+        //             // }
+        //             if (oView.byId("addSysPrefix")) {
+        //                 oView.byId("addSysPrefix").setVisible(false);
+        //             }
+        //             if (oView.byId("addSysPart")) {
+        //                 oView.byId("addSysPart").setVisible(false);
+        //             }
+        //             if (oView.byId("editSys")) {
+        //                 oView.byId("editSys").setVisible(false);
+        //             }
+        //             if (oView.byId("saveSysBtn")) {
+        //                 oView.byId("saveSysBtn").setVisible(false);
+        //             }
+        //             //  if (oView.byId("infoSys")) {
+        //             //     oView.byId("infoSys").setVisible(false);
+        //             // }
+        //             //AddPrompt
+        //             if (oView.byId("addPrPart")) {
+        //                 oView.byId("addPrPart").setVisible(false);
+        //             }
+        //             if (oView.byId("addPrName")) {
+        //                 oView.byId("addPrName").setValue("").setVisible(false);
+        //             }
+        //             if (oView.byId("editPrm")) {
+        //                 oView.byId("editPrm").setVisible(false);
+        //             }
+        //             if (oView.byId("cancelPrmBtn")) {
+        //                 oView.byId("cancelPrmBtn").setVisible(false);
+        //             }
+        //             if (oView.byId("savePrm")) {
+        //                 oView.byId("savePrm").setVisible(false);
+        //             }
+        //             ////rag
+        //             var oRagModel = this.getView().getModel("ragModel");
+        //             if (oRagModel) {
+        //                 oRagModel.setProperty("/currentRagEnabled", false);
+        //                 oRagModel.setProperty("/ragFiles", []);
+        //                 oRagModel.refresh(true);
+        //             }
+        //             // var ragModel = this.getOwnerComponent().getModel("ragModel");
+        //             // if (ragModel) {
+        //             //     ragModel.setProperty("/citationArr", []);
+        //             //     ragModel.refresh(true);
+        //             // }
+        //             var aMsgModel = this.getView().getModel("msgModel");
+        //             if (aMsgModel) {
+        //                 aMsgModel.setProperty("/aMsg", []);
+        //                 aMsgModel.refresh(true);
+        //             }
+
+        //             if (oView.byId("RagSwitch")) {
+        //                 oView.byId("RagSwitch").setSelected(false);
+        //             }
+        //             if (oView.byId("ragFileList")) {
+        //                 oView.byId("ragFileList").removeSelections(true);
+
+        //             }
+        //             ////value state
+        //             if (oView.byId("multiInputSystem")) {
+        //                 oView.byId("multiInputSystem").setValueState("None");
+        //             }
+        //             if (oView.byId("multiInputPrompt")) {
+        //                 oView.byId("multiInputPrompt").setValueState("None");
+        //             }
+        //             if (oView.byId("selDocList")) {
+        //                 oView.byId("selDocList").setValueState("None");
+        //             }
+        //             ////ai models list
+        //             var oViewModel = this.getView().getModel("viewModel");
+        //             if (oViewModel) {
+        //                 oViewModel.setProperty("/gptModels", this.allAIModels);
+        //                 oViewModel.refresh(true);
+        //             }
+        //             //parameters settings
+        //             if (this.savedSettings == false) {
+        //                 this.settingsRefresh();
+        //             }
+        //             //// git tab
+        //             if (oView.byId("gitTreeVis")) {
+        //                 oView.byId("gitTreeVis").setVisible(false);
+        //             }
+
+        //             oView.getModel("viewModel").setProperty("/templateToggle", false);
+        //             // if (oView.byId("viewGitFilebtn")) {
+        //             //     oView.byId("viewGitFilebtn").setVisible(false);
+        //             // }
+        //             if (oView.byId("TemplateUploader")) {
+        //                 oView.byId("TemplateUploader").setValue("");
+        //             }
+
+        //             this._selectedTemplateKey = "";
+
+        //             if (oView.byId("templateInfoBox")) {
+        //                 oView.byId("templateInfoBox").setVisible(false);
+        //             }
+
+        //             if (oView.byId("selectedTemplateName")) {
+        //                 oView.byId("selectedTemplateName").setText("");
+        //             }
+        //             if (oView.byId("templateToggle")) {
+        //                 oView.byId("templateToggle").setState(false);
+        //             }
+        //             // Reset MCP state for first-time visit to this tab (avoid leakage from previous tab)
+        //             var oVM = this.getView().getModel("viewModel");
+        //             if (oVM) {
+        //                 oVM.setProperty("/useMCP", false);
+        //                 oVM.setProperty("/selectedMCPTool", "");
+        //                 oVM.setProperty("/selectedAbapObject", {});
+        //             }
+        //             return;
+        //             return;
+        //         }
+
+        //         var oAppModel = this.getView().getModel("appmodel");
+        //         var oFileVM = this.getView().getModel("fileViewModel");
+
+        //         if ("BSContent" in oState && oAppModel) {
+        //             oAppModel.setProperty("/BSContent", oState.BSContent ?? "");
+        //         }
+
+        //         if (oFileVM) {
+
+        //             oFileVM.setProperty("/Key", oState.fileKey || "");
+        //             oFileVM.setProperty("/Name", oState.fileName || "");
+        //             oFileVM.setProperty("/srcUrl", oState.fileSrcUrl || "");
+        //             oFileVM.setProperty("/content", oState.fileViewContent || "");
+        //         }
+        //         // ---- if we have saved state, apply it ----
+        //         this.executedOnce = oState.excOnce || false;
+        //         // System message
+        //         if (oView.byId("multiInputSystem")) {
+        //             oView.byId("multiInputSystem").setValue(oState.systemKey || "");
+        //         }
+        //         if (oView.byId("descTxtArea")) {
+        //             oView.byId("descTxtArea").setValue(oState.systemText || "");
+        //         }
+        //         if (oView.byId("descTxtArea")) {
+        //             oView.byId("descTxtArea").setEditable(oState.systemTextEditable || false);
+        //         }
+
+        //         // Prompt
+        //         if (oView.byId("multiInputPrompt")) {
+        //             oView.byId("multiInputPrompt").setValue(oState.promptKey || "");
+        //         }
+        //         if (oView.byId("descTxtAreaPrompt")) {
+        //             oView.byId("descTxtAreaPrompt").setValue(oState.promptText || "");
+        //         }
+        //         if (oView.byId("descTxtAreaPrompt")) {
+        //             oView.byId("descTxtAreaPrompt").setEditable(oState.promptEditable || false);
+        //         }
+        //         // File select
+        //         if (oView.byId("selDocList")) {
+        //             oView.byId("selDocList").setSelectedKey(oState.docKey || "");
+        //         }
+        //         if (oView.byId("docNameText")) {
+        //             oView.byId("docNameText")
+        //                 .setText(oState.docNameText || "")
+        //                 .setVisible(!!oState.docNameVisible);
+        //         }
+        //         if (oView.byId("viewDocBtn")) {
+        //             oView.byId("viewDocBtn").setVisible(!!oState.viewDocVisible);
+        //         }
+
+        //         //Add System
+        //         // if (oView.byId("vbxSysAdd")) {
+        //         //     oView.byId("vbxSysAdd").setVisible(oState.addVb || false);
+        //         // }
+
+        //         if (oView.byId("addSysPart")) {
+        //             oView.byId("addSysPart").setVisible(oState.addSysLabel || false);
+        //         }
+        //         if (oView.byId("addSysPrefix")) {
+        //             oView.byId("addSysPrefix").setValue(oState.addSys1st || "");
+        //         }
+        //         if (oView.byId("addSysPrefix")) {
+        //             oView.byId("addSysPrefix").setVisible(oState.addSys1stVis || false);
+        //         }
+        //         if (oView.byId("editSys")) {
+        //             oView.byId("editSys").setVisible(oState.editSysBtn || false);
+        //         }
+
+        //         if (oView.byId("saveSysBtn")) {
+        //             oView.byId("saveSysBtn").setVisible(oState.saveSysBtn || false);
+        //         }
+        //         //  if (oView.byId("addSysSuffix")) {
+        //         //     oView.byId("addSysSuffix").setValue(oState.addSys2nd||"");
+        //         // }
+
+        //         //Add Prompt
+        //         if (oView.byId("addPrPart")) {
+        //             oView.byId("addPrPart").setVisible(oState.addPrLabel || false);
+        //         }
+        //         if (oView.byId("addPrName")) {
+        //             oView.byId("addPrName").setValue(oState.addPromptName || "").setVisible(oState.addPromptNameVisible || false);
+        //         }
+        //         if (oView.byId("editPrm")) {
+        //             oView.byId("editPrm").setVisible(oState.editPrmBtn || false);
+        //         }
+        //         if (oView.byId("cancelPrmBtn")) {
+        //             oView.byId("cancelPrmBtn").setVisible(oState.cancelPrm || false);
+        //         }
+        //         if (oView.byId("savePrm")) {
+        //             oView.byId("savePrm").setVisible(oState.savePrmBtn || false);
+        //         }
+        //         ////bpm and tcg
+        //         if (oView.byId("sapDocSel")) {
+        //             oView.byId("sapDocSel").setValue(oState.sapDocSelected || "");
+        //         }
+        //         if (oView.byId("tcTypeSel")) {
+        //             oView.byId("tcTypeSel").setValue(oState.tcTypeSelected || "");
+        //         }
+        //         ////DocGen - Document Type
+        //         if (oView.byId("docTypeSelector")) {
+        //             oView.byId("docTypeSelector").setSelectedKey(oState.docTypeSelected || "");
+        //         }
+        //         // STEP 3: restore detail model for DetailDetail
+        //         var oAiRespModel = this.getOwnerComponent().getModel("airesponseDetailModel");
+        //         if (oAiRespModel) {
+        //             oAiRespModel.setProperty("/resp", oState.detailResp || "");
+        //             oAiRespModel.setProperty("/sysMsg", oState.detailSys || "");
+        //             // oAiRespModel.setProperty("/beforeResult", oState.before || "");
+        //             // oAiRespModel.setProperty("/codeResult", oState.code || "");
+        //             // oAiRespModel.setProperty("/afterResult", oState.after || "");
+        //             // oAiRespModel.setProperty("/codeType", oState.lang || "");
+        //             oAiRespModel.setProperty("/downloadVis", oState.btnVis || false);
+        //             oAiRespModel.setProperty("/multiCE", oState.codeEdResp);
+        //             oAiRespModel.setProperty("/codeEdVis", oState.codeeditorVisible || false);
+        //             oAiRespModel.setProperty("/citationArr", oState.citation || []);
+        //             oAiRespModel.refresh(true);
+
+        //         }
+        //         var histM = this.getOwnerComponent().getModel("historyModel");
+        //         if (histM) {
+        //             //histM.setProperty("/promptHistory", oState.histPrompt || "");
+        //             histM.setProperty("/historyData", oState.histData || [])
+        //             // histM.setProperty("/aiResponseHistory", oState.histAIResp || "");
+        //         }
+        //         /////RAG
+        //         // var ragModel = this.getOwnerComponent().getModel("ragModel");
+        //         // if (ragModel) {
+        //         //     ragModel.setProperty("/citationArr", oState.citation || []);
+        //         //     //  ragModel.refresh(true);
+        //         // }
+        //         var oRagModel = this.getView().getModel("ragModel");
+        //         if (oRagModel) {
+        //             oRagModel.setProperty("/currentRagEnabled", oState.ragEnabled);
+        //             ///oRagModel.setProperty("/ragFiles", Array.isArray(oState.ragFiles) ? oState.ragFiles : []);
+        //             oRagModel.setProperty("/ragFiles",
+        //                 Array.isArray(oState.aRagFiles) ? JSON.parse(JSON.stringify(oState.aRagFiles)) : []
+        //             );
+        //             oRagModel.refresh(true);
+        //         }
+
+        //         var aMsgModel = this.getView().getModel("msgModel");
+        //         if (aMsgModel) {
+        //             aMsgModel.setProperty("/aMsg", oState.updMsgs);
+        //             aMsgModel.refresh(true);
+        //         }
+
+        //         var TokenModel = this.getOwnerComponent().getModel("TokenLimit");
+        //         if (TokenModel) {
+        //             TokenModel.setProperty("/usedToken", oState.currUsedTokens || "");
+        //             TokenModel.refresh(true);
+        //         }
+        //         ////ai models list
+        //         var oViewModel = this.getView().getModel("viewModel");
+        //         if (oViewModel) {
+        //             oViewModel.setProperty("/gptModels", oState.aiModels);
+        //             oViewModel.refresh(true);
+        //         }
+        //         if (oState.currUsedTokens == "") {
+        //             this.getView().getModel("TokenLimit").setProperty("/tokenVis", false);
+        //         } else {
+        //             this.getView().getModel("TokenLimit").setProperty("/tokenVis", true);
+        //         }
+        //         if (oView.byId("RagSwitch")) {
+        //             oView.byId("RagSwitch").setSelected(!!oState.ragEnabled);
+        //         }
+        //         ////value state
+        //         if (oView.byId("multiInputSystem")) {
+        //             oView.byId("multiInputSystem").setValueState(oState.valStateSys || "None");
+        //         }
+        //         if (oView.byId("multiInputPrompt")) {
+        //             oView.byId("multiInputPrompt").setValueState(oState.valStatePrompt || "None");
+        //         }
+        //         if (oView.byId("selDocList")) {
+        //             oView.byId("selDocList").setValueState(oState.valStateUpl || "None");
+        //         }
+        //         ///settings parameters
+
+        //         this.savedSettings = oState.parsett || false;
+
+        //         // if (this.savedSettings == true) {
+        //         //     oViewModel.setProperty("/comnPopUpModelParamTemp", oState.savedTemperature || 0.7);
+        //         //     oViewModel.setProperty("/comnPopUpModelParamTopP", oState.savedTopP || 0.95);
+        //         //     oViewModel.setProperty("/comnPopUpModelParamMaxLength", oState.maxResponse || 4000);
+        //         //     oViewModel.setProperty("/comnPopUpModelParamFreqP", oState.freqPenalty || 0.1);
+        //         //     oViewModel.setProperty("/comnPopUpModelParamPresenceP", oState.prePenalty || 0.1);
+        //         //     // oViewModel.setProperty("/SelectedStopSequence",this._prePenalty || 0.7);
+        //         //     oViewModel.setProperty("/comnPopUpModelParamContextHist", oState.contextHist || 2);
+        //         //     // oViewModel.setProperty("/TokenCount", 0 ||);
+        //         // }
+        //         if (this.savedSettings) {
+        //             this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamTemp", oState.savedTemperature || null);
+        //             this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamTopP", oState.savedTopP || null);
+        //             this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamMaxLength", oState.maxResponse || null);
+        //             this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamFreqP", oState.freqPenalty || null);
+        //             this.getView().getModel("settingsModel").setProperty("/comnPopUpModelParamPresenceP", oState.prePenalty || null);
+
+        //         }
+        //         ////git tab
+        //         if (oView.byId("gitFileTree")) {
+        //             oView.byId("gitFileTree").setVisible(oState.gitTreeVis || false);
+        //         }
+        //         // if (oView.byId("viewGitFilebtn")) {
+        //         //     oView.byId("viewGitFilebtn").setVisible(oState.gitGitfileViewVis || false);
+        //         // }
+        //         if (oView.byId("TemplateUploader")) {
+        //             oView.byId("TemplateUploader").setValue(oState.templateFileName || "");
+        //         }
+
+        //         this._selectedTemplateKey = oState.templateKey || "";
+
+        //         if (oView.byId("selectedTemplateName")) {
+        //             oView.byId("selectedTemplateName")
+        //                 .setText(oState.templateNameText || "");
+        //         }
+
+        //         if (oView.byId("templateInfoBox")) {
+        //             oView.byId("templateInfoBox")
+        //                 .setVisible(!!oState.templateInfoVisible);
+        //         }
+        //         oView.getModel("viewModel").setProperty("/templateToggle", !!oState.templateToggleState);
+
+        //         if (oView.byId("templateToggle")) {
+        //             oView.byId("templateToggle").setState(!!oState.templateToggleState);
+        //         }
+        //         // Restore MCP state per tab
+        //         if (oViewModel) {
+        //             oViewModel.setProperty("/useMCP", !!oState.mcpEnabled);
+        //             oViewModel.setProperty("/selectedMCPTool", oState.mcpSelectedTool || "");
+        //             oViewModel.setProperty("/selectedAbapObject", oState.mcpSelectedAbapObject || {});
+        //         }
+        //     }
+        // },
+
+
         resolveModelName: function (apiModelText) {
 
             const model = apiModelText?.toLowerCase();
@@ -10916,14 +12825,217 @@ sap.ui.define([
             }
 
         },
+        // ragHandleUploadPress: function () {
+        //     var that = this;
+        //     var sProject = this._ProjectDetail;
+        //     var sUserName = this._loggedInUserName;
+        //     var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+        //     var oFileUploader = "";
+        //     var sSelectedIconTab = "";
+        //     if (popUpSel == "knowlBAdmin") {
+        //         if (this.getView().byId("categorySelect")) {
+        //             sSelectedIconTab = this.getView().byId("categorySelect").getSelectedKey();
+        //             oFileUploader = this.getView().byId("fileUploaderKBAdmin");
+        //         }
+        //     } else {
+        //         sSelectedIconTab = this.selectedKeyFunct();
+        //         oFileUploader = this.getView().byId("fileUploader1");
+        //         this.getView().byId("viewDocBtn").setVisible(false);
+        //         this.getView().byId("docNameText").setVisible(false);
+        //     }
+        //     var oBundle = this.getView().getModel("i18n").getResourceBundle();
+        //     var aFiles = (oFileUploader && oFileUploader.oFileUpload && oFileUploader.oFileUpload.files) ? oFileUploader.oFileUpload.files : [];
+
+
+
+        //     if (!aFiles || aFiles.length === 0) {
+        //         ////   sap.m.MessageBox.success(oBundle.getText("fileUpload"));
+        //         sap.m.MessageToast.show(oBundle.getText("fileUpload"));
+        //         return;
+        //     }
+
+        //     var allowedFileTypes = ["txt", "pdf", "docx", "doc"];
+        //     var formData = new FormData();
+
+        //     for (var i = 0; i < aFiles.length; i++) {
+        //         var oFile = aFiles[i];
+        //         var fileExtension = oFile.name.split('.').pop().toLowerCase();
+        //         if (allowedFileTypes.indexOf(fileExtension) === -1) {
+        //             sap.m.MessageBox.error(oBundle.getText("allowedFileTypes"));
+        //             return;
+        //         }
+        //         formData.append('files', oFile);
+        //     }
+        //     formData.append('category', sSelectedIconTab);
+        //     formData.append('project', this._ProjectDetail);
+        //     formData.append('KB', true);
+        //     formData.append('overwrite', 'false'); // initial pass
+        //     var busyDialog = new sap.m.BusyDialog();
+        //     // https://KMDevCockpitIntegrationApp.cfapps.eu10.hana.ondemand.com/UploadToObjectStore",
+        //     /// https://KMDevCockpitIntegrationAppV2.cfapps.eu10.hana.ondemand.com/UploadToObjectStore
+        //     busyDialog.open();
+        //     let oHeader = {
+        //         "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //         "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
+        //     };
+        //     $.ajax({
+        //         url: that._sBasePath + "/kb-integration/UploadToObjectStore",
+        //         method: "POST",
+        //         processData: false,
+        //         contentType: false,
+        //         data: formData,
+        //         headers: oHeader,
+        //         success: function (data) {
+        //             busyDialog.close();
+        //             var oFileModel = that.getView().getModel("fileModel");
+        //             var currentFiles = oFileModel.getProperty("/" + sSelectedIconTab) || [];
+        //             currentFiles.push.apply(currentFiles, data.extracted_contents || []);
+        //             oFileModel.setProperty("/" + sSelectedIconTab, currentFiles);
+        //             var ragModel = that.getView().getModel("ragModel");
+
+        //             var aNormalized = (currentFiles || []).map(function (x) {
+        //                 var sKey = x.s3_key || "";
+        //                 var sFileName = x.filename || "";
+        //                 var extracted_content = x.extracted_value || "";
+
+        //                 return {
+        //                     Key: sKey,
+        //                     Name: sFileName,
+        //                     filename: sFileName,
+        //                     content: extracted_content
+        //                 };
+        //             });
+        //             if (popUpSel == "knowlBAdmin") {
+        //                 /// sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
+        //                 sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+        //                 var catSel = that.getView().byId("categorySelect").getSelectedKey();
+        //                 // var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
+        //                 // var roleSel = "system"
+        //                 //  that.onSearch(url, roleSel);
+        //                 that.loadKnowlBAdminFiles(sSelectedIconTab, sProject, sUserName);
+        //                 that.getView().byId("kbTable").getBinding("items").refresh();
+        //             } else {
+        //                 ragModel.setProperty("/ragFiles", aNormalized);
+        //                 ragModel.refresh(true);
+        //                 that._bUploadedViaRag = true;
+        //                 ////sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
+        //                 sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+        //             }
+        //             // ragModel.setProperty("/ragFiles", aNormalized);
+        //             // ragModel.refresh(true);
+        //             // that._bUploadedViaRag = true;
+        //             // sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
+
+        //         },
+        //         error: function (jqXHR) {
+        //             var resp = jqXHR.responseJSON;
+        //             try {
+        //                 if (!resp && jqXHR.responseText) {
+        //                     resp = JSON.parse(jqXHR.responseText);
+        //                 }
+        //             } catch (e) { }
+        //             if (jqXHR.status === 409 && resp && resp.status === "confirmation_required") {
+        //                 var filesNeedingConfirm = (resp.files_requiring_confirmation || []).map(function (f) { return f.filename; });
+        //                 var msg = (resp.message || oBundle.getText("successFileUpload"));
+        //                 if (filesNeedingConfirm.length) {
+        //                     msg = oBundle.getText("fileExistsConfirm", [filesNeedingConfirm.join(", ")]);
+        //                 }
+        //                 busyDialog.close();
+        //                 sap.m.MessageBox.confirm(
+        //                     msg,
+        //                     {
+        //                         actions: [sap.m.MessageBox.Action.OK, sap.m.MessageBox.Action.CANCEL],
+        //                         onClose: function (oAction) {
+        //                             if (oAction === sap.m.MessageBox.Action.OK) {
+        //                                 var formData2 = new FormData();
+        //                                 for (var i = 0; i < aFiles.length; i++) {
+        //                                     formData2.append('files', aFiles[i]);
+        //                                 }
+        //                                 formData2.append('category', sSelectedIconTab);
+        //                                 formData2.append('project', that._ProjectDetail);
+        //                                 formData2.append('KB', true);
+        //                                 formData2.append('overwrite', 'true'); // overwrite pass
+
+        //                                 busyDialog.open();
+        //                                 let oHeader = {
+        //                                     "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+        //                                     "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+        //                                     "X-Frame-Options": "DENY",
+        //                                     "X-XSS-Protection": "0",
+        //                                     "X-Content-Type-Options": "nosniff"
+        //                                 };
+        //                                 $.ajax({
+        //                                     url: this._sBasePath + "/kb-integration/UploadToObjectStore",
+        //                                     method: "POST",
+        //                                     processData: false,
+        //                                     contentType: false,
+        //                                     data: formData2,
+        //                                     dataType: "json",
+        //                                     header: oHeader,
+
+        //                                     success: function (data2) {
+        //                                         var oFileModel = that.getView().getModel("fileModel");
+        //                                         var currentFiles = oFileModel.getProperty("/" + sSelectedIconTab) || [];
+        //                                         currentFiles.push.apply(currentFiles, data2.extracted_contents || []);
+        //                                         oFileModel.setProperty("/" + sSelectedIconTab, currentFiles);
+        //                                         var ragModel = that.getView().getModel("ragModel");
+
+        //                                         var aNormalized = (currentFiles || []).map(function (x) {
+        //                                             var sKey = x.s3_key || "";
+        //                                             var sFileName = x.filename || "";
+        //                                             var extracted_content = x.extracted_value || "";
+
+        //                                             return {
+        //                                                 Key: sKey,
+        //                                                 Name: sFileName,
+        //                                                 filename: sFileName,
+        //                                                 content: extracted_content
+        //                                             };
+        //                                         });
+        //                                         ragModel.setProperty("/ragFiles", aNormalized);
+        //                                         ragModel.refresh(true);
+        //                                         that._bUploadedViaRag = true;
+        //                                         /// sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
+        //                                         sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
+
+        //                                         busyDialog.close();
+        //                                     },
+        //                                     error: function () {
+        //                                         busyDialog.close();
+        //                                         sap.m.MessageBox.error(oBundle.getText("errorFileUpload"));
+        //                                     }
+        //                                 });
+        //                             } else {
+        //                             }
+        //                         }
+        //                     }
+        //                 );
+
+        //             } else {
+        //                 busyDialog.close();
+        //                 sap.m.MessageBox.error(oBundle.getText("errorFileUpload"));
+        //             }
+        //             //sap.m.MessageBox.error(oBundle.getText("errorFileUpload"));
+        //         }
+        //     });
+        // },
+
         ragHandleUploadPress: function () {
-            var that = this;
-            var sProject = this._ProjectDetail;
-            var sUserName = this._loggedInUserName;
-            var popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
-            var oFileUploader = "";
-            var sSelectedIconTab = "";
-            if (popUpSel == "knowlBAdmin") {
+            let that = this;
+            let sProject = this._ProjectDetail;
+            let sUserName = this._loggedInUserName;
+            let popUpSel = this.getView().getModel("switchFragments").getProperty("/frg/frName");
+            let oFileUploader = "";
+            let sSelectedIconTab = "";
+            let oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff"
+            };
+
+            if (popUpSel === "knowlBAdmin") {
                 if (this.getView().byId("categorySelect")) {
                     sSelectedIconTab = this.getView().byId("categorySelect").getSelectedKey();
                     oFileUploader = this.getView().byId("fileUploaderKBAdmin");
@@ -10934,43 +13046,50 @@ sap.ui.define([
                 this.getView().byId("viewDocBtn").setVisible(false);
                 this.getView().byId("docNameText").setVisible(false);
             }
-            var oBundle = this.getView().getModel("i18n").getResourceBundle();
-            var aFiles = (oFileUploader && oFileUploader.oFileUpload && oFileUploader.oFileUpload.files) ? oFileUploader.oFileUpload.files : [];
 
-
+            let oBundle = this.getView().getModel("i18n").getResourceBundle();
+            let aFiles = (oFileUploader?.oFileUpload?.files) ? oFileUploader.oFileUpload.files : [];
 
             if (!aFiles || aFiles.length === 0) {
-                ////   sap.m.MessageBox.success(oBundle.getText("fileUpload"));
                 sap.m.MessageToast.show(oBundle.getText("fileUpload"));
                 return;
             }
 
-            var allowedFileTypes = ["txt", "pdf", "docx", "doc"];
-            var formData = new FormData();
+            let allowedFileTypes = ["txt", "pdf", "docx", "doc"];
+            let formData = new FormData();
 
-            for (var i = 0; i < aFiles.length; i++) {
-                var oFile = aFiles[i];
-                var fileExtension = oFile.name.split('.').pop().toLowerCase();
+            for (let i = 0; i < aFiles.length; i++) {
+                let oFile = aFiles[i];
+                let fileExtension = oFile.name.split('.').pop().toLowerCase();
                 if (allowedFileTypes.indexOf(fileExtension) === -1) {
                     sap.m.MessageBox.error(oBundle.getText("allowedFileTypes"));
                     return;
                 }
                 formData.append('files', oFile);
             }
+
             formData.append('category', sSelectedIconTab);
             formData.append('project', this._ProjectDetail);
             formData.append('KB', true);
-            formData.append('overwrite', 'false'); // initial pass
-            var busyDialog = new sap.m.BusyDialog();
-            // https://KMDevCockpitIntegrationApp.cfapps.eu10.hana.ondemand.com/UploadToObjectStore",
-            /// https://KMDevCockpitIntegrationAppV2.cfapps.eu10.hana.ondemand.com/UploadToObjectStore
+            formData.append('overwrite', 'false');
+
+            let busyDialog = new sap.m.BusyDialog();
             busyDialog.open();
-            let oHeader = {
-                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null
+
+            // Parameters object to pass context to helper methods
+            let oParams = {
+                sSelectedIconTab: sSelectedIconTab,
+                popUpSel: popUpSel,
+                sProject: sProject,
+                sUserName: sUserName,
+                oBundle: oBundle,
+                aFiles: aFiles,
+                oHeader: oHeader,
+                busyDialog: busyDialog
             };
+
             $.ajax({
-                url: that._sBasePath + "/kb-integration/UploadToObjectStore",
+                url: this._sBasePath + "/kb-integration/UploadToObjectStore",
                 method: "POST",
                 processData: false,
                 contentType: false,
@@ -10978,137 +13097,141 @@ sap.ui.define([
                 headers: oHeader,
                 success: function (data) {
                     busyDialog.close();
-                    var oFileModel = that.getView().getModel("fileModel");
-                    var currentFiles = oFileModel.getProperty("/" + sSelectedIconTab) || [];
-                    currentFiles.push.apply(currentFiles, data.extracted_contents || []);
-                    oFileModel.setProperty("/" + sSelectedIconTab, currentFiles);
-                    var ragModel = that.getView().getModel("ragModel");
-
-                    var aNormalized = (currentFiles || []).map(function (x) {
-                        var sKey = x.s3_key || "";
-                        var sFileName = x.filename || "";
-                        var extracted_content = x.extracted_value || "";
-
-                        return {
-                            Key: sKey,
-                            Name: sFileName,
-                            filename: sFileName,
-                            content: extracted_content
-                        };
-                    });
-                    if (popUpSel == "knowlBAdmin") {
-                        /// sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
-                        sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                        var catSel = that.getView().byId("categorySelect").getSelectedKey();
-                        // var url = this._sBasePath + "/lm/promptTemplates?scenario=" + catSel + "&version=0.0.1";
-                        // var roleSel = "system"
-                        //  that.onSearch(url, roleSel);
-                        that.loadKnowlBAdminFiles(sSelectedIconTab, sProject, sUserName);
-                        that.getView().byId("kbTable").getBinding("items").refresh();
-                    } else {
-                        ragModel.setProperty("/ragFiles", aNormalized);
-                        ragModel.refresh(true);
-                        that._bUploadedViaRag = true;
-                        ////sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
-                        sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-                    }
-                    // ragModel.setProperty("/ragFiles", aNormalized);
-                    // ragModel.refresh(true);
-                    // that._bUploadedViaRag = true;
-                    // sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
-
+                    that._ragHandleUploadSuccess(oParams, data);
                 },
                 error: function (jqXHR) {
-                    var resp = jqXHR.responseJSON;
-                    try {
-                        if (!resp && jqXHR.responseText) {
-                            resp = JSON.parse(jqXHR.responseText);
-                        }
-                    } catch (e) { }
-                    if (jqXHR.status === 409 && resp && resp.status === "confirmation_required") {
-                        var filesNeedingConfirm = (resp.files_requiring_confirmation || []).map(function (f) { return f.filename; });
-                        var msg = (resp.message || oBundle.getText("successFileUpload"));
-                        if (filesNeedingConfirm.length) {
-                            msg = oBundle.getText("fileExistsConfirm", [filesNeedingConfirm.join(", ")]);
-                        }
-                        busyDialog.close();
-                        sap.m.MessageBox.confirm(
-                            msg,
-                            {
-                                actions: [sap.m.MessageBox.Action.OK, sap.m.MessageBox.Action.CANCEL],
-                                onClose: function (oAction) {
-                                    if (oAction === sap.m.MessageBox.Action.OK) {
-                                        var formData2 = new FormData();
-                                        for (var i = 0; i < aFiles.length; i++) {
-                                            formData2.append('files', aFiles[i]);
-                                        }
-                                        formData2.append('category', sSelectedIconTab);
-                                        formData2.append('project', that._ProjectDetail);
-                                        formData2.append('KB', true);
-                                        formData2.append('overwrite', 'true'); // overwrite pass
-
-                                        busyDialog.open();
-                                        let oHeader = {
-                                            "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
-                                            "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
-                                            "X-Frame-Options": "DENY",
-                                            "X-XSS-Protection": "0",
-                                            "X-Content-Type-Options": "nosniff"
-                                        };
-                                        $.ajax({
-                                            url: this._sBasePath + "/kb-integration/UploadToObjectStore",
-                                            method: "POST",
-                                            processData: false,
-                                            contentType: false,
-                                            data: formData2,
-                                            dataType: "json",
-                                            header: oHeader,
-
-                                            success: function (data2) {
-                                                var oFileModel = that.getView().getModel("fileModel");
-                                                var currentFiles = oFileModel.getProperty("/" + sSelectedIconTab) || [];
-                                                currentFiles.push.apply(currentFiles, data2.extracted_contents || []);
-                                                oFileModel.setProperty("/" + sSelectedIconTab, currentFiles);
-                                                var ragModel = that.getView().getModel("ragModel");
-
-                                                var aNormalized = (currentFiles || []).map(function (x) {
-                                                    var sKey = x.s3_key || "";
-                                                    var sFileName = x.filename || "";
-                                                    var extracted_content = x.extracted_value || "";
-
-                                                    return {
-                                                        Key: sKey,
-                                                        Name: sFileName,
-                                                        filename: sFileName,
-                                                        content: extracted_content
-                                                    };
-                                                });
-                                                ragModel.setProperty("/ragFiles", aNormalized);
-                                                ragModel.refresh(true);
-                                                that._bUploadedViaRag = true;
-                                                /// sap.m.MessageBox.success(oBundle.getText("successFileUpload"));
-                                                sap.m.MessageToast.show(oBundle.getText("successFileUpload"));
-
-                                                busyDialog.close();
-                                            },
-                                            error: function () {
-                                                busyDialog.close();
-                                                sap.m.MessageBox.error(oBundle.getText("errorFileUpload"));
-                                            }
-                                        });
-                                    } else {
-                                    }
-                                }
-                            }
-                        );
-
-                    } else {
-                        busyDialog.close();
-                        sap.m.MessageBox.error(oBundle.getText("errorFileUpload"));
-                    }
-                    //sap.m.MessageBox.error(oBundle.getText("errorFileUpload"));
+                    that._ragHandleUploadError(oParams, jqXHR);
                 }
             });
+        },
+
+        _ragNormalizeFiles: function (aFiles) {
+            return (aFiles || []).map(function (x) {
+                let sKey = x.s3_key || "";
+                let sFileName = x.filename || "";
+                let extracted_content = x.extracted_value || "";
+
+                return {
+                    Key: sKey,
+                    Name: sFileName,
+                    filename: sFileName,
+                    content: extracted_content
+                };
+            });
+        },
+
+        _ragHandleUploadSuccess: function (oParams, data) {
+            let oFileModel = this.getView().getModel("fileModel");
+            let currentFiles = oFileModel.getProperty("/" + oParams.sSelectedIconTab) || [];
+            currentFiles.push(...(data.extracted_contents || []));
+
+            oFileModel.setProperty("/" + oParams.sSelectedIconTab, currentFiles);
+            let ragModel = this.getView().getModel("ragModel");
+            let aNormalized = this._ragNormalizeFiles(currentFiles);
+
+            if (oParams.popUpSel === "knowlBAdmin") {
+                sap.m.MessageToast.show(oParams.oBundle.getText("successFileUpload"));
+                this.loadKnowlBAdminFiles(oParams.sSelectedIconTab, oParams.sProject, oParams.sUserName);
+                this.getView().byId("kbTable").getBinding("items").refresh();
+            } else {
+                ragModel.setProperty("/ragFiles", aNormalized);
+                ragModel.refresh(true);
+                this._bUploadedViaRag = true;
+                sap.m.MessageToast.show(oParams.oBundle.getText("successFileUpload"));
+            }
+            // Refresh the ObjectFileList so uploaded files show up in the
+            // SelectFile value help the next time it is opened.
+            try { this.getFiles(); } catch (e) { /* no-op */ }
+        },
+
+
+        _ragOverwriteUploadSuccess: function (oParams, data2) {
+            let oFileModel = this.getView().getModel("fileModel");
+            let currentFiles = oFileModel.getProperty("/" + oParams.sSelectedIconTab) || [];
+            currentFiles.push(...(data2.extracted_contents || []));
+
+            oFileModel.setProperty("/" + oParams.sSelectedIconTab, currentFiles);
+            let ragModel = this.getView().getModel("ragModel");
+            let aNormalized = this._ragNormalizeFiles(currentFiles);
+
+            ragModel.setProperty("/ragFiles", aNormalized);
+            ragModel.refresh(true);
+            this._bUploadedViaRag = true;
+
+            sap.m.MessageToast.show(oParams.oBundle.getText("successFileUpload"));
+            oParams.busyDialog.close();
+            // Refresh the ObjectFileList so the overwritten file appears
+            // in the SelectFile value help the next time it is opened.
+            try { this.getFiles(); } catch (e) { /* no-op */ }
+        },
+
+
+        _ragPerformOverwriteUpload: function (oParams) {
+            let that = this;
+            let formData2 = new FormData();
+
+            for (const file of oParams.aFiles) {
+                formData2.append('files', file);
+            }
+            formData2.append('category', oParams.sSelectedIconTab);
+            formData2.append('project', this._ProjectDetail);
+            formData2.append('KB', true);
+            formData2.append('overwrite', 'true');
+
+            oParams.busyDialog.open();
+            $.ajax({
+                url: this._sBasePath + "/kb-integration/UploadToObjectStore",
+                method: "POST",
+                processData: false,
+                contentType: false,
+                data: formData2,
+                headers: oParams.oHeader,
+                dataType: "json",
+                success: function (data2) {
+                    that._ragOverwriteUploadSuccess(oParams, data2);
+                },
+                error: function () {
+                    oParams.busyDialog.close();
+                    sap.m.MessageBox.error(oParams.oBundle.getText("errorFileUpload"));
+                }
+            });
+        },
+
+
+        _ragHandleUploadError: function (oParams, jqXHR) {
+            let that = this;
+            let resp = jqXHR.responseJSON;
+
+            try {
+                if (!resp && jqXHR.responseText) {
+                    resp = JSON.parse(jqXHR.responseText);
+                }
+            } catch (e) {
+                console.log(e);
+            }
+
+            if (jqXHR.status === 409 && resp && resp.status === "confirmation_required") {
+                let filesNeedingConfirm = (resp.files_requiring_confirmation || []).map(function (f) {
+                    return f.filename;
+                });
+                let msg = resp.message || oParams.oBundle.getText("successFileUpload");
+                if (filesNeedingConfirm.length) {
+                    msg = oParams.oBundle.getText("fileExistsConfirm", [filesNeedingConfirm.join(", ")]);
+                }
+                oParams.busyDialog.close();
+
+                sap.m.MessageBox.confirm(msg, {
+                    actions: [sap.m.MessageBox.Action.OK, sap.m.MessageBox.Action.CANCEL],
+                    onClose: function (oAction) {
+                        if (oAction === sap.m.MessageBox.Action.OK) {
+                            that._ragPerformOverwriteUpload(oParams);
+                        }
+                    }
+                });
+            } else {
+                oParams.busyDialog.close();
+                sap.m.MessageBox.error(oParams.oBundle.getText("errorFileUpload"));
+            }
         },
 
         onRagFileSelect: function (oEvent) {
@@ -11126,6 +13249,32 @@ sap.ui.define([
         },
 
         onRagPreviewPress: function (oEvent) {
+            // Handle basic file list items (bound to fileModel context)
+    var oBasicCtx = oEvent.getSource().getBindingContext("fileModel");
+    if (oBasicCtx) {
+        var oBasicObj = oBasicCtx.getObject();
+        var sBasicName = oBasicObj.filename || oBasicObj.Name || "";
+        var sBasicContent = oBasicObj.content || "";
+        // Preserve the server-side key (set when a file is selected from the
+        // saved-file list) so that viewDoc() can call fileDisplay() to fetch
+        // the content from the server when local content is unavailable.
+        var sBasicKey = oBasicObj.key || "";
+        this.getView().getModel("fileViewModel").setData({
+            Key: sBasicKey,
+            Name: sBasicName,
+            srcUrl: oBasicObj.srcUrl || "",
+            content: sBasicContent
+        });
+        // The ViewDocument TextArea is bound to appmodel>/BSContent, not
+        // fileViewModel>/content. Update BSContent with this file's individual
+        // content so the preview shows the correct file (fixes the issue where
+        // all previews showed the same combined/stale BSContent).
+        if (sBasicContent) {
+            this.getView().getModel("appmodel").setProperty("/BSContent", sBasicContent);
+        }
+        this.viewDoc();
+        return;
+    }
             ////upload and file selected
             var sSelectedIconTab = this.selectedKeyFunct();
             var aFiles = this.getView().getModel("fileModel").getProperty("/" + sSelectedIconTab) || [];
@@ -11143,19 +13292,17 @@ sap.ui.define([
 
             var sExt = (sFileName || "").split(".").pop().toLowerCase();
 
-            var sKey = "/" + oFile.s3_key || oFile.Key || oFile.objectStoreRefKey || oFile.key || "";
-            var oFileModel = this.getView().getModel("fileModel");
-            var arrofExtCont = oFileModel.oData[sSelectedIconTab].filter(item => item.s3_key === oFile.s3_key);
+            let sKey = (oFile.s3_key ? "/" + oFile.s3_key : "") || oFile.Key || oFile.objectStoreRefKey || oFile.key || "";
 
             if (sExt === "pdf") {
                 this.getView().getModel("fileViewModel").setData({
                     Key: sKey,
                     Name: sFileName,
                     srcUrl: "",
-                    content: arrofExtCont[0].extracted_value
+                    content: oFile.extracted_value
                 });
                 var oModel = this.getView().getModel("appmodel");
-                oModel.setProperty("/BSContent", arrofExtCont[0].extracted_value);
+                oModel.setProperty("/BSContent", oFile.extracted_value);
                 this.viewDoc();
                 return;
             }
@@ -11187,6 +13334,10 @@ sap.ui.define([
 
                 oDetailModel.setProperty("/citationArr", []);
                 oDetailModel.refresh(true);
+            }
+            if (bSelected) {
+                this.getView().getModel("fileModel").setProperty("/basicFiles", []);
+                this.getView().getModel("fileModel").refresh(true);
             }
             var oViewModel = this.getView().getModel("viewModel");
             var existingAImodels = oViewModel.getProperty("/gptModels");
@@ -12069,7 +14220,7 @@ sap.ui.define([
                         error: function (xhr) {
                             busy.close();
                             var msg = "";
-                            try { msg = JSON.parse(xhr.responseText).error?.message || ""; } catch (e) { }
+                            try { msg = JSON.parse(xhr.responseText).error?.message || ""; } catch (e) { console.log(e); }
                             sap.m.MessageBox.error(msg || "Template upload failed");
                         }
                     });
@@ -12085,6 +14236,7 @@ sap.ui.define([
                 busy.close();
                 sap.m.MessageBox.error("Template upload failed");
             }
+            that._extractTemplateStructure(templateKey);
         },
         onDocTypeChange: function (oEvent) {
             const selectedKey = oEvent.getSource().getSelectedKey();
@@ -13689,8 +15841,8 @@ sap.ui.define([
         // Added for Retro Documentation feature
         // ============================================================
         onRetroDocumentModeChange: function (oEvent) {
-            var oButton = oEvent.getSource();
-            var sMode = oButton.data("mode");
+            var iSelectedIndex = oEvent.getParameter("selectedIndex");
+            var sMode = iSelectedIndex === 1 ? "update" : "create";
             var oRetroDocModel = this.getView().getModel("retroDocModel");
 
             if (sMode === "update") {
@@ -13730,18 +15882,196 @@ sap.ui.define([
             oRetroDocModel.refresh(true);
         },
 
+        // onRetroTemplateToggle: function (oEvent) {
+        //     var bState = oEvent.getParameter("state");
+        //     this.getView().getModel("retroDocModel").setProperty("/retroTemplateToggle", bState);
+        // },
+
         onRetroTemplateToggle: function (oEvent) {
             var bState = oEvent.getParameter("state");
-            this.getView().getModel("retroDocModel").setProperty("/retroTemplateToggle", bState);
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            oRetroDocModel.setProperty("/retroTemplateToggle", bState);
+            oRetroDocModel.setProperty("/templateEnabled", bState);
         },
+
+        /**
+         * Handler for FS Template file upload change event
+         * Uploads the selected FS template file and stores it in the model
+         */
+        onRetroFSTemplateUpload: function (oEvent) {
+            var that = this;
+            var oFile = oEvent.getParameter("files") && oEvent.getParameter("files")[0];
+            if (!oFile) {
+                return;
+            }
+            // Validate file extension
+            var sFileName = oFile.name;
+            if (!/\.docx$/i.test(sFileName)) {
+                sap.m.MessageBox.error("Please upload a .docx file for the FS Template.");
+                return;
+            }
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+
+            sap.ui.core.BusyIndicator.show();
+
+            // Read file as base64
+            var oReader = new FileReader();
+            oReader.onload = function (e) {
+                var sBase64 = e.target.result.split(",")[1];
+
+                // Store FS-specific template data
+                oRetroTemplateModel.setProperty("/uploadedTemplateFileFS", sFileName);
+                oRetroTemplateModel.setProperty("/uploadedTemplateDataFS", sBase64);
+                oRetroTemplateModel.setProperty("/hasUploadedTemplateFS", true);
+
+                // Update the input field to show the filename
+                oRetroDocModel.setProperty("/fsTemplateFileName", sFileName);
+                // Sync: auto-check the FS document checkbox
+                oRetroDocModel.setProperty("/createFS", true);
+
+                sap.ui.core.BusyIndicator.hide();
+                sap.m.MessageToast.show("FS Template uploaded: " + sFileName);
+            };
+            oReader.onerror = function () {
+                sap.ui.core.BusyIndicator.hide();
+                sap.m.MessageBox.error("Failed to read the FS Template file.");
+            };
+            oReader.readAsDataURL(oFile);
+        },
+
+        /**
+         * Handler for TS Template file upload change event
+         * Uploads the selected TS template file and stores it in the model
+         */
+        onRetroTSTemplateUpload: function (oEvent) {
+            var that = this;
+            var oFile = oEvent.getParameter("files") && oEvent.getParameter("files")[0];
+            if (!oFile) {
+                return;
+            }
+            // Validate file extension
+            var sFileName = oFile.name;
+            if (!/\.docx$/i.test(sFileName)) {
+                sap.m.MessageBox.error("Please upload a .docx file for the TS Template.");
+                return;
+            }
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+
+            sap.ui.core.BusyIndicator.show();
+
+            // Read file as base64
+            var oReader = new FileReader();
+            oReader.onload = function (e) {
+                var sBase64 = e.target.result.split(",")[1];
+
+                // Store TS-specific template data
+                oRetroTemplateModel.setProperty("/uploadedTemplateFileTS", sFileName);
+                oRetroTemplateModel.setProperty("/uploadedTemplateDataTS", sBase64);
+                oRetroTemplateModel.setProperty("/hasUploadedTemplateTS", true);
+
+                // Update the input field to show the filename
+                oRetroDocModel.setProperty("/tsTemplateFileName", sFileName);
+                // Sync: auto-check the TS document checkbox
+                oRetroDocModel.setProperty("/createTS", true);
+
+                sap.ui.core.BusyIndicator.hide();
+                sap.m.MessageToast.show("TS Template uploaded: " + sFileName);
+            };
+            oReader.onerror = function () {
+                sap.ui.core.BusyIndicator.hide();
+                sap.m.MessageBox.error("Failed to read the TS Template file.");
+            };
+            oReader.readAsDataURL(oFile);
+        },
+
+        // onRetroSearchPatternSelect: function (oEvent) {
+        //     var oSelectedItem = oEvent.getParameter("selectedItem");
+        //     if (oSelectedItem) {
+        //         var oRetroDocModel = this.getView().getModel("retroDocModel");
+        //         oRetroDocModel.setProperty("/searchPattern", oSelectedItem.getText());
+        //         oRetroDocModel.setProperty("/documentModeEnabled", true);
+        //         oRetroDocModel.setProperty("/buttonsEnabled", true);
+        //     }
+        // },
 
         onRetroSearchPatternSelect: function (oEvent) {
             var oSelectedItem = oEvent.getParameter("selectedItem");
-            if (oSelectedItem) {
-                var oRetroDocModel = this.getView().getModel("retroDocModel");
-                oRetroDocModel.setProperty("/searchPattern", oSelectedItem.getText());
-                oRetroDocModel.setProperty("/documentModeEnabled", true);
-                oRetroDocModel.setProperty("/buttonsEnabled", true);
+
+            if (!oSelectedItem) { return; }
+
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var sObjectName = oSelectedItem.getText();
+            var sObjectType = oRetroDocModel.getProperty("/selectedObjectType") || "PROG";
+
+
+            oRetroDocModel.setProperty("/searchPattern", sObjectName);
+            oRetroDocModel.setProperty("/selectedObject", sObjectName);
+            oRetroDocModel.setProperty("/selectedObjects", [{
+                objectName: sObjectName,
+                objectType: sObjectType
+            }]);
+
+            oRetroDocModel.setProperty("/documentModeEnabled", true);
+            oRetroDocModel.setProperty("/buttonsEnabled", true);
+            oRetroDocModel.setProperty("/hasExistingFS", false);
+            oRetroDocModel.setProperty("/hasExistingTS", false);
+            oRetroDocModel.setProperty("/existingFSFileName", "");
+            oRetroDocModel.setProperty("/existingTSFileName", "");
+            oRetroDocModel.setProperty("/existingFSFileKey", "");
+            oRetroDocModel.setProperty("/existingTSFileKey", "");
+            oRetroDocModel.setProperty("/existingFSDownloadUrl", "");
+            oRetroDocModel.setProperty("/existingTSDownloadUrl", "");
+            oRetroDocModel.setProperty("/existingFSViewUrl", "");
+            oRetroDocModel.setProperty("/existingTSViewUrl", "");
+            oRetroDocModel.setProperty("/updateFS", false);
+            oRetroDocModel.setProperty("/updateTS", false);
+            oRetroDocModel.setProperty("/createFS", true);
+            oRetroDocModel.setProperty("/createTS", true);
+            oRetroDocModel.setProperty("/documentMode", "create");
+
+            this._checkExistingRetroDocuments(sObjectName, sObjectType)
+                .then(function (oExisting) {
+                    oRetroDocModel.setProperty("/hasExistingFS", oExisting.hasFS);
+                    oRetroDocModel.setProperty("/hasExistingTS", oExisting.hasTS);
+                    oRetroDocModel.setProperty("/existingFSFileName", oExisting.fsFileName || "");
+                    oRetroDocModel.setProperty("/existingTSFileName", oExisting.tsFileName || "");
+                    oRetroDocModel.setProperty("/existingFSFileKey", oExisting.fsKey || "");
+                    oRetroDocModel.setProperty("/existingTSFileKey", oExisting.tsKey || "");
+                    oRetroDocModel.setProperty("/existingFSDownloadUrl", oExisting.fsDownloadUrl || "");
+                    oRetroDocModel.setProperty("/existingTSDownloadUrl", oExisting.tsDownloadUrl || "");
+                    oRetroDocModel.setProperty("/existingFSViewUrl", oExisting.fsViewUrl || "");
+                    oRetroDocModel.setProperty("/existingTSViewUrl", oExisting.tsViewUrl || "");
+                    oRetroDocModel.setProperty("/updateFS", !!oExisting.hasFS);
+                    oRetroDocModel.setProperty("/updateTS", !!oExisting.hasTS);
+                    if (oExisting.hasFS || oExisting.hasTS) {
+                        oRetroDocModel.setProperty("/documentMode", "update");
+                    } else {
+                        oRetroDocModel.setProperty("/documentMode", "create");
+                    }
+                    oRetroDocModel.refresh(true);
+                });
+        },
+
+        onSourceConfigChange: function (oEvent) {
+            var sKey = oEvent.getSource().getSelectedKey();
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var oContentMap = {
+                "objectSelection": "Select the SAP System, Object Type, and enter a Search Pattern to find ABAP objects in the system. Once the search results are displayed, select an object to proceed with document generation. Choose whether to create new documents (Functional Specification or Technical Specification) or update existing ones, then click 'Generate Document'.",
+                "uploadCode": "Upload your ABAP source code file (.abap or .txt format). Once the file is uploaded, select the type of document(s) to generate — Functional Specification (FS) or Technical Specification (TS). Click 'Generate Document' to start the AI-powered documentation pipeline.",
+                "transportRequest": "Enter a Transport Request ID (e.g. DEVK900123) and click 'Get Source Code' to retrieve the source code of all ABAP objects contained in the transport. The results will show each object's type, name, and source code."
+            };
+            oRetroDocModel.setProperty("/sourceConfigKey", sKey);
+            if (sKey && oContentMap[sKey]) {
+                oRetroDocModel.setProperty("/sourceConfigContent", oContentMap[sKey]);
+            } else {
+                oRetroDocModel.setProperty("/sourceConfigContent", "Select a Source Configuration option above to view the next-step instructions.");
+            }
+            var oSearchInput = this.byId("retroSearchPatternInputTop");
+            if (sKey === "objectSelection" && oSearchInput && !oSearchInput._enterBound) {
+                oSearchInput.attachBrowserEvent("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); this.onRetroSearchPress(); } }.bind(this));
+                oSearchInput._enterBound = true;
             }
         },
 
@@ -13763,12 +16093,19 @@ sap.ui.define([
             var sFileName = oEvent.getParameter("newValue") || "";
             oRetroDocModel.setProperty("/uploadCodeEnabled", !!sFileName);
             oRetroDocModel.setProperty("/uploadedCodeFileName", sFileName);
+            // Clear previously loaded source so it is re-read from the new file
+            oRetroDocModel.setProperty("/uploadedSourceCode", "");
             if (sFileName) {
-                MessageBox.information("File selected successfully. Please click on 'Upload and Generate' button to proceed with document generation.");
+                oRetroDocModel.setProperty("/sourceInputType", "upload");
+            } else {
+                oRetroDocModel.setProperty("/sourceInputType", "selection");
             }
         },
 
-        onRetroUploadCodePress: function () {
+        onRetroUploadCodePress: function () { // STUBBED - Go button handles upload code generation
+            return; // Upload and Generate removed - Go button handles this
+            // Upload and Generate button removed. Go button now handles upload code generation.
+            return;
             var oFileUploader = this.byId("retroCodeUploader");
             if (!oFileUploader.getValue()) {
                 MessageToast.show("Please select a file first.");
@@ -13779,6 +16116,18 @@ sap.ui.define([
             var reader = new FileReader();
             reader.onload = function (e) {
                 oRetroDocModel.setProperty("/uploadedSourceCode", e.target.result);
+                // Reset document mode to "create" so Upload Code mode never
+                // inherits "Update Existing" state left over from a previous
+                // Object Selection that found existing FS/TS documents.
+                oRetroDocModel.setProperty("/documentMode", "create");
+                oRetroDocModel.setProperty("/hasExistingFS", false);
+                oRetroDocModel.setProperty("/hasExistingTS", false);
+                oRetroDocModel.setProperty("/existingFSFileName", "");
+                oRetroDocModel.setProperty("/existingTSFileName", "");
+                oRetroDocModel.setProperty("/existingFSFileKey", "");
+                oRetroDocModel.setProperty("/existingTSFileKey", "");
+                oRetroDocModel.setProperty("/createFS", true);
+                oRetroDocModel.setProperty("/createTS", true);
                 oRetroDocModel.setProperty("/documentModeEnabled", true);
                 oRetroDocModel.setProperty("/buttonsEnabled", true);
                 oRetroDocModel.setProperty("/sourceInputType", "upload");
@@ -13837,7 +16186,7 @@ sap.ui.define([
                 hasViewButton: !!hasViewButton
             });
             oDefaultModel.setProperty("/logEntries", aLog);
-            oDefaultModel.setProperty("/logPanelVisible", true);
+            // oDefaultModel.setProperty("/logPanelVisible", true);
             this._autoScrollProcessLog();
         },
 
@@ -13874,12 +16223,26 @@ sap.ui.define([
             var oRetroTemplateModel = oView.getModel("retroTemplateModel");
             oRetroTemplateModel.setProperty("/dialogTitle", oBundle.getText("retroTechSpec"));
             oRetroTemplateModel.setProperty("/templateType", "technical");
-            oRetroTemplateModel.setProperty("/selectedTemplateKey", "default");
+            // oRetroTemplateModel.setProperty("/selectedTemplateKey", "default");
             oRetroTemplateModel.setProperty("/uploadFileName", "");
             oRetroTemplateModel.setProperty("/uploadEnabled", false);
             oRetroTemplateModel.setProperty("/defaultTemplateFile", "Style_Capgemini_Standard.docx");
 
-            // Open the template dialog
+            // Build templates list: default + uploaded TS template if present
+            var bHasTS = !!oRetroTemplateModel.getProperty("/hasUploadedTemplateTS");
+            var sTSFile = oRetroTemplateModel.getProperty("/uploadedTemplateFileTS") || "";
+            var aTSTemplates = [{ key: "default", text: "Default (Style_Capgemini_Standard.docx)" }];
+            if (bHasTS && sTSFile) {
+                aTSTemplates.push({ key: "uploaded", text: sTSFile + " (Uploaded)" });
+                oRetroTemplateModel.setProperty("/uploadedTemplateFile", sTSFile);
+                oRetroTemplateModel.setProperty("/uploadedTemplateData", oRetroTemplateModel.getProperty("/uploadedTemplateDataTS"));
+                oRetroTemplateModel.setProperty("/hasUploadedTemplate", true);
+            } else {
+                oRetroTemplateModel.setProperty("/hasUploadedTemplate", false);
+            }
+            oRetroTemplateModel.setProperty("/templates", aTSTemplates);
+            oRetroTemplateModel.setProperty("/selectedTemplateKey", bHasTS ? "uploaded" : "default");
+
             this._openRetroTemplateDialog();
         },
 
@@ -13896,12 +16259,26 @@ sap.ui.define([
             var oRetroTemplateModel = oView.getModel("retroTemplateModel");
             oRetroTemplateModel.setProperty("/dialogTitle", oBundle.getText("retroFuncSpec"));
             oRetroTemplateModel.setProperty("/templateType", "functional");
-            oRetroTemplateModel.setProperty("/selectedTemplateKey", "default");
+            // oRetroTemplateModel.setProperty("/selectedTemplateKey", "default");
             oRetroTemplateModel.setProperty("/uploadFileName", "");
             oRetroTemplateModel.setProperty("/uploadEnabled", false);
             oRetroTemplateModel.setProperty("/defaultTemplateFile", "Style_Capgemini_Standard.docx");
 
-            // Open the template dialog
+            // Build templates list: default + uploaded FS template if present
+            var bHasFS = !!oRetroTemplateModel.getProperty("/hasUploadedTemplateFS");
+            var sFSFile = oRetroTemplateModel.getProperty("/uploadedTemplateFileFS") || "";
+            var aFSTemplates = [{ key: "default", text: "Default (Style_Capgemini_Standard.docx)" }];
+            if (bHasFS && sFSFile) {
+                aFSTemplates.push({ key: "uploaded", text: sFSFile + " (Uploaded)" });
+                oRetroTemplateModel.setProperty("/uploadedTemplateFile", sFSFile);
+                oRetroTemplateModel.setProperty("/uploadedTemplateData", oRetroTemplateModel.getProperty("/uploadedTemplateDataFS"));
+                oRetroTemplateModel.setProperty("/hasUploadedTemplate", true);
+            } else {
+                oRetroTemplateModel.setProperty("/hasUploadedTemplate", false);
+            }
+            oRetroTemplateModel.setProperty("/templates", aFSTemplates);
+            oRetroTemplateModel.setProperty("/selectedTemplateKey", bHasFS ? "uploaded" : "default");
+
             this._openRetroTemplateDialog();
         },
 
@@ -13934,6 +16311,42 @@ sap.ui.define([
             }
         },
 
+        onRetroTemplateDialogConfirm: function () {
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var sTemplateType = oRetroTemplateModel.getProperty("/templateType");
+            var sSelectedKey = oRetroTemplateModel.getProperty("/selectedTemplateKey");
+
+            var sDisplayName = "";
+            if (sSelectedKey === "uploaded" && oRetroTemplateModel.getProperty("/hasUploadedTemplate")) {
+                sDisplayName = oRetroTemplateModel.getProperty("/uploadedTemplateFile") || "";
+                // Persist selection back into type-specific slots
+                if (sTemplateType === "functional") {
+                    oRetroTemplateModel.setProperty("/uploadedTemplateFileFS", sDisplayName);
+                    oRetroTemplateModel.setProperty("/uploadedTemplateDataFS", oRetroTemplateModel.getProperty("/uploadedTemplateData"));
+                    oRetroTemplateModel.setProperty("/hasUploadedTemplateFS", true);
+                } else {
+                    oRetroTemplateModel.setProperty("/uploadedTemplateFileTS", sDisplayName);
+                    oRetroTemplateModel.setProperty("/uploadedTemplateDataTS", oRetroTemplateModel.getProperty("/uploadedTemplateData"));
+                    oRetroTemplateModel.setProperty("/hasUploadedTemplateTS", true);
+                }
+            } else {
+                sDisplayName = oRetroTemplateModel.getProperty("/defaultTemplateFile") || "Style_Capgemini_Standard.docx";
+            }
+
+            // Update the appropriate input field and auto-check the matching document checkbox
+            if (sTemplateType === "functional") {
+                oRetroDocModel.setProperty("/fsTemplateFileName", sDisplayName);
+                oRetroDocModel.setProperty("/createFS", true);
+            } else {
+                oRetroDocModel.setProperty("/tsTemplateFileName", sDisplayName);
+                oRetroDocModel.setProperty("/createTS", true);
+            }
+
+            sap.m.MessageToast.show("Template confirmed: " + sDisplayName);
+            this.onRetroTemplateDialogClose();
+        },
+
         /**
         * Handler for template selection change in the dialog
         * Added for Retro Documentation feature
@@ -13951,14 +16364,72 @@ sap.ui.define([
          * Added for Retro Documentation feature
          */
         onRetroViewTemplate: function () {
-            // Show information dialog that DOCX files cannot be previewed directly
-            sap.m.MessageBox.information(
-                "DOCX files cannot be previewed directly in the browser. Please use the Download option to view the template in Microsoft Word or a compatible application.",
-                {
-                    title: "View Template",
-                    actions: [sap.m.MessageBox.Action.OK]
+            // Download the template so the user can open it in Word (best available DOCX preview)
+            this.onRetroDownloadTemplate();
+        },
+
+        /**
+         * View / Download the FS Template directly from the main form's eye icon button
+         */
+        onRetroViewFSTemplate: function () {
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var bHasUploaded = !!oRetroTemplateModel.getProperty("/hasUploadedTemplateFS");
+            if (bHasUploaded && oRetroTemplateModel.getProperty("/uploadedTemplateDataFS")) {
+                this._downloadTemplateFromBase64(
+                    oRetroTemplateModel.getProperty("/uploadedTemplateDataFS"),
+                    oRetroTemplateModel.getProperty("/uploadedTemplateFileFS") || oRetroDocModel.getProperty("/fsTemplateFileName")
+                );
+            } else {
+                var sDefaultFile = "Style_Capgemini_Standard.docx";
+                var sUrl = sap.ui.require.toUrl("aicockpitfe/templates/" + sDefaultFile);
+                var oLink = document.createElement("a");
+                oLink.href = sUrl; oLink.download = sDefaultFile;
+                document.body.appendChild(oLink); oLink.click(); document.body.removeChild(oLink);
+            }
+        },
+
+        /**
+         * View / Download the TS Template directly from the main form's eye icon button
+         */
+        onRetroViewTSTemplate: function () {
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            var oRetroDocModel = this.getView().getModel("retroDocModel");
+            var bHasUploaded = !!oRetroTemplateModel.getProperty("/hasUploadedTemplateTS");
+            if (bHasUploaded && oRetroTemplateModel.getProperty("/uploadedTemplateDataTS")) {
+                this._downloadTemplateFromBase64(
+                    oRetroTemplateModel.getProperty("/uploadedTemplateDataTS"),
+                    oRetroTemplateModel.getProperty("/uploadedTemplateFileTS") || oRetroDocModel.getProperty("/tsTemplateFileName")
+                );
+            } else {
+                var sDefaultFile = "Style_Capgemini_Standard.docx";
+                var sUrl = sap.ui.require.toUrl("aicockpitfe/templates/" + sDefaultFile);
+                var oLink = document.createElement("a");
+                oLink.href = sUrl; oLink.download = sDefaultFile;
+                document.body.appendChild(oLink); oLink.click(); document.body.removeChild(oLink);
+            }
+        },
+
+        /**
+         * Helper: convert a base64 string to a Blob and trigger a browser file download
+         */
+        _downloadTemplateFromBase64: function (sBase64, sFileName) {
+            try {
+                var byteCharacters = atob(sBase64);
+                var byteNumbers = new Array(byteCharacters.length);
+                for (var i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
-            );
+                var byteArray = new Uint8Array(byteNumbers);
+                var oBlob = new Blob([byteArray], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+                var sBlobUrl = URL.createObjectURL(oBlob);
+                var oLink = document.createElement("a");
+                oLink.href = sBlobUrl; oLink.download = sFileName || "template.docx";
+                document.body.appendChild(oLink); oLink.click(); document.body.removeChild(oLink);
+                URL.revokeObjectURL(sBlobUrl);
+            } catch (e) {
+                sap.m.MessageBox.error("Failed to download template: " + e.message);
+            }
         },
         /**
          * Handler for Download Template button press
@@ -14144,10 +16615,23 @@ sap.ui.define([
             var oRetroDocModel = oView.getModel("retroDocModel");
             var that = this;
 
+            // Get search pattern from ComboBox control directly (fallback for timing issues)
+            var oSearchComboBox = this.byId("retroSearchPatternInputTop");
+            var sSearchPattern = oRetroDocModel.getProperty("/searchPattern");
+
+            // If model value is empty, try getting it directly from the ComboBox
+            if (!sSearchPattern && oSearchComboBox) {
+                sSearchPattern = oSearchComboBox.getValue();
+                // Update the model with the ComboBox value
+                if (sSearchPattern) {
+                    oRetroDocModel.setProperty("/searchPattern", sSearchPattern);
+                }
+            }
+
             // Log start of search
             var sObjectType = oRetroDocModel.getProperty("/selectedObjectType");
             var sSapSystem = oRetroDocModel.getProperty("/selectedSapSystem");
-            var sSearchPattern = oRetroDocModel.getProperty("/searchPattern");
+            // var sSearchPattern = oRetroDocModel.getProperty("/searchPattern");
             this._appendProcessLog(
                 "Searching Objects",
                 "Object Type: " + (sObjectType || "") + ", System: " + (sSapSystem || "") + ", Pattern: " + (sSearchPattern || ""),
@@ -14196,6 +16680,7 @@ sap.ui.define([
                     { status: "pending" },
                     { status: "pending" }
                 ]);
+                _syncAgentFlow(oDefaultModel);
                 oDefaultModel.setProperty("/agentConnectors", [
                     { completed: false },
                     { completed: false },
@@ -14342,7 +16827,7 @@ sap.ui.define([
                             oDefaultModel = new sap.ui.model.json.JSONModel({});
                             that.getView().setModel(oDefaultModel);
                         }
-                        oDefaultModel.setProperty("/logPanelVisible", true);
+                        // oDefaultModel.setProperty("/logPanelVisible", true);
                         // Log results with timestamp
                         that._appendProcessLog(
                             "Searching Objects",
@@ -14369,7 +16854,7 @@ sap.ui.define([
                             oDefaultModel = new sap.ui.model.json.JSONModel({});
                             that.getView().setModel(oDefaultModel);
                         }
-                        oDefaultModel.setProperty("/logPanelVisible", true);
+                        // oDefaultModel.setProperty("/logPanelVisible", true);
                         that._appendProcessLog(
                             "Searching Objects",
                             "Error parsing search results: " + e.message,
@@ -14402,7 +16887,7 @@ sap.ui.define([
                         oDefaultModel = new sap.ui.model.json.JSONModel({});
                         that.getView().setModel(oDefaultModel);
                     }
-                    oDefaultModel.setProperty("/logPanelVisible", true);
+                    // oDefaultModel.setProperty("/logPanelVisible", true);
                     that._appendProcessLog(
                         "Searching Objects",
                         "Error: " + sErrorMsg,
@@ -14495,10 +16980,11 @@ sap.ui.define([
                     oRetroDocModel.setProperty("/updateFS", oExisting.hasFS);
                     oRetroDocModel.setProperty("/updateTS", oExisting.hasTS);
 
-                    oRetroDocModel.setProperty(
-                        "/documentMode",
-                        "create"
-                    );
+                    if (oExisting.hasFS || oExisting.hasTS) {
+                        oRetroDocModel.setProperty("/documentMode", "update");
+                    } else {
+                        oRetroDocModel.setProperty("/documentMode", "create");
+                    }
 
                     oRetroDocModel.refresh(true);
                 }.bind(this));
@@ -14540,6 +17026,7 @@ sap.ui.define([
                     { status: "pending" },
                     { status: "pending" }
                 ]);
+                _syncAgentFlow(oDefaultModel);
                 oDefaultModel.setProperty("/agentConnectors", [
                     { completed: false },
                     { completed: false },
@@ -14559,6 +17046,66 @@ sap.ui.define([
         * Resets all form fields to default values
         * Added for Retro Documentation feature
         */
+        // onRetroResetPress: function () {
+        //     var oRetroDocModel = this.getView().getModel("retroDocModel");
+
+        //     // Disable reset button after reset (will be re-enabled after next pipeline completion)
+        //     oRetroDocModel.setProperty("/resetEnabled", false);
+
+        //     // Reset to default values
+        //     oRetroDocModel.setProperty("/selectedObjectType", "PROG");
+        //     oRetroDocModel.setProperty("/selectedSapSystem", "DEV");
+        //     oRetroDocModel.setProperty("/searchPattern", "Z*");
+        //     oRetroDocModel.setProperty("/sourceMode", -1);
+        //     oRetroDocModel.setProperty("/searchSuggestions", []);
+        //     oRetroDocModel.setProperty("/currentStep", 1);
+        //     oRetroDocModel.setProperty("/logTimestamp", this._getCurrentTimestamp());
+
+        //     // Also hide and clear search results and disable buttons/document mode
+        //     oRetroDocModel.setProperty("/searchResultsVisible", false);
+        //     oRetroDocModel.setProperty("/searchResults", []);
+        //     oRetroDocModel.setProperty("/searchResultsCount", 0);
+        //     oRetroDocModel.setProperty("/selectedObjects", []);
+        //     oRetroDocModel.setProperty("/isSearching", false);
+        //     oRetroDocModel.setProperty("/buttonsEnabled", false);
+        //     oRetroDocModel.setProperty("/documentModeEnabled", false);
+        //     oRetroDocModel.setProperty("/documentMode", "create");
+        //     oRetroDocModel.setProperty("/hasExistingFS", false);
+        //     oRetroDocModel.setProperty("/hasExistingTS", false);
+        //     oRetroDocModel.setProperty("/createFS", true);
+        //     oRetroDocModel.setProperty("/createTS", true);
+
+        //     // Clear Agent Pipeline, Process Log, and Documents Ready sections
+        //     var oDefaultModel = this.getView().getModel();
+        //     if (oDefaultModel) {
+        //         // Hide and reset Agent Pipeline
+        //         oDefaultModel.setProperty("/agentPipelineVisible", false);
+        //         oDefaultModel.setProperty("/agentPipelineStatus", "");
+        //         oDefaultModel.setProperty("/agentPipelineComplete", false);
+        //         oDefaultModel.setProperty("/agentSteps", [
+        //             { status: "pending" },
+        //             { status: "pending" },
+        //             { status: "pending" },
+        //             { status: "pending" }
+        //         ]);
+        //         oDefaultModel.setProperty("/agentConnectors", [
+        //             { completed: false },
+        //             { completed: false },
+        //             { completed: false }
+        //         ]);
+
+        //         // Clear Process Log
+        //         oDefaultModel.setProperty("/logEntries", []);
+        //         oDefaultModel.setProperty("/logPanelVisible", true);
+
+        //         // Clear Documents Ready section
+        //         oDefaultModel.setProperty("/downloadItems", []);
+        //         oDefaultModel.setProperty("/downloadPanelVisible", false);
+        //     }
+
+        //     sap.m.MessageToast.show("Form reset to default values.");
+        // },
+
         onRetroResetPress: function () {
             var oRetroDocModel = this.getView().getModel("retroDocModel");
 
@@ -14569,7 +17116,44 @@ sap.ui.define([
             oRetroDocModel.setProperty("/selectedObjectType", "PROG");
             oRetroDocModel.setProperty("/selectedSapSystem", "DEV");
             oRetroDocModel.setProperty("/searchPattern", "Z*");
+            // Also explicitly clear the search pattern ComboBox value/selection to
+            // ensure any previously selected program (e.g. ZABAP_MCP_TEST) is wiped
+            var oSearchComboBox = this.getView().byId("retroSearchPatternInputTop");
+            if (oSearchComboBox) {
+                oSearchComboBox.setSelectedKey("");
+                oSearchComboBox.setValue("Z*");
+            }
+            // Clear the Released Transport Request input as well
+            var oTRInput = this.getView().byId("retroTRInputTop");
+            if (oTRInput) {
+                oTRInput.setValue("");
+            }
+            // Clear the Upload Code FileUploader and related model properties
+            var oCodeUploader = this.getView().byId("retroCodeUploader");
+            if (oCodeUploader) {
+                oCodeUploader.clear();
+            }
+            oRetroDocModel.setProperty("/uploadCodeEnabled", false);
+            oRetroDocModel.setProperty("/uploadedCodeFileName", "");
+            oRetroDocModel.setProperty("/uploadedSourceCode", "");
+            oRetroDocModel.setProperty("/sourceInputType", "selection");
+            oRetroDocModel.setProperty("/selectedObject", "");
+            oRetroDocModel.setProperty("/existingFSFileName", "");
+            oRetroDocModel.setProperty("/existingTSFileName", "");
+            oRetroDocModel.setProperty("/existingFSFileKey", "");
+            oRetroDocModel.setProperty("/existingTSFileKey", "");
+            oRetroDocModel.setProperty("/existingFSDownloadUrl", "");
+            oRetroDocModel.setProperty("/existingTSDownloadUrl", "");
+            oRetroDocModel.setProperty("/existingFSViewUrl", "");
+            oRetroDocModel.setProperty("/existingTSViewUrl", "");
             oRetroDocModel.setProperty("/sourceMode", -1);
+            oRetroDocModel.setProperty("/sourceConfigKey", "");
+            oRetroDocModel.setProperty("/sourceConfigContent", "Select a Source Configuration option above to view the next-step instructions.");
+            // Reset the Source Configuration dropdown to "-- Select --"
+            var oSourceConfigSelect = this.getView().byId("sourceConfigSelect");
+            if (oSourceConfigSelect) {
+                oSourceConfigSelect.setSelectedKey("");
+            }
             oRetroDocModel.setProperty("/searchSuggestions", []);
             oRetroDocModel.setProperty("/currentStep", 1);
             oRetroDocModel.setProperty("/logTimestamp", this._getCurrentTimestamp());
@@ -14585,8 +17169,10 @@ sap.ui.define([
             oRetroDocModel.setProperty("/documentMode", "create");
             oRetroDocModel.setProperty("/hasExistingFS", false);
             oRetroDocModel.setProperty("/hasExistingTS", false);
-            oRetroDocModel.setProperty("/createFS", true);
-            oRetroDocModel.setProperty("/createTS", true);
+            oRetroDocModel.setProperty("/createFS", false);
+            oRetroDocModel.setProperty("/createTS", false);
+            oRetroDocModel.setProperty("/updateFS", false);
+            oRetroDocModel.setProperty("/updateTS", false);
 
             // Clear Agent Pipeline, Process Log, and Documents Ready sections
             var oDefaultModel = this.getView().getModel();
@@ -14601,6 +17187,8 @@ sap.ui.define([
                     { status: "pending" },
                     { status: "pending" }
                 ]);
+                // Sync ProcessFlow visualization after pipeline reset
+                _syncAgentFlow(oDefaultModel);
                 oDefaultModel.setProperty("/agentConnectors", [
                     { completed: false },
                     { completed: false },
@@ -14609,12 +17197,49 @@ sap.ui.define([
 
                 // Clear Process Log
                 oDefaultModel.setProperty("/logEntries", []);
-                oDefaultModel.setProperty("/logPanelVisible", true);
+                oDefaultModel.setProperty("/logPanelVisible", false);
 
                 // Clear Documents Ready section
                 oDefaultModel.setProperty("/downloadItems", []);
                 oDefaultModel.setProperty("/downloadPanelVisible", false);
+
+                // Reset ProcessFlow lanes to Neutral/grey state
+                var that = this;
+                setTimeout(function () {
+                    var oPF = that._getRetroProcessFlow();
+                    if (oPF) {
+                        // Reset all lane states to empty (grey/neutral)
+                        oPF.getLanes().forEach(function (oLane) {
+                            oLane.setState([]);
+                        });
+                        // Reset all node states to Neutral and clear titles ("Completed", "Processing", etc.)
+                        oPF.getNodes().forEach(function (oNode) {
+                            oNode.setState("Neutral");
+                            oNode.setTitle("");
+                            oNode.setTitleAbbreviation("");
+                        });
+                        oPF.invalidate();
+                    }
+                }, 0);
             }
+
+            // Reset template section
+            oRetroDocModel.setProperty("/templateEnabled", false);
+            oRetroDocModel.setProperty("/fsTemplateFileName", "");
+            oRetroDocModel.setProperty("/tsTemplateFileName", "");
+            var oRetroTemplateModel = this.getView().getModel("retroTemplateModel");
+            if (oRetroTemplateModel) {
+                oRetroTemplateModel.setProperty("/hasUploadedTemplateFS", false);
+                oRetroTemplateModel.setProperty("/uploadedTemplateDataFS", "");
+                oRetroTemplateModel.setProperty("/uploadedTemplateFileFS", "");
+                oRetroTemplateModel.setProperty("/hasUploadedTemplateTS", false);
+                oRetroTemplateModel.setProperty("/uploadedTemplateDataTS", "");
+                oRetroTemplateModel.setProperty("/uploadedTemplateFileTS", "");
+            }
+            var oFSUploader = this.getView().byId("retroFSTemplateUploader");
+            if (oFSUploader) { oFSUploader.clear(); }
+            var oTSUploader = this.getView().byId("retroTSTemplateUploader");
+            if (oTSUploader) { oTSUploader.clear(); }
 
             sap.m.MessageToast.show("Form reset to default values.");
         },
@@ -14630,12 +17255,479 @@ sap.ui.define([
         RETRO_DELTA_LINE_THRESHOLD: 80,
 
         // generating docs on click of generate docs this was happening.
+        // onRetroGenerateDocsPress: function () {
+        //     var oRetro = this.getView().getModel("retroDocModel");
+
+        //     if (!oRetro || !oRetro.getProperty("/buttonsEnabled")) {
+        //         return;
+        //     }
+        //     // Disable Generate Documents button to prevent multiple clicks
+        //     oRetro.setProperty("/buttonsEnabled", false);
+
+        //     var aSelected = oRetro.getProperty("/selectedObjects") || [];
+        //     var oSel = aSelected[0] || {};
+
+        //     var sObjectName = oSel.objectName || oRetro.getProperty("/selectedObject") || "";
+        //     var sObjectType = oSel.objectType || oRetro.getProperty("/selectedObjectType") || "PROG";
+        //     var sDocMode = oRetro.getProperty("/documentMode") || "create";
+        //     var bCreateFS = !!oRetro.getProperty("/createFS");
+        //     var bCreateTS = !!oRetro.getProperty("/createTS");
+
+        //     // In update mode, the checkboxes used are updateFS/updateTS
+        //     if (sDocMode === "update") {
+        //         bCreateFS = !!oRetro.getProperty("/updateFS");
+        //         bCreateTS = !!oRetro.getProperty("/updateTS");
+        //     }
+        //     // In upload code mode, use uploaded file name as object name
+        //     var sSourceInputType = oRetro.getProperty("/sourceInputType") || "selection";
+        //     if (sSourceInputType === "upload") {
+        //         var sUploadedCode = oRetro.getProperty("/uploadedSourceCode") || "";
+        //         if (!sUploadedCode) {
+        //             sap.m.MessageToast.show("No source code loaded. Please upload a file first.");
+        //             return;
+        //         }
+        //         // Derive object name from uploaded file or use a default
+        //         var sUploadedFileName = oRetro.getProperty("/uploadedCodeFileName") || "UPLOADED_PROGRAM";
+        //         sObjectName = sUploadedFileName.replace(/\.(txt|abap)$/i, "").toUpperCase();
+        //     } else if (!sObjectName) {
+        //         sap.m.MessageToast.show("Please select an object first");
+        //         return;
+        //     }
+
+        //     if (!bCreateFS && !bCreateTS) {
+        //         sap.m.MessageToast.show("Please select FS or TS to generate");
+        //         return;
+        //     }
+
+        //     // ============================================================
+        //     // Update Existing mode → run delta pipeline (in-place update)
+        //     // ============================================================
+        //     if (sDocMode === "update") {
+        //         return this._retroRunDeltaUpdatePipeline(sObjectName, sObjectType, bCreateFS, bCreateTS);
+        //     }
+
+        //     var oDefaultModel = this.getView().getModel();
+
+        //     if (!oDefaultModel) {
+        //         oDefaultModel = new sap.ui.model.json.JSONModel({});
+        //         this.getView().setModel(oDefaultModel);
+        //     }
+
+        //     oDefaultModel.setProperty("/agentPipelineVisible", true);
+        //     oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
+        //     oDefaultModel.setProperty("/agentPipelineComplete", false);
+        //     oDefaultModel.setProperty("/logPanelVisible", true);
+
+        //     var aSteps = [
+        //         { status: "processing" },
+        //         { status: "pending" },
+        //         { status: "pending" },
+        //         { status: "pending" }
+        //     ];
+
+        //     oDefaultModel.setProperty("/agentSteps", aSteps);
+        //     oDefaultModel.setProperty("/agentConnectors", [
+        //         { completed: false },
+        //         { completed: false },
+        //         { completed: false }
+        //     ]);
+
+        //     var updateConnector = function (i) {
+        //         var aConnectors = oDefaultModel.getProperty("/agentConnectors") || [
+        //             { completed: false },
+        //             { completed: false },
+        //             { completed: false }
+        //         ];
+
+        //         if (aConnectors[i]) {
+        //             aConnectors[i].completed = true;
+        //             oDefaultModel.setProperty("/agentConnectors", aConnectors);
+        //         }
+        //     };
+
+        //     var setStep = function (i, sStatus) {
+        //         if (aSteps[i]) {
+        //             aSteps[i].status = sStatus;
+        //             oDefaultModel.setProperty("/agentSteps", aSteps);
+        //         }
+        //     };
+
+        //     var that = this;
+
+        //     this._setRetroLogStep(
+        //         "retro-pipeline-start",
+        //         "Pipeline",
+        //         sDocMode === "create"
+        //             ? "Generating: " + (bCreateFS ? "FS " : "") + (bCreateTS ? "TS" : "")
+        //             : "Update Existing mode selected",
+        //         "information"
+        //     );
+
+        //     var bModelHasFS = !!oRetro.getProperty("/hasExistingFS");
+        //     var bModelHasTS = !!oRetro.getProperty("/hasExistingTS");
+
+        //     var pCheck = Promise.resolve({
+        //         exists: bModelHasFS || bModelHasTS,
+        //         hasFS: bModelHasFS,
+        //         hasTS: bModelHasTS
+        //     });
+
+        //     pCheck
+        //         .then(function (res) {
+        //             if (sDocMode === "create") {
+        //                 var bConflict = (bCreateFS && res.hasFS) || (bCreateTS && res.hasTS);
+
+        //                 if (bConflict) {
+        //                     var sMsg = "Documents already exist for the selected program.";
+        //                     if (res.hasFS) {
+        //                         sMsg += " Functional Specification already exists.";
+        //                     }
+        //                     if (res.hasTS) {
+        //                         sMsg += " Technical Specification already exists.";
+        //                     }
+        //                     sMsg += " Please use 'Update Existing' to modify the Functional and/or Technical Specification.";
+
+        //                     MessageBox.warning(sMsg, {
+        //                         title: "Documents Already Exist",
+        //                         actions: [MessageBox.Action.OK],
+        //                         onClose: function () {
+        //                             // Re-enable Generate Documents button so user can switch mode
+        //                             oRetro.setProperty("/buttonsEnabled", true);
+        //                         }
+        //                     });
+
+        //                     that._setRetroLogStep(
+        //                         "retro-validation",
+        //                         "Validation Failed",
+        //                         sMsg,
+        //                         "error"
+        //                     );
+
+        //                     oDefaultModel.setProperty("/agentPipelineStatus", "Aborted");
+        //                     setStep(0, "completed");
+
+        //                     return Promise.reject(new Error(sMsg));
+        //                 }
+
+        //                 that._setRetroLogStep(
+        //                     "retro-validation",
+        //                     "Validation",
+        //                     "No existing documents for selected types. Proceeding.",
+        //                     "success"
+        //                 );
+        //             } else {
+        //                 that._setRetroLogStep(
+        //                     "retro-validation",
+        //                     "Update Mode",
+        //                     "Proceeding to fetch source and regenerate selected documents.",
+        //                     "information"
+        //                 );
+        //             }
+
+        //             setStep(0, "completed");
+        //             updateConnector(0);
+
+        //             setStep(1, "processing");
+
+        //             that._setRetroLogStep(
+        //                 "retro-fetch-source",
+        //                 "Fetching Source Code",
+        //                 "Reading ABAP source via arc1-mcp for " +
+        //                 sObjectName +
+        //                 " (" +
+        //                 sObjectType +
+        //                 ")",
+        //                 "processing"
+        //             );
+
+        //             // If upload mode, use uploaded code directly; otherwise fetch from MCP
+        //             if (sSourceInputType === "upload") {
+        //                 var sUploadedSrc = oRetro.getProperty("/uploadedSourceCode") || "";
+        //                 that._setRetroLogStep("retro-fetch-source", "Source Code", "Using uploaded source code (" + sUploadedSrc.length + " characters)", "success");
+        //                 return Promise.resolve(sUploadedSrc);
+        //             }
+        //             return that._retroFetchSourceCodeByMCP(sObjectName, sObjectType);
+        //         })
+        //         .then(function (sCode) {
+        //             sCode = that._cleanMcpSourceCode(sCode);
+
+        //             if (!sCode) {
+        //                 throw new Error("No source code found from MCP");
+        //             }
+        //             if (!that._isValidAbapSource(sCode)) {
+        //                 console.error("RETRO: Source code failed validation. Length: " + sCode.length + ", First 200 chars: " + sCode.substring(0, 200));
+        //                 // If the source is long enough, it is likely valid code
+        //                 // even if keywords were not detected (e.g., lowercase, comments-heavy)
+        //                 if (sCode.length < 50) {
+        //                     throw new Error("Invalid ABAP source returned from MCP");
+        //                 }
+        //                 console.warn("RETRO: Proceeding despite validation failure due to sufficient source length (" + sCode.length + " chars)");
+        //             }
+
+        //             that._setRetroLogStep(
+        //                 "retro-fetch-source",
+        //                 "Source",
+        //                 "Retrieved " + sCode.length + " characters from MCP",
+        //                 "success"
+        //             );
+
+        //             setStep(1, "completed");
+        //             updateConnector(1);
+
+        //             setStep(2, "processing");
+
+        //             var tsContent = "";
+        //             var fsContent = "";
+        //             var sCurrentTR = "";
+
+        //             // Fetch transport request for Version History (non-blocking - fallback to TRXXXXXX)
+        //             return that._retroFetchTransportsFromAPI(sObjectName)
+        //                 .then(function (oTransportData) {
+        //                     sCurrentTR = (oTransportData && oTransportData.currentTR) || "";
+        //                     if (sCurrentTR) {
+        //                         that._setRetroLogStep(
+        //                             "retro-transport-info",
+        //                             "Transport",
+        //                             "Current Transport Request: " + sCurrentTR,
+        //                             "success"
+        //                         );
+        //                     }
+        //                 })
+        //                 .catch(function () {
+        //                     // Non-blocking - continue without TR
+        //                     console.log("RETRO: Could not fetch transport request, using placeholder.");
+        //                 })
+        //                 .then(function () {
+        //                     if (bCreateTS) {
+        //                         that._setRetroLogStep(
+        //                             "retro-ts-generation",
+        //                             "Tech Spec",
+        //                             "Generating Technical Specification via AI Core...",
+        //                             "processing"
+        //                         );
+
+        //                         return that._retroGenerateTechSpecLocally(sCode, {
+        //                             name: sObjectName,
+        //                             type: sObjectType
+        //                         }, sCurrentTR).then(function (sTS) {
+        //                             tsContent = sTS || "";
+
+        //                             that._setRetroLogStep(
+        //                                 "retro-ts-generation",
+        //                                 "Tech Spec",
+        //                                 "Technical Specification generated successfully.",
+        //                                 "success",
+        //                                 true,
+        //                                 {
+        //                                     docKind: "TS",
+        //                                     documentTitle: "Technical Specification",
+        //                                     filename: sObjectName + "_TS.docx",
+        //                                     generatedContent: tsContent
+        //                                 }
+        //                             );
+        //                         });
+        //                     }
+        //                 })
+        //                 .then(function () {
+        //                     if (bCreateFS) {
+        //                         that._setRetroLogStep(
+        //                             "retro-fs-generation",
+        //                             "Func Spec",
+        //                             "Generating Functional Specification via AI Core...",
+        //                             "processing"
+        //                         );
+
+        //                         return that._retroGenerateFuncSpecLocally(
+        //                             sCode,
+        //                             {
+        //                                 name: sObjectName,
+        //                                 type: sObjectType
+        //                             },
+        //                             tsContent,
+        //                             sCurrentTR
+        //                         ).then(function (sFS) {
+        //                             fsContent = sFS || "";
+
+        //                             that._setRetroLogStep(
+        //                                 "retro-fs-generation",
+        //                                 "Func Spec",
+        //                                 "Functional Specification generated successfully.",
+        //                                 "success",
+        //                                 true,
+        //                                 {
+        //                                     docKind: "FS",
+        //                                     documentTitle: "Functional Specification",
+        //                                     filename: sObjectName + "_FS.docx",
+        //                                     generatedContent: fsContent
+        //                                 }
+        //                             );
+        //                         });
+        //                     }
+        //                 })
+        //                 .then(function () {
+        //                     var sDocsGenerated = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
+        //                     that._setRetroLogStep(
+        //                         "retro-doc-generation",
+        //                         "Docs",
+        //                         sDocsGenerated + " generation completed.",
+        //                         "success"
+        //                     );
+
+        //                     setStep(2, "completed");
+        //                     updateConnector(2);
+
+        //                     setStep(3, "processing");
+
+        //                     that._setRetroLogStep(
+        //                         "retro-upload",
+        //                         "Uploading",
+        //                         "Creating Word documents and uploading to Object Store under Retro prefix...",
+        //                         "processing"
+        //                     );
+
+        //                     return that._retroUploadDocuments(
+        //                         sObjectName,
+        //                         sObjectType,
+        //                         tsContent,
+        //                         fsContent
+        //                     );
+        //                 });
+        //         })
+        //         .then(function (aResults) {
+        //             var aItems = [];
+
+        //             (aResults || []).forEach(function (r) {
+        //                 if (r && r.filename) {
+        //                     aItems.push({
+        //                         name: r.type || "Document",
+        //                         filename: r.filename,
+        //                         objectName: sObjectName,
+        //                         objectType: sObjectType,
+        //                         category: r.category || "Retro",
+        //                         objectPath: r.objectPath || "",
+        //                         docKind: r.docKind,
+        //                         generatedContent: r.generatedContent || "",
+        //                         fileObject: r.fileObject,
+        //                         downloadMeta: r
+        //                     });
+        //                 }
+        //             });
+
+        //             oDefaultModel.setProperty("/downloadItems", aItems);
+        //             oDefaultModel.setProperty("/downloadPanelVisible", aItems.length > 0);
+
+        //             var sDocsUploaded = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
+        //             that._setRetroLogStep(
+        //                 "retro-upload",
+        //                 "Object Store",
+        //                 "Generated " + sDocsUploaded + " Word document(s) saved to Object Store under Retro prefix.",
+        //                 "success"
+        //             );
+
+        //             setStep(3, "completed");
+
+        //             oDefaultModel.setProperty("/agentPipelineComplete", true);
+        //             oDefaultModel.setProperty("/agentPipelineStatus", "Completed");
+        //             that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+        //             var sDocsCompleted = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
+        //             that._setRetroLogStep(
+        //                 "retro-completed",
+        //                 "Completed",
+        //                 "Pipeline finished. Generated " + sDocsCompleted + " Word document(s) are stored under Retro prefix in Object Store.",
+        //                 "success"
+        //             );
+
+        //             sap.m.MessageToast.show("Generated documents uploaded successfully.");
+        //         })
+        //         .catch(function (err) {
+        //             var sErrorMsg = err && err.message ? err.message : "Pipeline failed";
+
+        //             // If the rejection was due to "Documents Already Exist" conflict,
+        //             // the warning dialog was already shown - skip the error dialog and log
+        //             if (sErrorMsg && sErrorMsg.indexOf("Documents already exist") !== -1) {
+        //                 return;
+        //             }
+
+        //             that._setRetroLogStep(
+        //                 "retro-error",
+        //                 "Error",
+        //                 sErrorMsg,
+        //                 "error"
+        //             );
+
+        //             oDefaultModel.setProperty("/agentPipelineStatus", "Failed");
+        //             oDefaultModel.setProperty("/agentPipelineComplete", false);
+        //             // Enable reset button so user can reset after failure
+        //             that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
+
+        //             sap.m.MessageBox.error(sErrorMsg);
+        //         });
+        // },
+
         onRetroGenerateDocsPress: function () {
             var oRetro = this.getView().getModel("retroDocModel");
 
-            if (!oRetro || !oRetro.getProperty("/buttonsEnabled")) {
+            if (!oRetro) { return; }
+
+            // For Upload Code mode, the Go button is enabled via expression binding
+            // (uploadCodeEnabled && createFS||createTS), so bypass buttonsEnabled check.
+            var sSourceKey = oRetro.getProperty("/sourceConfigKey") || "";
+            if (sSourceKey === "uploadCode") {
+                var bFileReady = !!oRetro.getProperty("/uploadCodeEnabled");
+                var bDocSelected = !!(oRetro.getProperty("/createFS") || oRetro.getProperty("/createTS"));
+                if (!bFileReady) {
+                    sap.m.MessageToast.show("Please select a source file first.");
+                    return;
+                }
+                if (!bDocSelected) {
+                    sap.m.MessageToast.show("Please select FS or TS to generate.");
+                    return;
+                }
+                // Read the uploaded file content now if not already loaded
+                if (!oRetro.getProperty("/uploadedSourceCode")) {
+                    var oUploader = this.byId("retroCodeUploader");
+                    if (oUploader && oUploader.oFileUpload && oUploader.oFileUpload.files.length > 0) {
+                        var that = this;
+                        var oFile = oUploader.oFileUpload.files[0];
+                        var sFileExt = (oFile.name.split('.').pop() || "").toLowerCase();
+                        if (sFileExt === "docx") {
+                            // .docx is a binary ZIP – extract text via JSZip
+                            var readerDocx = new FileReader();
+                            readerDocx.onload = function (e) {
+                                try {
+                                    var zip = new JSZip(new Uint8Array(e.target.result.slice(0)));
+                                    var xmlEntry = zip.file("word/document.xml");
+                                    var sText = xmlEntry ? xmlEntry.asText()
+                                        .replace(/<w:p[^>]*>/g, '\n').replace(/<w:br[^>]*\/>/g, '\n')
+                                        .replace(/<w:tab[^>]*\/>/g, '\t').replace(/<[^>]+>/g, '')
+                                        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                                        .replace(/\n{3,}/g, '\n\n').trim() : '';
+                                    oRetro.setProperty("/uploadedSourceCode", sText);
+                                } catch (eDocx) {
+                                    oRetro.setProperty("/uploadedSourceCode", "");
+                                }
+                                oRetro.setProperty("/sourceInputType", "upload");
+                                that.onRetroGenerateDocsPress();
+                            };
+                            readerDocx.readAsArrayBuffer(oFile);
+                        } else {
+                            var reader = new FileReader();
+                            reader.onload = function (e) {
+                                oRetro.setProperty("/uploadedSourceCode", e.target.result);
+                                oRetro.setProperty("/sourceInputType", "upload");
+                                that.onRetroGenerateDocsPress();
+                            };
+                            reader.readAsText(oFile);
+                        }
+                        return;
+                    }
+                }
+                oRetro.setProperty("/sourceInputType", "upload");
+            } else if (!oRetro.getProperty("/buttonsEnabled")) {
                 return;
             }
+
             // Disable Generate Documents button to prevent multiple clicks
             oRetro.setProperty("/buttonsEnabled", false);
 
@@ -14663,7 +17755,7 @@ sap.ui.define([
                 }
                 // Derive object name from uploaded file or use a default
                 var sUploadedFileName = oRetro.getProperty("/uploadedCodeFileName") || "UPLOADED_PROGRAM";
-                sObjectName = sUploadedFileName.replace(/\.(txt|abap)$/i, "").toUpperCase();
+                sObjectName = sUploadedFileName.replace(/\.[^.]+$/i, "").toUpperCase();
             } else if (!sObjectName) {
                 sap.m.MessageToast.show("Please select an object first");
                 return;
@@ -14671,7 +17763,49 @@ sap.ui.define([
 
             if (!bCreateFS && !bCreateTS) {
                 sap.m.MessageToast.show("Please select FS or TS to generate");
+                // Re-enable Generate button since we're not proceeding
+                oRetro.setProperty("/buttonsEnabled", true);
                 return;
+            }
+
+            // TR validation for Update Existing mode
+            if (sDocMode === "update") {
+                var oTRInput = this.getView().byId("retroTRInputTop");
+                var sTRValue = oTRInput ? (oTRInput.getValue() || "").trim() : "";
+                if (!sTRValue) {
+                    sap.m.MessageBox.error("Please provide a Released Transport Request to proceed", {
+                        title: "Transport Request Required"
+                    });
+                    if (oTRInput) {
+                        oTRInput.setValueState("Error");
+                        oTRInput.setValueStateText("Please provide a Released Transport Request to proceed");
+                    }
+                    // Re-enable Generate button so user can enter TR and retry
+                    oRetro.setProperty("/buttonsEnabled", true);
+                    return;
+                }
+                // Clear error state if TR was provided
+                if (oTRInput) {
+                    oTRInput.setValueState("None");
+                }
+            }
+
+            if (!bCreateTS) {
+                this._setRetroLogStep(
+                    "step-3",
+                    "Tech Spec",
+                    "Not Selected",
+                    "info"
+                );
+            }
+
+            if (!bCreateFS) {
+                this._setRetroLogStep(
+                    "step-4",
+                    "Func Spec",
+                    "Not Selected",
+                    "info"
+                );
             }
 
             // ============================================================
@@ -14681,6 +17815,20 @@ sap.ui.define([
                 return this._retroRunDeltaUpdatePipeline(sObjectName, sObjectType, bCreateFS, bCreateTS);
             }
 
+            // ============================================================
+            // Busy dialog for the "gap" phases of the retro pipeline:
+            //   - After Go is clicked and before Technical Specification
+            //     appears on the right panel (source fetch + AI generation)
+            //   - Between TS appearing and FS appearing (FS AI generation)
+            //   - Between FS appearing and the Object Store upload finishing
+            // The dialog's title changes as the pipeline progresses so users
+            // can see which step is running. It's closed on completion or on
+            // any error via the .then/.catch chain further below.
+            // ============================================================
+            try {
+                sap.ui.core.BusyIndicator.show(0);
+            } catch (eBusy) { /* best-effort */ }
+
             var oDefaultModel = this.getView().getModel();
 
             if (!oDefaultModel) {
@@ -14688,54 +17836,16 @@ sap.ui.define([
                 this.getView().setModel(oDefaultModel);
             }
 
-            oDefaultModel.setProperty("/agentPipelineVisible", true);
-            oDefaultModel.setProperty("/agentPipelineStatus", "In Progress");
-            oDefaultModel.setProperty("/agentPipelineComplete", false);
+            oDefaultModel.setProperty("/agentPipelineVisible", false);
             oDefaultModel.setProperty("/logPanelVisible", true);
-
-            var aSteps = [
-                { status: "processing" },
-                { status: "pending" },
-                { status: "pending" },
-                { status: "pending" }
-            ];
-
-            oDefaultModel.setProperty("/agentSteps", aSteps);
-            oDefaultModel.setProperty("/agentConnectors", [
-                { completed: false },
-                { completed: false },
-                { completed: false }
-            ]);
-
-            var updateConnector = function (i) {
-                var aConnectors = oDefaultModel.getProperty("/agentConnectors") || [
-                    { completed: false },
-                    { completed: false },
-                    { completed: false }
-                ];
-
-                if (aConnectors[i]) {
-                    aConnectors[i].completed = true;
-                    oDefaultModel.setProperty("/agentConnectors", aConnectors);
-                }
-            };
-
-            var setStep = function (i, sStatus) {
-                if (aSteps[i]) {
-                    aSteps[i].status = sStatus;
-                    oDefaultModel.setProperty("/agentSteps", aSteps);
-                }
-            };
 
             var that = this;
 
             this._setRetroLogStep(
-                "retro-pipeline-start",
-                "Pipeline",
-                sDocMode === "create"
-                    ? "Generating: " + (bCreateFS ? "FS " : "") + (bCreateTS ? "TS" : "")
-                    : "Update Existing mode selected",
-                "information"
+                "step-1",
+                "Object Selection",
+                sObjectName + " (" + sObjectType + ")",
+                "success"
             );
 
             var bModelHasFS = !!oRetro.getProperty("/hasExistingFS");
@@ -14753,17 +17863,10 @@ sap.ui.define([
                         var bConflict = (bCreateFS && res.hasFS) || (bCreateTS && res.hasTS);
 
                         if (bConflict) {
-                            var sMsg = "Documents already exist for the selected program.";
-                            if (res.hasFS) {
-                                sMsg += " Functional Specification already exists.";
-                            }
-                            if (res.hasTS) {
-                                sMsg += " Technical Specification already exists.";
-                            }
-                            sMsg += " Please use 'Update Existing' to modify the Functional and/or Technical Specification.";
+                            var sMsg = "Documents already exist for the selected object. Please use 'Update Existing' to modify Documents.";
 
                             MessageBox.warning(sMsg, {
-                                title: "Documents Already Exist",
+                                title: "Warning",
                                 actions: [MessageBox.Action.OK],
                                 onClose: function () {
                                     // Re-enable Generate Documents button so user can switch mode
@@ -14772,53 +17875,54 @@ sap.ui.define([
                             });
 
                             that._setRetroLogStep(
-                                "retro-validation",
-                                "Validation Failed",
+                                "step-1",
+                                "Object Selection",
                                 sMsg,
                                 "error"
                             );
 
-                            oDefaultModel.setProperty("/agentPipelineStatus", "Aborted");
-                            setStep(0, "completed");
-
                             return Promise.reject(new Error(sMsg));
                         }
 
-                        that._setRetroLogStep(
-                            "retro-validation",
-                            "Validation",
-                            "No existing documents for selected types. Proceeding.",
-                            "success"
-                        );
-                    } else {
-                        that._setRetroLogStep(
-                            "retro-validation",
-                            "Update Mode",
-                            "Proceeding to fetch source and regenerate selected documents.",
-                            "information"
-                        );
+                    }
+                    // Collapse left navigation only after GO is clicked
+                    var oSideNav = that.byId("sideNavigation");
+
+                    if (oSideNav && oSideNav.getExpanded()) {
+                        oSideNav.setExpanded(false);
                     }
 
-                    setStep(0, "completed");
-                    updateConnector(0);
-
-                    setStep(1, "processing");
+                    // Navigate to DetailDetail immediately (two-column layout like other tabs)
+                    var sSelectedAIRetro = "";
+                    try {
+                        var oRetroSelModel = that.getView().byId("selModelRetro");
+                        sSelectedAIRetro = oRetroSelModel ? oRetroSelModel.getSelectedKey() : "gpt-4o";
+                    } catch (e) { sSelectedAIRetro = "gpt-4o"; }
+                    // Clear previous TS/FS content before new pipeline run
+                    var oAiRespModelPre = that.getOwnerComponent().getModel("airesponseDetailModel");
+                    if (oAiRespModelPre) {
+                        oAiRespModelPre.setProperty("/tsContent", "");
+                        oAiRespModelPre.setProperty("/fsContent", "");
+                        oAiRespModelPre.setProperty("/resp", "");
+                        oAiRespModelPre.refresh(true);
+                    }
+                    that.oRouter.navTo("DetailDetail", {
+                        dispKey: "retroDocKey",
+                        aimodel: sSelectedAIRetro,
+                        layout: sap.f.LayoutType.TwoColumnsMidExpanded
+                    });
 
                     that._setRetroLogStep(
-                        "retro-fetch-source",
-                        "Fetching Source Code",
-                        "Reading ABAP source via arc1-mcp for " +
-                        sObjectName +
-                        " (" +
-                        sObjectType +
-                        ")",
+                        "step-2",
+                        "Fetch Source",
+                        "Fetching source code for " + sObjectName + "...",
                         "processing"
                     );
 
                     // If upload mode, use uploaded code directly; otherwise fetch from MCP
                     if (sSourceInputType === "upload") {
                         var sUploadedSrc = oRetro.getProperty("/uploadedSourceCode") || "";
-                        that._setRetroLogStep("retro-fetch-source", "Source Code", "Using uploaded source code (" + sUploadedSrc.length + " characters)", "success");
+                        that._setRetroLogStep("step-2", "Fetch Source", "Using uploaded source code (" + sUploadedSrc.length + " characters)", "success");
                         return Promise.resolve(sUploadedSrc);
                     }
                     return that._retroFetchSourceCodeByMCP(sObjectName, sObjectType);
@@ -14840,16 +17944,11 @@ sap.ui.define([
                     }
 
                     that._setRetroLogStep(
-                        "retro-fetch-source",
-                        "Source",
-                        "Retrieved " + sCode.length + " characters from MCP",
+                        "step-2",
+                        "Fetch Source",
+                        "Retrieved " + sCode.length + " characters",
                         "success"
                     );
-
-                    setStep(1, "completed");
-                    updateConnector(1);
-
-                    setStep(2, "processing");
 
                     var tsContent = "";
                     var fsContent = "";
@@ -14859,14 +17958,6 @@ sap.ui.define([
                     return that._retroFetchTransportsFromAPI(sObjectName)
                         .then(function (oTransportData) {
                             sCurrentTR = (oTransportData && oTransportData.currentTR) || "";
-                            if (sCurrentTR) {
-                                that._setRetroLogStep(
-                                    "retro-transport-info",
-                                    "Transport",
-                                    "Current Transport Request: " + sCurrentTR,
-                                    "success"
-                                );
-                            }
                         })
                         .catch(function () {
                             // Non-blocking - continue without TR
@@ -14875,12 +17966,11 @@ sap.ui.define([
                         .then(function () {
                             if (bCreateTS) {
                                 that._setRetroLogStep(
-                                    "retro-ts-generation",
+                                    "step-3",
                                     "Tech Spec",
-                                    "Generating Technical Specification via AI Core...",
+                                    "Generating Technical Specification...",
                                     "processing"
                                 );
-
                                 return that._retroGenerateTechSpecLocally(sCode, {
                                     name: sObjectName,
                                     type: sObjectType
@@ -14888,7 +17978,7 @@ sap.ui.define([
                                     tsContent = sTS || "";
 
                                     that._setRetroLogStep(
-                                        "retro-ts-generation",
+                                        "step-3",
                                         "Tech Spec",
                                         "Technical Specification generated successfully.",
                                         "success",
@@ -14900,18 +17990,25 @@ sap.ui.define([
                                             generatedContent: tsContent
                                         }
                                     );
+
+                                    // Immediately show TS in right panel while FS generates
+                                    var oAiRespModelTS = that.getOwnerComponent().getModel("airesponseDetailModel");
+                                    if (oAiRespModelTS && tsContent) {
+                                        oAiRespModelTS.setProperty("/tsContent", tsContent);
+                                        oAiRespModelTS.setProperty("/resp", tsContent);
+                                        oAiRespModelTS.refresh(true);
+                                    }
                                 });
                             }
                         })
                         .then(function () {
                             if (bCreateFS) {
                                 that._setRetroLogStep(
-                                    "retro-fs-generation",
+                                    "step-4",
                                     "Func Spec",
-                                    "Generating Functional Specification via AI Core...",
+                                    "Generating Functional Specification...",
                                     "processing"
                                 );
-
                                 return that._retroGenerateFuncSpecLocally(
                                     sCode,
                                     {
@@ -14924,7 +18021,7 @@ sap.ui.define([
                                     fsContent = sFS || "";
 
                                     that._setRetroLogStep(
-                                        "retro-fs-generation",
+                                        "step-4",
                                         "Func Spec",
                                         "Functional Specification generated successfully.",
                                         "success",
@@ -14940,26 +18037,12 @@ sap.ui.define([
                             }
                         })
                         .then(function () {
-                            var sDocsGenerated = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
                             that._setRetroLogStep(
-                                "retro-doc-generation",
-                                "Docs",
-                                sDocsGenerated + " generation completed.",
-                                "success"
-                            );
-
-                            setStep(2, "completed");
-                            updateConnector(2);
-
-                            setStep(3, "processing");
-
-                            that._setRetroLogStep(
-                                "retro-upload",
-                                "Uploading",
-                                "Creating Word documents and uploading to Object Store under Retro prefix...",
+                                "step-5",
+                                "Download",
+                                "Creating Word documents and uploading to Object Store...",
                                 "processing"
                             );
-
                             return that._retroUploadDocuments(
                                 sObjectName,
                                 sObjectType,
@@ -14993,30 +18076,79 @@ sap.ui.define([
 
                     var sDocsUploaded = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
                     that._setRetroLogStep(
-                        "retro-upload",
-                        "Object Store",
-                        "Generated " + sDocsUploaded + " Word document(s) saved to Object Store under Retro prefix.",
+                        "step-5",
+                        "Download",
+                        "Generated " + sDocsUploaded + " Word document(s) ready for download.",
                         "success"
                     );
 
-                    setStep(3, "completed");
-
-                    oDefaultModel.setProperty("/agentPipelineComplete", true);
-                    oDefaultModel.setProperty("/agentPipelineStatus", "Completed");
                     that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
 
-                    var sDocsCompleted = (bCreateFS && bCreateTS) ? "FS & TS" : (bCreateFS ? "FS" : "TS");
-                    that._setRetroLogStep(
-                        "retro-completed",
-                        "Completed",
-                        "Pipeline finished. Generated " + sDocsCompleted + " Word document(s) are stored under Retro prefix in Object Store.",
-                        "success"
-                    );
+                    // Navigate to DetailDetail to show TS/FS documents on the right panel
+                    if (aItems.length > 0) {
+                        var oAiRespModel = that.getOwnerComponent().getModel("airesponseDetailModel");
+                        var sTSContent = "";
+                        var sFSContent = "";
+
+                        aItems.forEach(function (oItem) {
+                            if (oItem.docKind === "TS") {
+                                sTSContent = oItem.generatedContent || "";
+                            } else if (oItem.docKind === "FS") {
+                                sFSContent = oItem.generatedContent || "";
+                            }
+                        });
+
+                        oAiRespModel.setProperty("/tsContent", sTSContent);
+                        oAiRespModel.setProperty("/fsContent", sFSContent);
+                        oAiRespModel.setProperty("/resp", sTSContent || sFSContent);
+                        oAiRespModel.setProperty("/downloadVis", true);
+                        oAiRespModel.refresh(true);
+
+                        // Mark tab state so DetailDetail stays open when switching back
+                        var oStateModel = that.getView().getModel("tabState");
+                        if (oStateModel) {
+                            var oTabs = oStateModel.getProperty("/tabs") || {};
+                            oTabs["retroDocKey"] = oTabs["retroDocKey"] || {};
+                            oTabs["retroDocKey"].hasDetail = true;
+                            oStateModel.setProperty("/tabs", oTabs);
+                        }
+
+                        var sSelectedAI = "";
+                        try {
+                            var oRetroModelSel = that.getView().byId("selModelRetro");
+                            sSelectedAI = oRetroModelSel ? oRetroModelSel.getSelectedKey() : "";
+                        } catch (e) { sSelectedAI = "gpt-4o"; }
+
+                        that.oRouter.navTo("DetailDetail", {
+                            dispKey: "retroDocKey",
+                            aimodel: sSelectedAI,
+                            layout: sap.f.LayoutType.TwoColumnsMidExpanded
+                        });
+                    }
+
+                    // Record this Retro Documentation run into the History
+                    // dialog so users can review the generated TS / FS later
+                    // via the clock icon on the retro tab.
+                    try {
+                        that._addToRetroHistoryLog({
+                            objectName: sObjectName,
+                            objectType: sObjectType,
+                            mode: "create",
+                            tsContent: (typeof sTSContent !== "undefined" ? sTSContent : ""),
+                            fsContent: (typeof sFSContent !== "undefined" ? sFSContent : "")
+                        });
+                    } catch (eHist) { /* history log must not break pipeline */ }
+
+                    // Hide the global busy indicator now that everything is done
+                    try { sap.ui.core.BusyIndicator.hide(); } catch (eB) { /* ignore */ }
 
                     sap.m.MessageToast.show("Generated documents uploaded successfully.");
                 })
                 .catch(function (err) {
                     var sErrorMsg = err && err.message ? err.message : "Pipeline failed";
+
+                    // Always hide the busy indicator on any error/rejection
+                    try { sap.ui.core.BusyIndicator.hide(); } catch (eB) { /* ignore */ }
 
                     // If the rejection was due to "Documents Already Exist" conflict,
                     // the warning dialog was already shown - skip the error dialog and log
@@ -15031,8 +18163,6 @@ sap.ui.define([
                         "error"
                     );
 
-                    oDefaultModel.setProperty("/agentPipelineStatus", "Failed");
-                    oDefaultModel.setProperty("/agentPipelineComplete", false);
                     // Enable reset button so user can reset after failure
                     that.getView().getModel("retroDocModel").setProperty("/resetEnabled", true);
 
@@ -15428,16 +18558,34 @@ sap.ui.define([
                 { status: "pending" }     // upload (in-place)
             ];
             oDefaultModel.setProperty("/agentSteps", aSteps);
+            _syncAgentFlow(oDefaultModel);
             oDefaultModel.setProperty("/agentConnectors", [
                 { completed: false },
                 { completed: false },
                 { completed: false }
             ]);
 
+            var aStepNodeIds = ["step-1", "step-2", "step-3", "step-5"];
+            var aStepNodeLabels = ["Object Selection", "Fetch Source", "Spec Generation", "Download"];
+
             var setStep = function (i, sStatus) {
                 if (aSteps[i]) {
                     aSteps[i].status = sStatus;
                     oDefaultModel.setProperty("/agentSteps", aSteps);
+                    _syncAgentFlow(oDefaultModel);
+                    // Directly update ProcessFlow node so colour changes immediately
+                    var sPFType = sStatus === "completed" ? "success"
+                        : (sStatus === "processing" ? "processing"
+                            : (sStatus === "error" ? "error" : "info"));
+                    var sNodeId = aStepNodeIds[i];
+                    var sLabel = aStepNodeLabels[i];
+                    if (sNodeId) {
+                        that._setRetroLogStep(sNodeId, sLabel, sLabel + ": " + _mapAgentStateText(sStatus), sPFType);
+                    }
+                    // Step 2 covers both Tech Spec and Func Spec lanes
+                    if (i === 2) {
+                        that._setRetroLogStep("step-4", "Func Spec", "Func Spec: " + _mapAgentStateText(sStatus), sPFType);
+                    }
                 }
             };
             var updateConnector = function (i) {
@@ -15568,6 +18716,18 @@ sap.ui.define([
                 .then(function (aResults) {
                     var oDiffData = aResults[0] || {};
                     var oTransportData = aResults[1] || {};
+
+                    // ============================================================
+                    // FIX: Use the TR from the input field if provided by user
+                    // The user-provided TR is a Released TR and should be used
+                    // for version comparison instead of relying on API response.
+                    // ============================================================
+                    var oTRInput = that.getView().byId("retroTRInputTop");
+                    var sUserProvidedTR = oTRInput ? (oTRInput.getValue() || "").trim() : "";
+                    if (sUserProvidedTR) {
+                        console.log("RETRO UPDATE: Using user-provided Released TR:", sUserProvidedTR);
+                        oTransportData.releasedTR = sUserProvidedTR;
+                    }
 
                     // Store current source from diff API
                     sCurrentSource = oDiffData.currentSource || "";
@@ -15834,6 +18994,20 @@ sap.ui.define([
                         "Pipeline finished. Same FS / TS documents now contain delta changes.",
                         "success"
                     );
+
+                    // Record this Retro Documentation delta update into the
+                    // History dialog so users can review the regenerated
+                    // TS / FS later via the clock icon on the retro tab.
+                    try {
+                        that._addToRetroHistoryLog({
+                            objectName: sObjectName,
+                            objectType: sObjectType,
+                            mode: "update",
+                            tsContent: (typeof sNewTsContent !== "undefined" ? sNewTsContent : ""),
+                            fsContent: (typeof sNewFsContent !== "undefined" ? sNewFsContent : ""),
+                            transportRequest: (oCtx && oCtx.transportRequest) || ""
+                        });
+                    } catch (eHist) { /* history log must not break pipeline */ }
 
                     sap.m.MessageToast.show("Documents updated successfully.");
                 })
@@ -16309,28 +19483,14 @@ sap.ui.define([
                 ? "Technical Specification - " + sObjectName
                 : "Functional Specification - " + sObjectName;
 
-            var sSubFolder = sDocKind === "TS" ? "TechnicalSpec" : "FunctionalSpec";
-            var sFullFileName;
-            if (sExistingKey && sExistingKey.indexOf("/") !== -1) {
-                var sStripped = sExistingKey.replace(/^\/+/, "")
-                    .replace(/^Retro\//i, "");
-                sFullFileName = sStripped;
-            } else {
-                sFullFileName = sSubFolder + "/" + sFileName;
-            }
-
-            return this._generateDocxFromTemplate(sTitle, sContent, sFullFileName)
+            return this._generateDocxFromTemplate(sTitle, sContent, sFileName)
                 .then(function (oWordFile) {
                     try {
-                        if (oWordFile && oWordFile.name !== sFullFileName) {
-                            try {
-                                oWordFile = new File([oWordFile], sFullFileName, {
-                                    type: oWordFile.type ||
-                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                });
-                            } catch (e) {
-                                oWordFile.name = sFullFileName;
-                            }
+                        if (oWordFile && oWordFile.name !== sFileName) {
+                            oWordFile = new File([oWordFile], sFileName, {
+                                type: oWordFile.type ||
+                                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            });
                         }
                     } catch (e) { /* ignore */ }
 
@@ -16374,9 +19534,85 @@ sap.ui.define([
                 hasViewButton: !!hasViewButton
             });
             oDefaultModel.setProperty("/logEntries", aLog);
-            oDefaultModel.setProperty("/logPanelVisible", true);
+            // oDefaultModel.setProperty("/logPanelVisible", true);
             this._autoScrollRetro();
         },
+
+        _getRetroProcessFlow: function () {
+            // The Retro Documentation ProcessFlow was moved from View1 (left
+            // panel) to the DetailDetail view (right panel). Look it up on
+            // the DetailDetail view via the FlexibleColumnLayout. Fall back
+            // to a local lookup for backwards compatibility.
+            try {
+                var oOwner = this.getOwnerComponent && this.getOwnerComponent();
+                var oAppView = oOwner && oOwner.byId && oOwner.byId("App");
+                var oFCL = oAppView && oAppView.byId && oAppView.byId("flexibleColumnLayout");
+                if (oFCL) {
+                    var aMid = oFCL.getMidColumnPages && oFCL.getMidColumnPages();
+                    if (aMid && aMid.length) {
+                        for (var i = 0; i < aMid.length; i++) {
+                            var oPage = aMid[i];
+                            var oPF = oPage && oPage.byId && oPage.byId("retroProcessFlow");
+                            if (oPF) { return oPF; }
+                        }
+                    }
+                    var aEnd = oFCL.getEndColumnPages && oFCL.getEndColumnPages();
+                    if (aEnd && aEnd.length) {
+                        for (var j = 0; j < aEnd.length; j++) {
+                            var oPageE = aEnd[j];
+                            var oPFE = oPageE && oPageE.byId && oPageE.byId("retroProcessFlow");
+                            if (oPFE) { return oPFE; }
+                        }
+                    }
+                }
+            } catch (e) { /* best-effort */ }
+            return this.byId("retroProcessFlow");
+        },
+
+        // _setRetroLogStep: function (sKey, sTitle, sContent, sType, bHasViewButton, oExtraData) {
+        //     var oDefaultModel = this.getView().getModel();
+
+        //     if (!oDefaultModel) {
+        //         oDefaultModel = new sap.ui.model.json.JSONModel({});
+        //         this.getView().setModel(oDefaultModel);
+        //     }
+
+        //     var aLog = oDefaultModel.getProperty("/logEntries") || [];
+        //     var sTime =
+        //         (this._getCurrentTimestamp && this._getCurrentTimestamp()) ||
+        //         new Date().toLocaleTimeString();
+
+        //     var iIndex = -1;
+
+        //     for (var i = 0; i < aLog.length; i++) {
+        //         if (aLog[i].key === sKey) {
+        //             iIndex = i;
+        //             break;
+        //         }
+        //     }
+
+        //     var oEntry = Object.assign({
+        //         key: sKey,
+        //         title: sTitle || "",
+        //         content: sContent || "",
+        //         type: sType || "info",
+        //         time: sTime,
+        //         hasViewButton: !!bHasViewButton
+        //     }, oExtraData || {});
+
+        //     if (iIndex >= 0) {
+        //         aLog[iIndex] = Object.assign({}, aLog[iIndex], oEntry);
+        //     } else {
+        //         oEntry.seq = aLog.length + 1;
+        //         aLog.push(oEntry);
+        //     }
+
+        //     oDefaultModel.setProperty("/logEntries", aLog);
+        //     oDefaultModel.setProperty("/logPanelVisible", true);
+
+        //     this._autoScrollRetro();
+        // },
+
         _setRetroLogStep: function (sKey, sTitle, sContent, sType, bHasViewButton, oExtraData) {
             var oDefaultModel = this.getView().getModel();
 
@@ -16416,9 +19652,119 @@ sap.ui.define([
             }
 
             oDefaultModel.setProperty("/logEntries", aLog);
-            oDefaultModel.setProperty("/logPanelVisible", true);
+            // Do not auto-show log panel here; only Generate Documents opens it
+
+            var oPF = this._getRetroProcessFlow();
+
+            if (oPF) {
+
+                var aNodes = oPF.getNodes();
+
+                aNodes.forEach(function (oNode) {
+
+                    if (oNode.getNodeId() === sKey) {
+
+                        if (sType === "success") {
+                            oNode.setState("Positive");
+                            oNode.setTitle("Completed");
+                            oNode.setTitleAbbreviation("Completed");
+
+                            var oLane = oPF.getLanes().find(function (oL) {
+                                return oL.getLaneId() === oNode.getLaneId();
+                            });
+
+                            if (oLane) {
+                                oLane.setState([{ state: "Positive" }]);
+                            }
+
+                        } else if (sType === "processing") {
+                            oNode.setState("Critical");
+                            oNode.setTitle("Processing");
+                            oNode.setTitleAbbreviation("Processing");
+
+                            var oLane = oPF.getLanes().find(function (oL) {
+                                return oL.getLaneId() === oNode.getLaneId();
+                            });
+
+                            if (oLane) {
+                                oLane.setState([{ state: "Critical" }]);
+                            }
+
+                        } else if (sType === "error") {
+                            oNode.setState("Negative");
+                            oNode.setTitle("Failed");
+                            oNode.setTitleAbbreviation("Failed");
+
+                            var oLane = oPF.getLanes().find(function (oL) {
+                                return oL.getLaneId() === oNode.getLaneId();
+                            });
+
+                            if (oLane) {
+                                oLane.setState([{ state: "Negative" }]);
+                            }
+
+                        } else {
+                            oNode.setState("Neutral");
+                            oNode.setTitle("Skipped");
+                            oNode.setTitleAbbreviation("Skipped");
+
+                            var oLane = oPF.getLanes().find(function (oL) {
+                                return oL.getLaneId() === oNode.getLaneId();
+                            });
+
+                            if (oLane) {
+                                oLane.setState([{ state: "Neutral" }]);
+                            }
+
+                        }
+
+                    }
+
+                });
+
+                // Force ProcessFlow to re-render so state colour changes are visible immediately
+                oPF.invalidate();
+            } else {
+                // ProcessFlow not yet rendered (navigation to DetailDetail is still
+                // pending or the mid-column page hasn't mounted yet). Schedule a
+                // single delayed replay so that once the ProcessFlow exists all
+                // already-logged steps get their correct visual state.
+                var that = this;
+                clearTimeout(that._pfRetryTimer);
+                that._pfRetryTimer = setTimeout(function () {
+                    that._replayRetroProcessFlowFromLog();
+                }, 700);
+            }
 
             this._autoScrollRetro();
+        },
+
+        _replayRetroProcessFlowFromLog: function () {
+            var oPF = this._getRetroProcessFlow();
+            if (!oPF) { return; }
+            var oModel = this.getView().getModel();
+            var aLog = (oModel && oModel.getProperty("/logEntries")) || [];
+            aLog.forEach(function (oEntry) {
+                var sKey = oEntry.key;
+                var sType = oEntry.type;
+                var sState, sTitle;
+                if (sType === "success") { sState = "Positive"; sTitle = "Completed"; }
+                else if (sType === "processing") { sState = "Critical"; sTitle = "Processing"; }
+                else if (sType === "error") { sState = "Negative"; sTitle = "Failed"; }
+                else { return; } // skip info / other entries
+                oPF.getNodes().forEach(function (oNode) {
+                    if (oNode.getNodeId() === sKey) {
+                        oNode.setState(sState);
+                        oNode.setTitle(sTitle);
+                        oNode.setTitleAbbreviation(sTitle);
+                        var oLane = oPF.getLanes().find(function (l) {
+                            return l.getLaneId() === oNode.getLaneId();
+                        });
+                        if (oLane) { oLane.setState([{ state: sState }]); }
+                    }
+                });
+            });
+            oPF.invalidate();
         },
 
         // Auto-scroll Process Log to the latest item when enabled
@@ -16818,7 +20164,20 @@ Please provide the Functional Specification in plain text format with clear sect
             }).then(function (res) {
                 if (!res.ok) {
                     return res.text().then(function (sError) {
-                        throw new Error("AI Core call failed: " + res.status + " - " + sError);
+                        var sErrMsg = sError;
+                        try {
+                            var oErrJson = JSON.parse(sError);
+                            if (oErrJson.error) {
+                                sErrMsg = typeof oErrJson.error === "string"
+                                    ? oErrJson.error
+                                    : (oErrJson.error.message || oErrJson.error.code || JSON.stringify(oErrJson.error));
+                            } else if (oErrJson.message) {
+                                sErrMsg = oErrJson.message;
+                            }
+                        } catch (e) {
+                            // keep raw text as error message
+                        }
+                        throw new Error("AI Core call failed (HTTP " + res.status + "): " + sErrMsg);
                     });
                 }
                 // Always read as text - parser handles both plain JSON and SSE streaming formats
@@ -16893,6 +20252,17 @@ Please provide the Functional Specification in plain text format with clear sect
             // First: try to parse as plain JSON (non-streaming response from AI Core)
             try {
                 var oJson = JSON.parse(sResponseText.trim());
+                // Check if the response contains an error field - surface original error
+                if (oJson.error) {
+                    var sErrDetail = typeof oJson.error === "string"
+                        ? oJson.error
+                        : (oJson.error.message || oJson.error.code || JSON.stringify(oJson.error));
+                    throw new Error(sErrDetail);
+                }
+                // Top-level message without content/choices usually means an error response
+                if (oJson.message && !oJson.content && !oJson.choices && !oJson.orchestration_result) {
+                    throw new Error(oJson.message);
+                }
                 // Anthropic non-streaming format: { content: [{ type: "text", text: "..." }] }
                 if (oJson.content && Array.isArray(oJson.content)) {
                     var sPlainText = oJson.content
@@ -16910,12 +20280,26 @@ Please provide the Functional Specification in plain text format with clear sect
                 // SAP AI Core Orchestration non-streaming wrapper format
                 if (oJson.orchestration_result) {
                     var oOrch = oJson.orchestration_result;
+                    // Check for error inside orchestration_result
+                    if (oOrch.error) {
+                        var sOrchErr = typeof oOrch.error === "string"
+                            ? oOrch.error
+                            : (oOrch.error.message || oOrch.error.code || JSON.stringify(oOrch.error));
+                        throw new Error(sOrchErr);
+                    }
                     if (oOrch.choices && oOrch.choices[0] && oOrch.choices[0].message && oOrch.choices[0].message.content) {
                         return oOrch.choices[0].message.content;
                     }
                 }
             } catch (e) {
-                // Not valid JSON — proceed to SSE line-by-line parsing below
+                // Re-throw errors that we explicitly threw (original model errors)
+                if (e.message && e.message !== "Not valid JSON") {
+                    var sMsg = e.message;
+                    // Only re-throw if this is our explicitly thrown error (not a JSON parse error)
+                    if (!(e instanceof SyntaxError)) {
+                        throw e;
+                    }
+                }
             }
 
             var aLines = sResponseText.split("\n");
@@ -17036,16 +20420,10 @@ Please provide the Functional Specification in plain text format with clear sect
 
             var sObjName = this._sanitizeRetroFilePart(sObjectName || "UNKNOWN");
 
-            var sDocName = sDocKind === "TS"
-                ? "technical_specification"
-                : "functional_specification";
+            var sDocName = sDocKind === "TS" ? "TS" : "FS";
 
             return sObjType + "_" + sDocName + "_" + sObjName + ".docx";
         },
-
-
-
-
 
         // upload generated documents to object store via MCP
         _uploadRetroWordDocumentToObjectStore: function (sContent, sObjectName, sObjectType, sDocKind) {
@@ -18060,9 +21438,7 @@ Please provide the Functional Specification in plain text format with clear sect
                 sObjectName || "UNKNOWN"
             );
 
-            var sDocName = sDocKind === "TS"
-                ? "technical_specification"
-                : "functional_specification";
+            var sDocName = sDocKind === "TS" ? "TS" : "FS";
 
             return sObjType + "_" + sDocName + "_" + sObjName + ".docx";
         },
@@ -18185,7 +21561,27 @@ Please provide the Functional Specification in plain text format with clear sect
                 aResults.forEach(function (r) {
                     if (!r) return;
                     var sDocKind = r.docKind || "";
-                    var sKey = (r.response && (r.response.objectStoreRefKey || r.response.ObjectStoreRefKey || (r.response.value && r.response.value.objectStoreRefKey))) || "";
+                    var oResp = r.response || {};
+                    var sKey =
+                        oResp.objectStoreRefKey ||
+                        oResp.ObjectStoreRefKey ||
+                        oResp.Key || oResp.key ||
+                        (oResp.value && (
+                            oResp.value.objectStoreRefKey ||
+                            oResp.value.ObjectStoreRefKey ||
+                            oResp.value.Key ||
+                            (oResp.value.data && (
+                                oResp.value.data.objectStoreRefKey ||
+                                oResp.value.data.ObjectStoreRefKey
+                            ))
+                        )) ||
+                        "";
+                    // Fallback: use the deterministic object-path we uploaded to
+                    // so the download endpoint still has a valid key even when
+                    // the response payload does not expose one.
+                    if (!sKey) {
+                        sKey = r.objectPath || that._buildRetroObjectPath(sObjectName, sObjectType, sDocKind) || "";
+                    }
                     var sFName = r.filename || "";
                     var sDlUrl = sKey ? "/cockpit/getFileDetails?key=" + encodeURIComponent(sKey) : "";
 
@@ -18206,6 +21602,12 @@ Please provide the Functional Specification in plain text format with clear sect
                 var oRDM = that.getView().getModel("retroDocModel");
                 oRDM.setProperty("/hasExistingFS", !!oCached.hasFS);
                 oRDM.setProperty("/hasExistingTS", !!oCached.hasTS);
+                oRDM.setProperty("/existingFSFileName", oCached.fsFileName || "");
+                oRDM.setProperty("/existingTSFileName", oCached.tsFileName || "");
+                oRDM.setProperty("/existingFSFileKey", oCached.fsKey || "");
+                oRDM.setProperty("/existingTSFileKey", oCached.tsKey || "");
+                oRDM.setProperty("/existingFSDownloadUrl", oCached.fsDownloadUrl || "");
+                oRDM.setProperty("/existingTSDownloadUrl", oCached.tsDownloadUrl || "");
                 if (oCached.hasFS || oCached.hasTS) {
                     oRDM.setProperty("/documentMode", "update");
                     oRDM.setProperty("/updateFS", !!oCached.hasFS);
@@ -18781,9 +22183,12 @@ Please provide the Functional Specification in plain text format with clear sect
 
                 var sExpectedFSBase =
                     (sObjType + "_functional_specification_" + sObjName).toUpperCase();
-
+                var sExpectedFSBaseShort =
+                    (sObjType + "_FS_" + sObjName).toUpperCase();
                 var sExpectedTSBase =
                     (sObjType + "_technical_specification_" + sObjName).toUpperCase();
+                var sExpectedTSBaseShort =
+                    (sObjType + "_TS_" + sObjName).toUpperCase();
 
                 // Sanitized object name used as a contains-fallback so we
                 // tolerate Key/Name formats that don't end in the exact
@@ -18948,10 +22353,14 @@ Please provide the Functional Specification in plain text format with clear sect
                                 // Strict: filename matches the exact expected base.
                                 var bExactFS =
                                     sFileBase === sExpectedFSBase ||
-                                    sKeyTail === sExpectedFSBase;
+                                    sKeyTail === sExpectedFSBase ||
+                                    sFileBase === sExpectedFSBaseShort ||
+                                    sKeyTail === sExpectedFSBaseShort;
                                 var bExactTS =
                                     sFileBase === sExpectedTSBase ||
-                                    sKeyTail === sExpectedTSBase;
+                                    sKeyTail === sExpectedTSBase ||
+                                    sFileBase === sExpectedTSBaseShort ||
+                                    sKeyTail === sExpectedTSBaseShort;
 
                                 // Fallback: sub-folder layouts like
                                 //   FunctionalSpec/PROG_functional_specification_<NAME>.docx
@@ -18965,6 +22374,8 @@ Please provide the Functional Specification in plain text format with clear sect
                                 var bLooseFS = !bExactFS && bContainsName && (
                                     /FUNCTIONAL[_\s-]*SPEC/i.test(sFileBase) ||
                                     /FUNCTIONAL[_\s-]*SPEC/i.test(sKeyUpper) ||
+                                    /_FS_/.test(sFileBase) ||
+                                    /_FS_/.test(sKeyTail) ||
                                     /\bFS\b/.test(sFileBase) ||
                                     /\/FUNCTIONALSPEC\//i.test(sKeyUpper)
                                 );
@@ -18972,6 +22383,8 @@ Please provide the Functional Specification in plain text format with clear sect
                                 var bLooseTS = !bExactTS && bContainsName && (
                                     /TECHNICAL[_\s-]*SPEC/i.test(sFileBase) ||
                                     /TECHNICAL[_\s-]*SPEC/i.test(sKeyUpper) ||
+                                    /_TS_/.test(sFileBase) ||
+                                    /_TS_/.test(sKeyTail) ||
                                     /\bTS\b/.test(sFileBase) ||
                                     /\/TECHNICALSPEC\//i.test(sKeyUpper)
                                 );
@@ -18995,10 +22408,24 @@ Please provide the Functional Specification in plain text format with clear sect
                                         encodeURIComponent(sKey);
                                 }
 
+                                var fnStripUUID = function (s) {
+                                    return (s || "").replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[_-]/i, "");
+                                };
+
+                                // Normalize legacy long filename to short format:
+                                //   PROG_functional_specification_NAME.docx → PROG_FS_NAME.docx
+                                //   PROG_technical_specification_NAME.docx  → PROG_TS_NAME.docx
+                                var fnNormalizeFileName = function (sName) {
+                                    if (!sName) { return sName; }
+                                    return sName
+                                        .replace(/_functional_specification_/gi, "_FS_")
+                                        .replace(/_technical_specification_/gi, "_TS_");
+                                };
+
                                 if ((bExactFS || bLooseFS) && !oResult.hasFS) {
                                     oResult.hasFS = true;
-                                    oResult.fsFileName = sFileName ||
-                                        (sKey ? sKey.split("/").pop() : "");
+                                    oResult.fsFileName = fnNormalizeFileName(fnStripUUID(sFileName ||
+                                        (sKey ? sKey.split("/").pop() : "")));
                                     oResult.fsKey = sKey;
                                     oResult.fsDownloadUrl = sDownloadUrl;
                                     oResult.fsViewUrl = sViewUrl;
@@ -19006,8 +22433,8 @@ Please provide the Functional Specification in plain text format with clear sect
 
                                 if ((bExactTS || bLooseTS) && !oResult.hasTS) {
                                     oResult.hasTS = true;
-                                    oResult.tsFileName = sFileName ||
-                                        (sKey ? sKey.split("/").pop() : "");
+                                    oResult.tsFileName = fnNormalizeFileName(fnStripUUID(sFileName ||
+                                        (sKey ? sKey.split("/").pop() : "")));
                                     oResult.tsKey = sKey;
                                     oResult.tsDownloadUrl = sDownloadUrl;
                                     oResult.tsViewUrl = sViewUrl;
@@ -19026,9 +22453,9 @@ Please provide the Functional Specification in plain text format with clear sect
                             var sCacheKey = sObjNameUpper;
                             var oCache = that._retroUploadedDocCache || {};
                             var oCachedEntry = oCache[sCacheKey];
-                            if (oCachedEntry && (oCachedEntry.hasFS || oCachedEntry.hasTS)) {
-                                // Merge cache data - cache takes priority for missing values
+                            if (oCachedEntry) {
                                 if (!oResult.hasFS && oCachedEntry.hasFS) {
+                                    console.log("RETRO CHECK: FS not in API response, using cached FS entry.");
                                     oResult.hasFS = true;
                                     oResult.fsFileName = oCachedEntry.fsFileName || "";
                                     oResult.fsKey = oCachedEntry.fsKey || "";
@@ -19036,14 +22463,15 @@ Please provide the Functional Specification in plain text format with clear sect
                                     oResult.fsViewUrl = oCachedEntry.fsViewUrl || "";
                                 }
                                 if (!oResult.hasTS && oCachedEntry.hasTS) {
+                                    console.log("RETRO CHECK: TS not in API response, using cached TS entry.");
                                     oResult.hasTS = true;
                                     oResult.tsFileName = oCachedEntry.tsFileName || "";
                                     oResult.tsKey = oCachedEntry.tsKey || "";
                                     oResult.tsDownloadUrl = oCachedEntry.tsDownloadUrl || "";
                                     oResult.tsViewUrl = oCachedEntry.tsViewUrl || "";
                                 }
-                                console.log("RETRO CHECK: Session cache merged. Final result:", oResult);
-                            } else if (!oResult.hasFS && !oResult.hasTS) {
+                            }
+                            if (!oResult.hasFS && !oResult.hasTS) {
                                 console.log("RETRO CHECK: No match found in API response or session cache.");
                             }
 
@@ -19552,12 +22980,7 @@ Please provide the Functional Specification in plain text format with clear sect
                                 ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
                             }
                         }
-                        oAiResp.setProperty("/multiCE", ceArr);
-                        oAiResp.refresh(true);
-                        // Show code editor VBox and hide TextArea (same as Code Generation)
-                        var oDetailView = that.getOwnerComponent().getRootControl().byId("app").getPages ? null : null;
                         try {
-                            var oMultiCEBox = sap.ui.getCore().byId("application-Zsemobj-display-component---DetailDetail--multipleCodeEd") ||
                                 that.getOwnerComponent().getRootControl().getController ? null : null;
                             // Use the component to find the DetailDetail view
                             var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfeq.view.DetailDetail"];
@@ -19580,17 +23003,26 @@ Please provide the Functional Specification in plain text format with clear sect
         },
         _runAbapMcpTool: async function (toolName, toolArgs) {
             try {
-                var args = toolArgs && typeof toolArgs === "object" ? toolArgs : {};
-                var payload = { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: toolName, arguments: args } };
-                var response = await fetch(this._sBasePath + "/abap-mcp/mcp", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" }, body: JSON.stringify(payload) });
-                if (!response.ok) { throw new Error("MCP " + toolName + " call failed with status " + response.status); }
+                var jsonRpcPayload = {
+                    jsonrpc: "2.0",
+                    id: Date.now(),
+                    method: "tools/call",
+                    params: { name: toolName, arguments: toolArgs || {} }
+                };
+                var response = await fetch(this._sBasePath + "/abap-mcp/mcp", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream"
+                    },
+                    body: JSON.stringify(jsonRpcPayload)
+                });
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status + " from MCP " + toolName);
+                }
                 var responseText = await response.text();
                 var parse = this._parseArc1McpResponse(responseText);
                 if (parse.isError) { throw new Error(parse.message || "MCP " + toolName + " returned an error"); }
-                var oAppModel = this.getView().getModel("appmodel");
-                if (oAppModel) { oAppModel.setProperty("/BSContent", parse.message || ""); }
-                this.executedOnce = false;
-                MessageToast.show(toolName + " executed");
                 return parse;
             } catch (err) {
                 MessageBox.error("MCP " + toolName + " error: " + (err && err.message ? err.message : String(err)));
@@ -19763,11 +23195,41 @@ Please provide the Functional Specification in plain text format with clear sect
         },
         onSapSearchUseSelected: function () {
             try {
+                // var oComboBox = this.byId("sapSearchPattern");
+                // var sSelectedName = oComboBox.getSelectedKey() || oComboBox.getValue();
+                // if (!sSelectedName) { sap.m.MessageToast.show("Please select a result first"); return; }
+                var oSearchModel = this.getView().getModel("sapSearchModel");
+                var aResults = oSearchModel.getProperty("/results") || [];
+                // var oObj = aResults.find(function (o) { return o.name === sSelectedName; }) ||
+                var oObj = null;
+                var sSelectedName = "";
+
+                // Prefer selection from the results Table (SapSearch fragment shows objects here).
                 var oTable = this.byId("sapSearchResultsTable");
-                var oItem = oTable && oTable.getSelectedItem();
-                if (!oItem) { MessageToast.show("Please select a result first"); return; }
-                var oObj = oItem.getBindingContext("sapSearchModel").getObject();
-                // Normalize ADT type: "PROG/P" → "PROG", "CLAS/OC" → "CLAS", etc.
+                if (oTable && typeof oTable.getSelectedItem === "function") {
+                    var oSelItem = oTable.getSelectedItem();
+                    if (oSelItem) {
+                        var oCtx = oSelItem.getBindingContext("sapSearchModel");
+                        if (oCtx) {
+                            oObj = oCtx.getObject();
+                            sSelectedName = (oObj && oObj.name) || "";
+                        }
+                    }
+                }
+
+                // Fallback: use the SearchField value typed by the user.
+                if (!oObj) {
+                    var oSearchInput = this.byId("sapSearchPattern");
+                    if (oSearchInput) {
+                        // Support both SearchField (getValue) and older ComboBox (getSelectedKey) shapes.
+                        sSelectedName = (typeof oSearchInput.getSelectedKey === "function" && oSearchInput.getSelectedKey())
+                            || (typeof oSearchInput.getValue === "function" && oSearchInput.getValue())
+                            || "";
+                    }
+                    if (!sSelectedName) { sap.m.MessageToast.show("Please select a result first"); return; }
+                    oObj = aResults.find(function (o) { return o.name === sSelectedName; }) ||
+                    { name: sSelectedName, type: oSearchModel.getProperty("/objectType"), desc: "" };
+                }
                 var sRawType = (oObj.type || "PROG").toUpperCase();
                 var sNormType = sRawType.split("/")[0];
                 // Store selected object in viewModel for later use by callAbapMCPCodeGen
@@ -20237,8 +23699,210 @@ Please provide the Functional Specification in plain text format with clear sect
 
             this.getView().addDependent(oDialog);
             oDialog.open();
-        }
+        },
         // ========== END ABAP MCP SERVER INTEGRATION ==========
+
+        onTrIdInputChange: function (oEvent) {
+            var sValue = oEvent.getParameter("value") || "";
+            var sUpper = sValue.toUpperCase();
+            this.getView().getModel("trSourceModel").setProperty("/transportId", sUpper);
+
+            var oInput = this.byId("trIdInput");
+            if (oInput && oInput.getValue() !== sUpper) {
+                oInput.setValue(sUpper);
+            }
+        },
+
+        onGetTransportSource: async function () {
+            var oModel = this.getView().getModel("trSourceModel");
+            var sTrId = (oModel.getProperty("/transportId") || "").trim().toUpperCase();
+
+            if (!sTrId) {
+                sap.m.MessageToast.show("Please enter a Transport Request ID.");
+                return;
+            }
+
+            oModel.setProperty("/isLoading", true);
+            oModel.setProperty("/hasError", false);
+            oModel.setProperty("/errorMessage", "");
+            oModel.setProperty("/hasResult", false);
+            oModel.setProperty("/selectedObjectName", "");
+            oModel.setProperty("/selectedObjectType", "");
+            oModel.setProperty("/selectedObjectSource", "");
+            oModel.setProperty("/hasSelectedObject", false);
+
+            var oRetroMdl = this.getView().getModel("retroDocModel");
+            if (oRetroMdl) {
+                oRetroMdl.setProperty("/buttonsEnabled", false);
+            }
+
+            var sUrl = this._sBasePath + "/abap-mcp/api/transport/source?tr=" + encodeURIComponent(sTrId);
+
+            try {
+                var oResponse = await fetch(sUrl, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...this.defaultHeaders
+                    }
+                });
+
+                var sRawText = await oResponse.text();
+                var oData = null;
+                try {
+                    oData = JSON.parse(sRawText);
+                } catch (eJson) {
+
+                    oData = null;
+                }
+
+                if (!oResponse.ok) {
+                    var sErr = (oData && (oData.error || oData.message || oData.details)) ||
+                        sRawText ||
+                        ("HTTP " + oResponse.status);
+                    oModel.setProperty("/hasError", true);
+                    oModel.setProperty("/errorMessage", sErr);
+                    oModel.setProperty("/isLoading", false);
+                    return;
+                }
+
+                if (!oData) {
+                    oModel.setProperty("/hasError", true);
+                    oModel.setProperty("/errorMessage", sRawText || "Empty response from server.");
+                    oModel.setProperty("/isLoading", false);
+                    return;
+                }
+
+                oData.statusText = oData.status === "R" ? "Released" : "Modifiable";
+
+                oModel.setProperty("/result", oData);
+                oModel.setProperty("/hasResult", true);
+                oModel.setProperty("/isLoading", false);
+
+            } catch (oErr) {
+                oModel.setProperty("/hasError", true);
+                oModel.setProperty("/errorMessage", oErr.message || String(oErr));
+                oModel.setProperty("/isLoading", false);
+            }
+        },
+
+        onTrObjectSelectForFSTS: function (oEvent) {
+            var that = this;
+            var oBtn = oEvent.getSource();
+            var oCtx = oBtn.getBindingContext("trSourceModel");
+            if (!oCtx) { return; }
+            var oObj = oCtx.getObject();
+            if (!oObj || oObj.status !== "success" || !oObj.sourceCode) {
+                sap.m.MessageToast.show("No source code available for this object.");
+                return;
+            }
+
+            var sObjectName = oObj.name;
+            var sObjectType = oObj.type;
+
+            var oTrModel = this.getView().getModel("trSourceModel");
+            var oRetroModel = this.getView().getModel("retroDocModel");
+
+            oTrModel.setProperty("/selectedObjectName", sObjectName);
+            oTrModel.setProperty("/selectedObjectType", sObjectType);
+            oTrModel.setProperty("/selectedObjectSource", oObj.sourceCode);
+            oTrModel.setProperty("/hasSelectedObject", true);
+
+            oRetroModel.setProperty("/selectedObjects", [{
+                objectName: sObjectName,
+                objectType: sObjectType
+            }]);
+            oRetroModel.setProperty("/selectedObject", sObjectName);
+            oRetroModel.setProperty("/selectedObjectType", sObjectType);
+            oRetroModel.setProperty("/documentModeEnabled", true);
+            oRetroModel.setProperty("/buttonsEnabled", true);
+
+            oRetroModel.setProperty("/hasExistingFS", false);
+            oRetroModel.setProperty("/hasExistingTS", false);
+            oRetroModel.setProperty("/existingFSFileName", "");
+            oRetroModel.setProperty("/existingTSFileName", "");
+            oRetroModel.setProperty("/existingFSFileKey", "");
+            oRetroModel.setProperty("/existingTSFileKey", "");
+            oRetroModel.setProperty("/existingFSDownloadUrl", "");
+            oRetroModel.setProperty("/existingTSDownloadUrl", "");
+            oRetroModel.setProperty("/existingFSViewUrl", "");
+            oRetroModel.setProperty("/existingTSViewUrl", "");
+            oRetroModel.setProperty("/updateFS", false);
+            oRetroModel.setProperty("/updateTS", false);
+            oRetroModel.setProperty("/createFS", true);
+            oRetroModel.setProperty("/createTS", true);
+            oRetroModel.setProperty("/documentMode", "create");
+
+            this._checkExistingRetroDocuments(sObjectName, sObjectType)
+                .then(function (oExisting) {
+                    oRetroModel.setProperty("/hasExistingFS", oExisting.hasFS);
+                    oRetroModel.setProperty("/hasExistingTS", oExisting.hasTS);
+                    oRetroModel.setProperty("/existingFSFileName", oExisting.fsFileName || "");
+                    oRetroModel.setProperty("/existingTSFileName", oExisting.tsFileName || "");
+                    oRetroModel.setProperty("/existingFSFileKey", oExisting.fsKey || "");
+                    oRetroModel.setProperty("/existingTSFileKey", oExisting.tsKey || "");
+                    oRetroModel.setProperty("/existingFSDownloadUrl", oExisting.fsDownloadUrl || "");
+                    oRetroModel.setProperty("/existingTSDownloadUrl", oExisting.tsDownloadUrl || "");
+                    oRetroModel.setProperty("/existingFSViewUrl", oExisting.fsViewUrl || "");
+                    oRetroModel.setProperty("/existingTSViewUrl", oExisting.tsViewUrl || "");
+                    oRetroModel.setProperty("/updateFS", !!oExisting.hasFS);
+                    oRetroModel.setProperty("/updateTS", !!oExisting.hasTS);
+
+                    if (oExisting.hasFS || oExisting.hasTS) {
+                        oRetroModel.setProperty("/documentMode", "update");
+                        sap.m.MessageToast.show("Selected: " + sObjectType + " / " + sObjectName + ". Existing documents found - Update mode enabled.");
+                    } else {
+                        oRetroModel.setProperty("/documentMode", "create");
+                        sap.m.MessageToast.show("Selected: " + sObjectType + " / " + sObjectName + ". Click 'Generate Document' to create FS/TS.");
+                    }
+                    oRetroModel.refresh(true);
+                })
+                .catch(function (err) {
+                    console.error("Error checking existing documents:", err);
+                    oRetroModel.setProperty("/documentMode", "create");
+                    sap.m.MessageToast.show("Selected: " + sObjectType + " / " + sObjectName + ". Click 'Generate Document' to create FS/TS.");
+                });
+        },
+
+        _extractTemplateStructure: function (sTemplateKey) {
+            if (!sTemplateKey) return;
+            let that = this;
+            let sUrl = this._sBasePath + "/cockpit/extractTemplateStructure(key='" + encodeURIComponent(sTemplateKey) + "')";
+
+            $.ajax({
+                url: sUrl,
+                method: "GET",
+                headers: that.defaultHeaders,
+                success: function (response) {
+                    try {
+                        let data = typeof response === "string" ? JSON.parse(response) : response;
+                        if (data.value) {
+                            data = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+                        }
+                        if (data.status === 200 && data.templateDescription) {
+                            // Store the template structure description for injection into system message
+                            that.getView().getModel("viewModel").setProperty("/templateStructure", data.templateDescription);
+                            that.getView().getModel("viewModel").setProperty("/templateHeadings", data.structure?.headings || []);
+                            console.log("[Template] Structure extracted:", data.headingCount, "headings found");
+                            sap.m.MessageToast.show("Template structure loaded (" + data.headingCount + " sections)");
+                        } else {
+                            console.warn("[Template] Structure extraction returned non-200:", data);
+                            that.getView().getModel("viewModel").setProperty("/templateStructure", "");
+                            that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
+                        }
+                    } catch (e) {
+                        console.error("[Template] Error parsing structure response:", e);
+                        that.getView().getModel("viewModel").setProperty("/templateStructure", "");
+                        that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
+                    }
+                },
+                error: function (err) {
+                    console.error("[Template] Error fetching template structure:", err);
+                    that.getView().getModel("viewModel").setProperty("/templateStructure", "");
+                    that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
+                }
+            });
+        },
 
     });
 });
