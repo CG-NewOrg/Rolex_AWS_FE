@@ -2139,6 +2139,14 @@ sap.ui.define([
                                         MessageBox.error("Selected type PROG expects ABAP program source starting with 'REPORT', 'PROGRAM' or 'INCLUDE'. The current content does not look like ABAP code.");
                                         return;
                                     }
+                                    var codeNameMatch = cleanedForCheck.match(/^(?:REPORT|PROGRAM)\s+([A-Z][A-Z0-9_]+)/i);
+                                    if (codeNameMatch && codeNameMatch[1]) {
+                                        var codeReportName = codeNameMatch[1].toUpperCase();
+                                        if (codeReportName !== objName) {
+                                            MessageBox.error("The REPORT name in the code ('" + codeReportName + "') does not match the selected object ('" + objName + "'). The AI may have changed the program name. Please correct the code before pushing.");
+                                            return;
+                                        }
+                                    }
                                 } else if (typeKey === "CLAS") {
                                     var isAbapClass = /CLASS\s+\w+\s+DEFINITION/i.test(cleanedForCheck);
                                     if (!isAbapClass) {
@@ -2288,9 +2296,6 @@ sap.ui.define([
             this._pushDialog.open();
         },
 
-        /**
-         * Remove Markdown code fences and extract raw ABAP text.
-         */
         _stripMarkdownCodeFences: function (text) {
             if (!text || typeof text !== "string") return text || "";
             var t = text.trim();
@@ -2365,9 +2370,6 @@ sap.ui.define([
             return t;
         },
 
-        /**
-         * Parse ARC-1 MCP Server response (Server-Sent Events format)
-         */
         _parseArc1Response: function (responseText) {
             try {
                 var jsonMatch = responseText.match(/data:\s*(\{[\s\S]*\})/);
@@ -2463,10 +2465,6 @@ sap.ui.define([
             }, 50);
         },
 
-        /**
-         * Client-side quick fix for common activation issue:
-         * ABAP method signatures with 'RETURNING VALUE(...) TYPE p' must fully type packed numbers.
-         */
         _clientPreflightFixAbap: function (code) {
             try {
                 if (!code || typeof code !== "string") {
@@ -2498,6 +2496,9 @@ sap.ui.define([
             let newResponse = this.getView().byId("aiRespTxtArea").getValue();
             this.getView().getModel("airesponseDetailModel").setProperty("/resp", newResponse);
             let aiContent = this.formatter.mdToHTML(newResponse);
+            // Use setContent() (not setProperty) so that sap.ui.core.HTML clears its
+            // internal _sDOMContent cache; otherwise preferDOM re-inserts the stale
+            // old DOM when the control is made visible, showing the old response.
             this.getView().byId("aiRespHtml").setContent(aiContent);
             this.getView().byId("aiRespHtml").setVisible(true);
             this.getView().byId("aiRespTxtArea").setVisible(false);
@@ -2507,7 +2508,6 @@ sap.ui.define([
             this.getView().byId("saveResponse").setVisible(false);
         },
         onCancelAIResponse: function () {
-            //   let oldResponse = this.getView().getModel("airesponseDetailModel").getProperty("/resp");
             let oldResponse = this.fixed;
             this.getView().byId("aiRespTxtArea").setValue(oldResponse);
             let aiContent = this.formatter.mdToHTML(oldResponse);
@@ -2519,7 +2519,7 @@ sap.ui.define([
             this.getView().byId("saveResponse").setVisible(false);
             this.getView().byId("editResponse").setVisible(true);
         },
-        handleLiveChangeTxtArea: function (oEvent) {
+         handleLiveChangeTxtArea: function (oEvent) {
             let typed, fixed;
             this.typed = oEvent.getParameter("newValue");
             this.fixed = oEvent.getSource().getProperty("value");

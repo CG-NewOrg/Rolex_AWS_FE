@@ -376,14 +376,6 @@
                                                         key="DEV"
                                                         text="DEV — Development"
                                                     />
-                                                    <core:Item
-                                                        key="QAS"
-                                                        text="QAS — Quality"
-                                                    />
-                                                    <core:Item
-                                                        key="PRD"
-                                                        text="PRD — Production"
-                                                    />
                                                 </ComboBox>
                                             </VBox>
                                             <!-- Object Type -->
@@ -454,7 +446,7 @@
                                                     id="retroTRInputTop"
                                                     width="100%"
                                                     placeholder="S4TK123456"
-                                                    enabled="{= ${retroDocModel>/documentMode} === 'update'}"
+                                                    editable="{= ${retroDocModel>/documentMode} === 'update'}"
                                                 />
                                             </VBox>
                                         </HBox>

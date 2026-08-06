@@ -1010,6 +1010,7 @@ sap.ui.define([
                     this.getView().byId("navigationList").setSelectedKey(
                         eveKey.getParameters().item.getProperty("key")
                     );
+                    this.loadDocGenTypes();
                 } else if (eveKey.getParameters().item.getProperty("key") == "bdPMO") {
                     this.getView().getModel("switchFragments").setProperty("/frg/frName", "");
                     this.getView().getModel("switchFragments").refresh();
@@ -3222,6 +3223,34 @@ sap.ui.define([
 
                 oRetroModel.refresh(true);
             }
+            // Clear Agent Pipeline, Process Log, and Documents Ready sections for RetroDocumentation
+            var oDefaultModel = this.getView().getModel();
+            if (oDefaultModel) {
+                // Hide and reset Agent Pipeline
+                oDefaultModel.setProperty("/agentPipelineVisible", false);
+                oDefaultModel.setProperty("/agentPipelineStatus", "");
+                oDefaultModel.setProperty("/agentPipelineComplete", false);
+                oDefaultModel.setProperty("/agentSteps", [
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" },
+                    { status: "pending" }
+                ]);
+                // Sync ProcessFlow visualization after pipeline reset
+                _syncAgentFlow(oDefaultModel);
+                oDefaultModel.setProperty("/agentConnectors", [
+                    { completed: false },
+                    { completed: false },
+                    { completed: false }
+                ]);
+                // Clear Process Log
+                oDefaultModel.setProperty("/logEntries", []);
+                oDefaultModel.setProperty("/logPanelVisible", false);
+
+                // Clear Documents Ready section
+                oDefaultModel.setProperty("/downloadItems", []);
+                oDefaultModel.setProperty("/downloadPanelVisible", false);
+            }
 
             // Clear uploaded file
             if (this.byId("retroCodeUploader")) {
@@ -3731,7 +3760,7 @@ sap.ui.define([
                     } else if (sFragmentName == "promptlibpr") {
                         catSel = this.getView().byId("categorySelect").getSelectedKey();
                         sysContent = this.getView().getModel("savePrmModel").oData.spec.template[0].content;
-                        sysName = this.getView().getModel("savePrmModel").oData.name;
+                        sysName = this.getView().byId("vis").getValue() + this.getView().getModel("savePrmModel").oData.name;
                     }
                     // else {
                     // if (sFragmentName !== "promptlibpr") {
@@ -7024,6 +7053,48 @@ sap.ui.define([
             this.onRagToggle();
 
         },
+        _buildUserMessageContent: function (sContent, promptMsgData) {
+            var userContentParts = [];
+
+            // 1. Selected ABAP object info (if any selected via MCP SAPSearch)
+            var oSelAbapObj = this.getView().getModel("viewModel").getProperty("/selectedAbapObject") || {};
+            if (oSelAbapObj.name) {
+                var objContext = "Selected ABAP Object:\n";
+                objContext += "- Object Type: " + (oSelAbapObj.rawType || oSelAbapObj.type || "PROG") + "\n";
+                objContext += "- Object Name: " + oSelAbapObj.name + "\n";
+                if (oSelAbapObj.desc) {
+                    objContext += "- Description: " + oSelAbapObj.desc + "\n";
+                }
+                userContentParts.push(objContext);
+            }
+
+            // 2. Uploaded file content (if any)
+            // Skip BSContent if it's the raw SAP search results JSON (array of objects with objectType/objectName)
+            // since the selected object info is already included above
+            var bSkipFileContent = false;
+            if (oSelAbapObj.name && sContent && typeof sContent === "string") {
+                var sTrimmed = sContent.trim();
+                if (sTrimmed.startsWith("[") && sTrimmed.indexOf("\"objectType\"") !== -1 && sTrimmed.indexOf("\"objectName\"") !== -1) {
+                    bSkipFileContent = true; // This is the raw search results, skip it
+                }
+            }
+            if (!bSkipFileContent) {
+                if (sContent && typeof sContent === "string" && sContent.trim() !== "" && sContent !== "null" && sContent !== "undefined") {
+                    userContentParts.push(sContent);
+                } else if (sContent && typeof sContent === "object") {
+                    // Handle object content (e.g., RAG url object or image array)
+                    userContentParts.push(JSON.stringify(sContent));
+                }
+            }
+
+            // 3. User prompt text
+            if (promptMsgData && promptMsgData.trim() !== "") {
+                userContentParts.push(promptMsgData);
+            }
+
+            // Join all parts with double newline separator
+            return userContentParts.length > 0 ? userContentParts.join("\n\n") : "";
+        },
         onImageUpload: async function () {
             var oFileUploader;
             var busyDialog = new sap.m.BusyDialog();
@@ -7043,6 +7114,7 @@ sap.ui.define([
 
             var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            aMsgContentSystemDesc = this._enrichSystemMsgWithTemplate(aMsgContentSystemDesc);
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
             var aiSelected = that.getView().byId("selModel").getSelectedKey();
             var aiModelName = that.getView().byId("selModel").getValue();
@@ -9241,6 +9313,7 @@ sap.ui.define([
             var oViewModel = this.getView().getModel("viewModel");
             var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
+            aMsgContentSystemDesc = this._enrichSystemMsgWithTemplate(aMsgContentSystemDesc);
 
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
 
@@ -9256,7 +9329,7 @@ sap.ui.define([
             if (sContent == undefined) {
                 sContent = null;
             }
-            const oContent = sContent + "\n" + promptMsgData;
+            const oContent = this._buildUserMessageContent(sContent, promptMsgData);
             var aMessages = [
                 {
                     "role": "system",
@@ -9516,7 +9589,7 @@ sap.ui.define([
             var busyDialog = new sap.m.BusyDialog();
             var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
- 
+            aMsgContentSystemDesc = this._enrichSystemMsgWithTemplate(aMsgContentSystemDesc);
             var finalText = "";
             var aiSelected = that.getView().byId("selModel").getSelectedKey();
             var aiModelName = that.getView().byId("selModel").getValue();
@@ -9613,6 +9686,16 @@ sap.ui.define([
             }
  
             updatedaMsgs = aMsgModel.oData.aMsg;
+            var sTemplateForUser = this._getTemplateInstructionForUser();
+            if (sTemplateForUser && updatedaMsgs.length > 0) {
+                var lastUserIdx = -1;
+                for (var mi = updatedaMsgs.length - 1; mi >= 0; mi--) {
+                    if (updatedaMsgs[mi].role === "user") { lastUserIdx = mi; break; }
+                }
+                if (lastUserIdx >= 0 && typeof updatedaMsgs[lastUserIdx].content === "string") {
+                    updatedaMsgs[lastUserIdx].content += sTemplateForUser;
+                }
+            }
             if (aiModelName == "gpt-5" && sSelectedIconTab == "tstocode") {
                 updatedaMsgs.push({ "role": "user", "content": "Give ``` before code language as indicator that after this line code is being provided" });
             }
@@ -9990,7 +10073,7 @@ sap.ui.define([
             var oViewModel = this.getView().getModel("viewModel");
             var aMsgContentSystemKey = this.getView().byId("multiInputSystem").getValue();
             var aMsgContentSystemDesc = this.getView().byId("descTxtArea").getValue();
-
+            aMsgContentSystemDesc = this._enrichSystemMsgWithTemplate(aMsgContentSystemDesc);
             var promptMsgData = this.getView().byId("descTxtAreaPrompt").getValue();
             var oQuestionAI = promptMsgData;
             var contentPath = "/BSContent";
@@ -11666,7 +11749,6 @@ sap.ui.define([
                         oFMClearFirst.refresh(true);
                     }
                     return;
-                    return;
                 }
 
                 var oAppModel = this.getView().getModel("appmodel");
@@ -13250,38 +13332,101 @@ sap.ui.define([
 
         onRagPreviewPress: function (oEvent) {
             // Handle basic file list items (bound to fileModel context)
-    var oBasicCtx = oEvent.getSource().getBindingContext("fileModel");
-    if (oBasicCtx) {
-        var oBasicObj = oBasicCtx.getObject();
-        var sBasicName = oBasicObj.filename || oBasicObj.Name || "";
-        var sBasicContent = oBasicObj.content || "";
-        // Preserve the server-side key (set when a file is selected from the
-        // saved-file list) so that viewDoc() can call fileDisplay() to fetch
-        // the content from the server when local content is unavailable.
-        var sBasicKey = oBasicObj.key || "";
-        this.getView().getModel("fileViewModel").setData({
-            Key: sBasicKey,
-            Name: sBasicName,
-            srcUrl: oBasicObj.srcUrl || "",
-            content: sBasicContent
-        });
-        // The ViewDocument TextArea is bound to appmodel>/BSContent, not
-        // fileViewModel>/content. Update BSContent with this file's individual
-        // content so the preview shows the correct file (fixes the issue where
-        // all previews showed the same combined/stale BSContent).
-        if (sBasicContent) {
-            this.getView().getModel("appmodel").setProperty("/BSContent", sBasicContent);
-        }
-        this.viewDoc();
-        return;
-    }
-            ////upload and file selected
-            var sSelectedIconTab = this.selectedKeyFunct();
-            var aFiles = this.getView().getModel("fileModel").getProperty("/" + sSelectedIconTab) || [];
-            var oRowObj = oEvent.getSource().getBindingContext("ragModel").getObject();
-            var sFileName = oRowObj.filename || oRowObj.Name;
+            var oBasicCtx = oEvent.getSource().getBindingContext("fileModel");
+            if (oBasicCtx) {
+                var oBasicObj = oBasicCtx.getObject();
+                var sBasicName = oBasicObj.filename || oBasicObj.Name || "";
+                var sBasicContent = oBasicObj.content || "";
+                // Preserve the server-side key (set when a file is selected from the
+                // saved-file list) so that viewDoc() can call fileDisplay() to fetch
+                // the content from the server when local content is unavailable.
+                var sBasicKey = oBasicObj.key || "";
+                this.getView().getModel("fileViewModel").setData({
+                    Key: sBasicKey,
+                    Name: sBasicName,
+                    srcUrl: oBasicObj.srcUrl || "",
+                    content: sBasicContent
+                });
+                if (sBasicContent) {
+                    this.getView().getModel("appmodel").setProperty("/BSContent", sBasicContent);
+                }
+                this.viewDoc();
+                return;
+            }
 
-            var oFile = aFiles.find(function (f) {
+            // Handle rag file list items copied from basicFiles for TCG/PCT/BPM tabs
+            // (files preserved when Knowledge Search toggle is ON).
+            // These items carry the _copiedFromBasic flag along with the file
+            // content/key/name, so we can preview them just like basic files.
+            var oRagCtx = oEvent.getSource().getBindingContext("ragModel");
+            if (oRagCtx) {
+                var oRagObj = oRagCtx.getObject() || {};
+                if (oRagObj._copiedFromBasic) {
+                    var sRName = oRagObj.filename || oRagObj.Name || "";
+                    var sRContent = oRagObj.content || "";
+                    var sRKey = oRagObj.key || oRagObj.Key || "";
+                    var sRSrcUrl = oRagObj.srcUrl || "";
+                    this.getView().getModel("fileViewModel").setData({
+                        Key: sRKey,
+                        Name: sRName,
+                        srcUrl: sRSrcUrl,
+                        content: sRContent
+                    });
+                    if (sRContent) {
+                        this.getView().getModel("appmodel").setProperty("/BSContent", sRContent);
+                    }
+
+
+                    var that = this;
+                    this._getViewDocDialog().then(function (oDialog) {
+                        if (sRKey && !sRSrcUrl) {
+
+                            // (bypass RAG branch by calling the object-store endpoint).
+                            var oHeader = {
+                                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                                "X-Frame-Options": "DENY",
+                                "X-XSS-Protection": "0",
+                                "X-Content-Type-Options": "nosniff"
+                            };
+                            var oAppModel = that.getView().getModel("appmodel");
+                            var encodedKey = encodeURIComponent(sRKey);
+                            var sUrl = that._sBasePath + "/cockpit/getFileDetails(key='" + encodedKey + "')";
+                            var fileExtension = (sRName.split('.').pop() || "").toLowerCase();
+                            $.ajax({
+                                url: sUrl,
+                                type: "GET",
+                                headers: oHeader,
+                                success: function (data) {
+                                    that._handleFileDisplaySuccess(data, fileExtension, sUrl, oAppModel);
+                                },
+                                error: function () {
+                                    if (sap.ui.core.BusyIndicator) {
+                                        sap.ui.core.BusyIndicator.hide();
+                                    }
+                                }
+                            });
+                        } else if (sRSrcUrl) {
+                            that.KBfileDisplay();
+                            return;
+                        }
+                        if (!oDialog.isOpen()) {
+                            var sExt = (sRName.split('.').pop() || "").toLowerCase();
+                            var bIsImage = ["png", "jpg", "jpeg"].includes(sExt);
+                            oDialog.setVerticalScrolling(bIsImage);
+                            oDialog.open();
+                        }
+                    });
+                    return;
+                }
+            }
+
+            let sSelectedIconTab = this.selectedKeyFunct();
+            let aFiles = this.getView().getModel("fileModel").getProperty("/" + sSelectedIconTab) || [];
+            let oRowObj = oEvent.getSource().getBindingContext("ragModel").getObject();
+            let sFileName = oRowObj.filename || oRowObj.Name;
+
+            let oFile = aFiles.find(function (f) {
                 return (f.filename || f.FileName || f.Name) === sFileName;
             });
 
@@ -13290,7 +13435,7 @@ sap.ui.define([
                 return;
             }
 
-            var sExt = (sFileName || "").split(".").pop().toLowerCase();
+            let sExt = (sFileName || "").split(".").pop().toLowerCase();
 
             let sKey = (oFile.s3_key ? "/" + oFile.s3_key : "") || oFile.Key || oFile.objectStoreRefKey || oFile.key || "";
 
@@ -13301,13 +13446,13 @@ sap.ui.define([
                     srcUrl: "",
                     content: oFile.extracted_value
                 });
-                var oModel = this.getView().getModel("appmodel");
+                let oModel = this.getView().getModel("appmodel");
                 oModel.setProperty("/BSContent", oFile.extracted_value);
                 this.viewDoc();
                 return;
             }
 
-            var sText = oFile.extracted_value || oFile.content || oFile.text || "";
+            let sText = oFile.extracted_value || oFile.content || oFile.text || "";
             sText = (sText || "").replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim();
 
             this.getView().getModel("appmodel").setProperty("/BSContent", sText);
@@ -13320,11 +13465,87 @@ sap.ui.define([
             this.viewDoc();
 
         },
+        
+        // onRagToggle: function () {
+        //     let bSelected = this.getView().byId("RagSwitch").getSelected();
+        //     let oRagModel = this.getView().getModel("ragModel");
+        //     let oDetailModel = this.getOwnerComponent().getModel("airesponseDetailModel");
+        //     let sCurrentTab = this.selectedKeyFunct();
+        //     let bIsPreserveFilesTab = (sCurrentTab === "TCG" || sCurrentTab === "PCT" || sCurrentTab === "BPM");
 
+        //     oRagModel.setProperty("/currentRagEnabled", bSelected);
+
+        //     if (!bSelected) {
+        //         if (bIsPreserveFilesTab) {
+                    
+        //             oRagModel.setProperty("/ragFiles", []);
+        //             oRagModel.refresh(true);
+        //             oDetailModel.setProperty("/citationArr", []);
+        //             oDetailModel.refresh(true);
+                    
+        //             let oFileModelOff = this.getView().getModel("fileModel");
+        //             let aTabLocal = oFileModelOff.getProperty("/" + sCurrentTab + "_local") || [];
+        //             if (aTabLocal.length > 0) {
+        //                 oFileModelOff.setProperty("/basicFiles", aTabLocal);
+        //                 oFileModelOff.refresh(true);
+        //             }
+        //         } else {
+        //             oRagModel.setProperty("/ragFiles", []);
+        //             oRagModel.refresh(true);
+        //             oDetailModel.setProperty("/citationArr", []);
+        //             oDetailModel.refresh(true);
+        //         }
+        //     } else {
+        //         if (bIsPreserveFilesTab) {
+                   
+        //             let oFileModel = this.getView().getModel("fileModel");
+        //             let aBasicFiles = oFileModel.getProperty("/basicFiles") || [];
+        //             if (!aBasicFiles.length) {
+        //                 aBasicFiles = oFileModel.getProperty("/" + sCurrentTab + "_local") || [];
+        //             }
+        //             if (aBasicFiles.length > 0) {
+        //                 let aConverted = aBasicFiles.map(function (f) {
+        //                     return {
+        //                         Key: f.key || f.Key || "",
+        //                         key: f.key || f.Key || "",
+        //                         Name: f.filename || f.Name || "",
+        //                         filename: f.filename || f.Name || "",
+        //                         content: f.content || "",
+        //                         srcUrl: f.srcUrl || "",
+        //                         _copiedFromBasic: true
+        //                     };
+        //                 });
+                        
+        //                 oRagModel.setProperty("/ragFiles", aConverted);
+        //                 oRagModel.refresh(true);
+        //                 this._bUploadedViaRag = true;
+        //             } else {
+                      
+        //                 oRagModel.setProperty("/ragFiles", []);
+        //                 oRagModel.refresh(true);
+        //             }
+        //         } else {
+        //             this.getView().getModel("fileModel").setProperty("/basicFiles", []);
+        //             this.getView().getModel("fileModel").refresh(true);
+        //         }
+        //     }
+
+        //     let oViewModel = this.getView().getModel("viewModel");
+
+        //     if (bRagEnabled) {
+        //         //   this.getView().byId("docNameText").setVisible(false);
+        //         //   this.getView().byId("viewDocBtn").setVisible(false);
+        //         var filteredModels = existingAImodels.filter(item => (item.text === "gpt-5" || item.text === "gpt-4o" || item.text === "anthropic--claude-3.5-sonnet" || item.text === "mistralai--mistral-small-instruct" || item.text === "mistralai--mistral-large-instruct"));
+        //         oViewModel.setProperty("/gptModels", filteredModels);
+        //     } else {
+        //         oViewModel.setProperty("/gptModels", this.allAIModels);
+        //     }
+        // },
+        
         onRagToggle: function () {
-            var bSelected = this.getView().byId("RagSwitch").getSelected();
-            var oRagModel = this.getView().getModel("ragModel");
-            var oDetailModel = this.getOwnerComponent().getModel("airesponseDetailModel");
+            let bSelected = this.getView().byId("RagSwitch").getSelected();
+            let oRagModel = this.getView().getModel("ragModel");
+            let oDetailModel = this.getOwnerComponent().getModel("airesponseDetailModel");
 
             oRagModel.setProperty("/currentRagEnabled", bSelected);
 
@@ -13335,24 +13556,26 @@ sap.ui.define([
                 oDetailModel.setProperty("/citationArr", []);
                 oDetailModel.refresh(true);
             }
+            // Only clear basic file list when RAG is being enabled (they are mutually exclusive).
+            // Do NOT clear on every call, because onRagToggle is also invoked programmatically
+            // after Go which would erase the uploaded files from the UI.
             if (bSelected) {
                 this.getView().getModel("fileModel").setProperty("/basicFiles", []);
                 this.getView().getModel("fileModel").refresh(true);
             }
-            var oViewModel = this.getView().getModel("viewModel");
-            var existingAImodels = oViewModel.getProperty("/gptModels");
-            var bRagEnabled = this.getView().byId("RagSwitch").getSelected();
+            let oViewModel = this.getView().getModel("viewModel");
+            let existingAImodels = oViewModel.getProperty("/gptModels");
+            let bRagEnabled = this.getView().byId("RagSwitch").getSelected();
 
             if (bRagEnabled) {
-                //   this.getView().byId("docNameText").setVisible(false);
-                //   this.getView().byId("viewDocBtn").setVisible(false);
-                var filteredModels = existingAImodels.filter(item => (item.text === "gpt-5" || item.text === "gpt-4o" || item.text === "anthropic--claude-3.5-sonnet" || item.text === "mistralai--mistral-small-instruct" || item.text === "mistralai--mistral-large-instruct"));
+
+                let filteredModels = existingAImodels.filter(item => (item.text === "gpt-5" || item.text === "gpt-4o" || item.text === "anthropic--claude-3.5-sonnet" || item.text === "mistralai--mistral-small-instruct" || item.text === "mistralai--mistral-large-instruct"));
                 oViewModel.setProperty("/gptModels", filteredModels);
             } else {
                 oViewModel.setProperty("/gptModels", this.allAIModels);
-                // this.getView().byId("selModel").setSelectedKey("d7bcd076748c9c61");
             }
         },
+
         // End of Aishwarya for Chatbot
         adminPromptsUsed: function (event) {
             var that = this;
@@ -13932,45 +14155,6 @@ sap.ui.define([
             this._oTemplateDialog.close();
         },
 
-        _extractTemplateStructure: function (sTemplateKey) {
-            if (!sTemplateKey) return;
-            let that = this;
-            let sUrl = this._sBasePath + "/cockpit/extractTemplateStructure(key='" + encodeURIComponent(sTemplateKey) + "')";
-
-            $.ajax({
-                url: sUrl,
-                method: "GET",
-                headers: that.defaultHeaders,
-                success: function (response) {
-                    try {
-                        let data = typeof response === "string" ? JSON.parse(response) : response;
-                        if (data.value) {
-                            data = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
-                        }
-                        if (data.status === 200 && data.templateDescription) {
-                            // Store the template structure description for injection into system message
-                            that.getView().getModel("viewModel").setProperty("/templateStructure", data.templateDescription);
-                            that.getView().getModel("viewModel").setProperty("/templateHeadings", data.structure?.headings || []);
-                            console.log("[Template] Structure extracted:", data.headingCount, "headings found");
-                            sap.m.MessageToast.show("Template structure loaded (" + data.headingCount + " sections)");
-                        } else {
-                            console.warn("[Template] Structure extraction returned non-200:", data);
-                            that.getView().getModel("viewModel").setProperty("/templateStructure", "");
-                            that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
-                        }
-                    } catch (e) {
-                        console.error("[Template] Error parsing structure response:", e);
-                        that.getView().getModel("viewModel").setProperty("/templateStructure", "");
-                        that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
-                    }
-                },
-                error: function (err) {
-                    console.error("[Template] Error fetching template structure:", err);
-                    that.getView().getModel("viewModel").setProperty("/templateStructure", "");
-                    that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
-                }
-            });
-        },
 
         onTemplateFileDelete: function (oEvent) {
             let _this = this;
@@ -15040,6 +15224,78 @@ sap.ui.define([
             }
 
         },
+
+        loadDocGenTypes: function () {
+            var that = this;
+            var sUrl = this._sBasePath + "/cockpit/getPromptDetails?Category=DocGen&MsgType=sysMsg&ProjectId=" +
+                encodeURIComponent(this._ProjectDetail);
+            var oHeader = {
+                "Access-Control-Allow-Origin": "https://*.hana.ondemand.com/**" || null,
+                "Access-Control-Allow-Methods": "POST, GET, PUT, PATCH, DELETE" || null,
+                "X-Frame-Options": "DENY",
+                "X-XSS-Protection": "0",
+                "X-Content-Type-Options": "nosniff",
+                ...(this.defaultHeaders || {})
+            };
+
+            $.ajax({
+                url: sUrl,
+                method: "GET",
+                headers: oHeader,
+                success: function (data) {
+                    // Be lenient about the response shape. Accept:
+                    //   { value: { status: 200, result: [...] } }
+                    //   { value: { result: [...] } }
+                    //   { value: [...] }
+                    //   [...]
+                    var resultData = null;
+                    if (data && data.value && Array.isArray(data.value.result)) {
+                        resultData = data.value.result;
+                    } else if (data && data.value && data.value.result) {
+                        resultData = data.value.result;
+                    } else if (data && Array.isArray(data.value)) {
+                        resultData = data.value;
+                    } else if (Array.isArray(data)) {
+                        resultData = data;
+                    }
+
+                    if (!resultData) {
+                        console.warn("loadDocGenTypes: No data returned from API");
+                        var oEmptyModel = new sap.ui.model.json.JSONModel({ types: [] });
+                        that.getView().setModel(oEmptyModel, "docGenTypesModel");
+                        return;
+                    }
+
+                    var resultsArray = Array.isArray(resultData) ? resultData : [resultData];
+
+                    // Filter for current project or default, map to ComboBox format
+                    var aTypes = resultsArray
+                        .filter(function (item) {
+                            return item && (item.Project_Id === that._ProjectDetail ||
+                                item.Project_Id === "default" ||
+                                !item.Project_Id);
+                        })
+                        .map(function (item) {
+                            return {
+                                key: item.PromptId || item.promptId || item.name || "",
+                                text: item.PromptId || item.promptId || item.name || ""
+                            };
+                        })
+                        .filter(function (o) { return !!o.key; });
+
+                    // Create/update the model for the ComboBox
+                    var oDocGenTypesModel = new sap.ui.model.json.JSONModel({ types: aTypes });
+                    that.getView().setModel(oDocGenTypesModel, "docGenTypesModel");
+                    console.log("loadDocGenTypes: Loaded " + aTypes.length + " document types");
+                },
+                error: function (err) {
+                    console.error("loadDocGenTypes: Error fetching DocGen types:", err);
+                    var oEmptyModel = new sap.ui.model.json.JSONModel({ types: [] });
+                    that.getView().setModel(oEmptyModel, "docGenTypesModel");
+                }
+            });
+        },
+
         getDataSysMsgDocGen: function () {
             let that = this;
 
@@ -16056,6 +16312,7 @@ sap.ui.define([
 
         onSourceConfigChange: function (oEvent) {
             var sKey = oEvent.getSource().getSelectedKey();
+            this.onRefresh();
             var oRetroDocModel = this.getView().getModel("retroDocModel");
             var oContentMap = {
                 "objectSelection": "Select the SAP System, Object Type, and enter a Search Pattern to find ABAP objects in the system. Once the search results are displayed, select an object to proceed with document generation. Choose whether to create new documents (Functional Specification or Technical Specification) or update existing ones, then click 'Generate Document'.",
@@ -16382,7 +16639,7 @@ sap.ui.define([
                 );
             } else {
                 var sDefaultFile = "Style_Capgemini_Standard.docx";
-                var sUrl = sap.ui.require.toUrl("aicockpitfe/templates/" + sDefaultFile);
+                var sUrl = sap.ui.require.toUrl("aicockpitfeq/templates/" + sDefaultFile);
                 var oLink = document.createElement("a");
                 oLink.href = sUrl; oLink.download = sDefaultFile;
                 document.body.appendChild(oLink); oLink.click(); document.body.removeChild(oLink);
@@ -16403,7 +16660,7 @@ sap.ui.define([
                 );
             } else {
                 var sDefaultFile = "Style_Capgemini_Standard.docx";
-                var sUrl = sap.ui.require.toUrl("aicockpitfe/templates/" + sDefaultFile);
+                var sUrl = sap.ui.require.toUrl("aicockpitfeq/templates/" + sDefaultFile);
                 var oLink = document.createElement("a");
                 oLink.href = sUrl; oLink.download = sDefaultFile;
                 document.body.appendChild(oLink); oLink.click(); document.body.removeChild(oLink);
@@ -20304,6 +20561,7 @@ Please provide the Functional Specification in plain text format with clear sect
 
             var aLines = sResponseText.split("\n");
             var aTextParts = [];
+            var sApiError = null;
 
             for (var i = 0; i < aLines.length; i++) {
                 var sLine = aLines[i].trim();
@@ -20355,10 +20613,16 @@ Please provide the Functional Specification in plain text format with clear sect
                                 }
                             }
                         }
+                        else if (oData.message && (oData.code || oData.request_id)) {
+                            sApiError = this._extractApiErrorMessage(oData.message);
+                        }
                     } catch (e) {
                         console.warn("Failed to parse SSE JSON chunk:", sJsonStr, e);
                     }
                 }
+            }
+            if (sApiError) {
+                throw new Error(sApiError);
             }
 
             var sResult = aTextParts.join("");
@@ -20366,6 +20630,19 @@ Please provide the Functional Specification in plain text format with clear sect
                 throw new Error("No generated text found in AI Core streaming response");
             }
             return sResult;
+        },
+
+        _extractApiErrorMessage: function (sMessage) {
+            if (!sMessage) { return sMessage; }
+            // Strip leading "NNN - Module Name: " prefix
+            var sClean = sMessage.replace(/^\d+\s*-\s*[^:]+:\s*/, "");
+            // Remove " Please reduce…" and anything that follows
+            var iPlease = sClean.indexOf(" Please reduce");
+            if (iPlease !== -1) { sClean = sClean.substring(0, iPlease); }
+            // Remove " Originally encountered…" and anything that follows
+            var iOrig = sClean.indexOf(" Originally encountered");
+            if (iOrig !== -1) { sClean = sClean.substring(0, iOrig); }
+            return sClean.trim() || sMessage;
         },
 
 
@@ -22951,7 +23228,6 @@ Please provide the Functional Specification in plain text format with clear sect
                 this.oRouter.navTo("DetailDetail", { dispKey: keytoSend, aimodel: selectedAI, layout: fioriLibrary.LayoutType.TwoColumnsMidExpanded });
                 await this.handleUploadContentPress();
                 this.executedOnce = true;
-
                 // Ensure assistant response is added to msgModel for conversation history continuity
                 var sAiResp = this.getOwnerComponent().getModel("airesponseDetailModel").getProperty("/resp") || "";
                 if (sAiResp) {
@@ -22962,7 +23238,6 @@ Please provide the Functional Specification in plain text format with clear sect
                         this.getView().getModel("msgModel").setProperty("/aMsg", aMsgs);
                     }
                 }
-
                 // Post-process: split response into code blocks for coderem/codesum tabs (same as cdGen)
                 var sScenario = this.selectedKeyFunct();
                 if (sScenario === "coderem" || sScenario === "codesum") {
@@ -22980,7 +23255,12 @@ Please provide the Functional Specification in plain text format with clear sect
                                 ceArr.push({ textData: resArr[h], codeData: "", lang: "" });
                             }
                         }
+                        oAiResp.setProperty("/multiCE", ceArr);
+                        oAiResp.refresh(true);
+                        // Show code editor VBox and hide TextArea (same as Code Generation)
+                        var oDetailView = that.getOwnerComponent().getRootControl().byId("app").getPages ? null : null;
                         try {
+                            var oMultiCEBox = sap.ui.getCore().byId("application-Zsemobj-display-component---DetailDetail--multipleCodeEd") ||
                                 that.getOwnerComponent().getRootControl().getController ? null : null;
                             // Use the component to find the DetailDetail view
                             var oDetailCtrl = that.getOwnerComponent()._oViews && that.getOwnerComponent()._oViews._oViews["aicockpitfeq.view.DetailDetail"];
@@ -22988,7 +23268,7 @@ Please provide the Functional Specification in plain text format with clear sect
                                 // Alternative: find via router targets
                                 var aPages = sap.ui.getCore().byId("__component0---app") ? sap.ui.getCore().byId("__component0---app").getPages() : [];
                             }
-                        } catch (e) { }
+                        } catch(e) {}
                         // Simpler approach: set a flag in the model that DetailDetail view binds to
                         oAiResp.setProperty("/codeEdVis", true);
                         oAiResp.refresh(true);
@@ -23003,26 +23283,17 @@ Please provide the Functional Specification in plain text format with clear sect
         },
         _runAbapMcpTool: async function (toolName, toolArgs) {
             try {
-                var jsonRpcPayload = {
-                    jsonrpc: "2.0",
-                    id: Date.now(),
-                    method: "tools/call",
-                    params: { name: toolName, arguments: toolArgs || {} }
-                };
-                var response = await fetch(this._sBasePath + "/abap-mcp/mcp", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Accept": "application/json, text/event-stream"
-                    },
-                    body: JSON.stringify(jsonRpcPayload)
-                });
-                if (!response.ok) {
-                    throw new Error("HTTP " + response.status + " from MCP " + toolName);
-                }
+                var args = toolArgs && typeof toolArgs === "object" ? toolArgs : {};
+                var payload = { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: toolName, arguments: args } };
+                var response = await fetch(this._sBasePath + "/abap-mcp/mcp", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" }, body: JSON.stringify(payload) });
+                if (!response.ok) { throw new Error("MCP " + toolName + " call failed with status " + response.status); }
                 var responseText = await response.text();
                 var parse = this._parseArc1McpResponse(responseText);
                 if (parse.isError) { throw new Error(parse.message || "MCP " + toolName + " returned an error"); }
+                var oAppModel = this.getView().getModel("appmodel");
+                if (oAppModel) { oAppModel.setProperty("/BSContent", parse.message || ""); }
+                this.executedOnce = false;
+                MessageToast.show(toolName + " executed");
                 return parse;
             } catch (err) {
                 MessageBox.error("MCP " + toolName + " error: " + (err && err.message ? err.message : String(err)));
@@ -23140,6 +23411,7 @@ Please provide the Functional Specification in plain text format with clear sect
             }
             return null;
         },
+
         // SAPSearch dialog helpers
         _openSapSearchDialog: async function () {
             var oModel = this.getView().getModel("sapSearchModel");
@@ -23195,41 +23467,11 @@ Please provide the Functional Specification in plain text format with clear sect
         },
         onSapSearchUseSelected: function () {
             try {
-                // var oComboBox = this.byId("sapSearchPattern");
-                // var sSelectedName = oComboBox.getSelectedKey() || oComboBox.getValue();
-                // if (!sSelectedName) { sap.m.MessageToast.show("Please select a result first"); return; }
-                var oSearchModel = this.getView().getModel("sapSearchModel");
-                var aResults = oSearchModel.getProperty("/results") || [];
-                // var oObj = aResults.find(function (o) { return o.name === sSelectedName; }) ||
-                var oObj = null;
-                var sSelectedName = "";
-
-                // Prefer selection from the results Table (SapSearch fragment shows objects here).
                 var oTable = this.byId("sapSearchResultsTable");
-                if (oTable && typeof oTable.getSelectedItem === "function") {
-                    var oSelItem = oTable.getSelectedItem();
-                    if (oSelItem) {
-                        var oCtx = oSelItem.getBindingContext("sapSearchModel");
-                        if (oCtx) {
-                            oObj = oCtx.getObject();
-                            sSelectedName = (oObj && oObj.name) || "";
-                        }
-                    }
-                }
-
-                // Fallback: use the SearchField value typed by the user.
-                if (!oObj) {
-                    var oSearchInput = this.byId("sapSearchPattern");
-                    if (oSearchInput) {
-                        // Support both SearchField (getValue) and older ComboBox (getSelectedKey) shapes.
-                        sSelectedName = (typeof oSearchInput.getSelectedKey === "function" && oSearchInput.getSelectedKey())
-                            || (typeof oSearchInput.getValue === "function" && oSearchInput.getValue())
-                            || "";
-                    }
-                    if (!sSelectedName) { sap.m.MessageToast.show("Please select a result first"); return; }
-                    oObj = aResults.find(function (o) { return o.name === sSelectedName; }) ||
-                    { name: sSelectedName, type: oSearchModel.getProperty("/objectType"), desc: "" };
-                }
+                var oItem = oTable && oTable.getSelectedItem();
+                if (!oItem) { MessageToast.show("Please select a result first"); return; }
+                var oObj = oItem.getBindingContext("sapSearchModel").getObject();
+                // Normalize ADT type: "PROG/P" → "PROG", "CLAS/OC" → "CLAS", etc.
                 var sRawType = (oObj.type || "PROG").toUpperCase();
                 var sNormType = sRawType.split("/")[0];
                 // Store selected object in viewModel for later use by callAbapMCPCodeGen
@@ -23484,7 +23726,8 @@ Please provide the Functional Specification in plain text format with clear sect
                         out.push({
                             type: (it.type || it.objectType || it.object_type || it.kind || "").toString(),
                             name: (it.name || it.objectName || it.object_name || it.id || "").toString(),
-                            desc: (it.description || it.desc || it.path || it.package || it.devclass || "").toString()
+                            desc: (it.description || it.desc || it.path || it.package || it.devclass || "").toString(),
+                            template: (it.template || it.templateName || it.template_name || "").toString()
                         });
                     });
                     return out;
@@ -23496,7 +23739,7 @@ Please provide the Functional Specification in plain text format with clear sect
                 if (!s) return;
                 var parts = s.split(/\s+/);
                 if (parts.length >= 2) {
-                    out.push({ type: parts[0], name: parts[1], desc: parts.slice(2).join(" ") });
+                    out.push({ type: parts[0], name: parts[1], desc: parts.slice(2).join(" "), template: "" });
                 }
             });
             return out;
@@ -23539,7 +23782,8 @@ Please provide the Functional Specification in plain text format with clear sect
             var idx = oM.getProperty("/sourceIndex");
             var preview = "";
             if (idx === 1) {
-                preview = this.getOwnerComponent().getModel("airesponseDetailModel")?.getProperty("/resp") || "(No AI response yet)";
+                var rawResp = this.getOwnerComponent().getModel("airesponseDetailModel")?.getProperty("/resp") || "";
+                preview = rawResp ? this._extractAbapCodeFromResponse(rawResp) : "(No AI response yet)";
             } else if (idx === 2) {
                 preview = this.getView().getModel("appmodel")?.getProperty("/BSContent") || "(No editor content)";
             }
@@ -23552,19 +23796,18 @@ Please provide the Functional Specification in plain text format with clear sect
                 if (parse && !parse.isError && parse.message) {
                     try {
                         var arr = JSON.parse(parse.message);
-                        if (Array.isArray(arr)) {
-                            aList = arr.map(function (t) {
-                                var id = t.id || t.trkorr || t.name || (typeof t === "string" ? t : ""); var desc = t.description || t.desc || "";
-                                return { key: id, text: id + (desc ? " - " + desc : "") };
-                            });
-                        }
-                        else if (arr && Array.isArray(arr.transports)) {
-                            aList = arr.transports.map(function (t) {
-                                var id = t.id || t.trkorr || t.name || ""; var desc = t.description || t.desc || ""; return {
-                                    key: id, text: id + (desc ? " - " + desc : "")
-                                };
-                            });
-                        }
+                        if (Array.isArray(arr)) { 
+                            aList = arr.map(function (t) { var id = t.id || t.trkorr || t.name || (typeof t === "string" ? t : ""); var desc = t.description || t.desc || "";
+                                 return { key: id, text: id + (desc ? " - " + desc : "") }; 
+                                }); 
+                                } 
+                                else if (arr && Array.isArray(arr.transports)) { 
+                                    aList = arr.transports.map(function (t) { 
+                                        var id = t.id || t.trkorr || t.name || ""; var desc = t.description || t.desc || ""; return { 
+                                            key: id, text: id + (desc ? " - " + desc : "") 
+                                        }; 
+                                    }); 
+                                }
                     } catch (e) { /* plain text */ }
                 }
                 var oM = this.getView().getModel("abapCreateModel");
@@ -23583,9 +23826,25 @@ Please provide the Functional Specification in plain text format with clear sect
             var activate = oM.getProperty("/activate");
             var sourceIdx = oM.getProperty("/sourceIndex");
             var source = "";
-            if (sourceIdx === 1) { source = this.getOwnerComponent().getModel("airesponseDetailModel")?.getProperty("/resp") || ""; }
+            if (sourceIdx === 1) {
+                var rawResp = this.getOwnerComponent().getModel("airesponseDetailModel")?.getProperty("/resp") || "";
+                source = rawResp ? this._extractAbapCodeFromResponse(rawResp) : "";
+            }
             else if (sourceIdx === 2) { source = this.getView().getModel("appmodel")?.getProperty("/BSContent") || ""; }
             if (!name) { MessageBox.error("Object name is required"); return; }
+            // Validate that the object name matches the name declared in the AI response source
+            if (sourceIdx === 1 && source) {
+                var sSourceName = this._extractAbapObjectNameFromSource(type, source);
+                if (sSourceName && sSourceName.toUpperCase() !== String(name).toUpperCase()) {
+                    MessageBox.error(
+                        "Object name mismatch: the AI Response defines '" + sSourceName +
+                        "' but the Object Name field is '" + name + "'.\n\n" +
+                        "Please change the Object Name to '" + sSourceName +
+                        "' or update the AI response to use '" + name + "'."
+                    );
+                    return;
+                }
+            }
             var busyDialog = new BusyDialog({ text: "Creating " + name + "..." });
             busyDialog.open();
             try {
@@ -23601,6 +23860,13 @@ Please provide the Functional Specification in plain text format with clear sect
                 } else {
                     MessageToast.show(name + " created successfully (not activated)");
                 }
+                // Update selectedAbapObject so the Push dialog reflects the newly created object
+                this.getView().getModel("viewModel").setProperty("/selectedAbapObject", {
+                    type: type,
+                    rawType: type,
+                    name: name.toUpperCase(),
+                    desc: ""
+                });
                 busyDialog.close();
                 this.onCancelAbapCreate();
             } catch (err) {
@@ -23610,6 +23876,22 @@ Please provide the Functional Specification in plain text format with clear sect
         },
         onCancelAbapCreate: function () {
             if (this._abapCreateDlg) { this._abapCreateDlg.close(); }
+            this._resetAbapCreateModel();
+
+        },
+        _resetAbapCreateModel: function () {
+            var oM = this.getView().getModel("abapCreateModel");
+            if (oM) {
+                oM.setProperty("/objectType", "PROG");
+                oM.setProperty("/objectName", "");
+                oM.setProperty("/package", "$TMP");
+                oM.setProperty("/transport", "");
+                oM.setProperty("/description", "");
+                oM.setProperty("/activate", true);
+                oM.setProperty("/sourceIndex", 0);
+                oM.setProperty("/sourcePreview", "");
+                oM.setProperty("/transports", []);
+            }
         },
         onCreateTransportFromAbapCreate: function () {
             var that = this;
@@ -23699,6 +23981,46 @@ Please provide the Functional Specification in plain text format with clear sect
 
             this.getView().addDependent(oDialog);
             oDialog.open();
+        },
+        /**
+         * Extract only the ABAP code from an AI response, stripping markdown fences and explanatory text.
+         */
+        _extractAbapCodeFromResponse: function (text) {
+            if (!text || typeof text !== "string") return text || "";
+            var t = text.trim();
+
+            // Find all code blocks in the response
+            var codeBlockRegex = /```([a-zA-Z]*)\s*\n?([\s\S]*?)```/g;
+            var allCodeBlocks = [];
+            var match;
+            while ((match = codeBlockRegex.exec(t)) !== null) {
+                var lang = (match[1] || "").toLowerCase();
+                var code = (match[2] || "").trim();
+                if (code) {
+                    allCodeBlocks.push({ lang: lang, code: code });
+                }
+            }
+
+            if (allCodeBlocks.length > 0) {
+                // First, look for explicitly marked ABAP code blocks
+                for (var i = 0; i < allCodeBlocks.length; i++) {
+                    if (allCodeBlocks[i].lang === "abap" || allCodeBlocks[i].lang === "sap") {
+                        return allCodeBlocks[i].code;
+                    }
+                }
+                // Second, look for code blocks that look like ABAP
+                var abapKeywords = /^(REPORT|PROGRAM|INCLUDE|CLASS|INTERFACE|FUNCTION|FORM|METHOD|DATA|TYPES|CONSTANTS)\b/im;
+                for (var j = 0; j < allCodeBlocks.length; j++) {
+                    if (abapKeywords.test(allCodeBlocks[j].code)) {
+                        return allCodeBlocks[j].code;
+                    }
+                }
+                // If no ABAP-specific block found, return the first code block
+                return allCodeBlocks[0].code;
+            }
+
+            // No code fences found - return raw text as fallback
+            return t;
         },
         // ========== END ABAP MCP SERVER INTEGRATION ==========
 
@@ -23863,6 +24185,44 @@ Please provide the Functional Specification in plain text format with clear sect
                     sap.m.MessageToast.show("Selected: " + sObjectType + " / " + sObjectName + ". Click 'Generate Document' to create FS/TS.");
                 });
         },
+        _extractAbapObjectNameFromSource: function (type, source) {
+            if (!source) return "";
+            var src = String(source);
+            // Strip line comments starting with * at column 0 and inline " comments to reduce noise
+            var re;
+            try {
+                switch (type) {
+                    case "PROG":
+                        re = /^\s*(?:REPORT|PROGRAM)\s+([A-Za-z_][A-Za-z0-9_\/]*)/im;
+                        break;
+                    case "CLAS":
+                        re = /^\s*CLASS\s+([A-Za-z_][A-Za-z0-9_\/]*)\s+DEFINITION/im;
+                        break;
+                    case "INTF":
+                        re = /^\s*INTERFACE\s+([A-Za-z_][A-Za-z0-9_\/]*)/im;
+                        break;
+                    case "DDLS":
+                        re = /define\s+(?:root\s+)?(?:view\s+entity|view|table\s+function)\s+([A-Za-z_][A-Za-z0-9_\/]*)/i;
+                        break;
+                    case "DDLX":
+                        re = /annotate\s+(?:view|entity)\s+([A-Za-z_][A-Za-z0-9_\/]*)/i;
+                        break;
+                    case "BDEF":
+                        re = /(?:managed|unmanaged|projection|interface)\s+implementation\s+in\s+class\s+[A-Za-z_][A-Za-z0-9_\/]*\s+unique\s*;?\s*(?:strict[^\n]*)?\s*for\s+([A-Za-z_][A-Za-z0-9_\/]*)|define\s+behavior\s+for\s+([A-Za-z_][A-Za-z0-9_\/]*)/i;
+                        break;
+                    case "SRVD":
+                        re = /define\s+service\s+([A-Za-z_][A-Za-z0-9_\/]*)/i;
+                        break;
+                    default:
+                        return "";
+                }
+                var m = src.match(re);
+                if (m) {
+                    return (m[1] || m[2] || "").trim();
+                }
+            } catch (e) { /* ignore */ }
+            return "";
+        },
 
         _extractTemplateStructure: function (sTemplateKey) {
             if (!sTemplateKey) return;
@@ -23902,6 +24262,32 @@ Please provide the Functional Specification in plain text format with clear sect
                     that.getView().getModel("viewModel").setProperty("/templateHeadings", []);
                 }
             });
+        },
+         _enrichSystemMsgWithTemplate: function (sSysMsg) {
+            var oViewModel = this.getView().getModel("viewModel");
+            var bTemplateToggle = oViewModel.getProperty("/templateToggle");
+            var sTemplateStructure = oViewModel.getProperty("/templateStructure") || "";
+
+            if (bTemplateToggle && sTemplateStructure) {
+                var sTemplateInstruction = "\n\n---\n" +
+                    "IMPORTANT: You MUST structure your response to match the following document template. " +
+                    "Use the exact section headings shown below. For sections that contain tables, generate data in markdown table format " +
+                    "using pipe (|) separators with the exact column headers from the template.\n\n" +
+                    sTemplateStructure +
+                    "\n\nGenerate content for ALL sections listed above. For table sections, provide data rows in markdown table format.";
+                return sSysMsg + sTemplateInstruction;
+            }
+            return sSysMsg;
+        },
+        _getTemplateInstructionForUser: function () {
+            var oViewModel = this.getView().getModel("viewModel");
+            var bTemplateToggle = oViewModel.getProperty("/templateToggle");
+            var sTemplateStructure = oViewModel.getProperty("/templateStructure") || "";
+
+            if (bTemplateToggle && sTemplateStructure) {
+                return "\n\n[Template Structure - Please follow this structure in your response:]\n" + sTemplateStructure;
+            }
+            return "";
         },
 
     });
