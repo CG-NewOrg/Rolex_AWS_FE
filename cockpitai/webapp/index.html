@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta data-sap-ui-frame-options="trusted" />
+    <title>Code, Test and Document Agents</title>
+    <style>
+        html, body, body > div, #container, #container-uiarea {
+            height: 100%;
+        }
+    </style>
+    <script
+        id="sap-ui-bootstrap"
+        src="resources/sap-ui-core.js"
+        data-sap-ui-theme="sap_horizon"
+        data-sap-ui-resource-roots='{
+            "cockpitai": "./"
+        }'
+        data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"
+        data-sap-ui-compat-version="edge"
+        data-sap-ui-async="true"
+        data-sap-ui-frame-options="trusted"
+    ></script>
+    <!-- pdfmake removed to comply with strict CSP (managed FLP blocks 'unsafe-eval').
+         If/when PDF generation is required, we will add a CSP-safe library (e.g., pdf-lib) -->
+    <!-- jsPDF (UMD) vendored locally for strict CSP environments -->
+    <script src="lib/jspdf.umd.min.js"></script>
+</head>
+<body class="sapUiBody sapUiSizeCompact" id="content">
+    <div
+        data-sap-ui-component
+        data-name="cockpitai"
+        data-id="container"
+        data-settings='{"id" : "cockpitai"}'
+        data-handle-validation="true"
+    ></div>
+</body>
+</html>

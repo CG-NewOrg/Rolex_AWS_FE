@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Start aicockpitfeq",
+      "name": "Start cockpitai",
       "type": "node",
       "request": "launch",
-      "cwd": "${workspaceFolder}/aicockpitfeq",
+      "cwd": "${workspaceFolder}/cockpitai",
       "runtimeExecutable": "npx",
       "windows": {
         "runtimeExecutable": "npx.cmd"
@@ -24,14 +24,14 @@
       "env": {
         "DEBUG": "--inspect",
         "FIORI_TOOLS_URL_PARAMS": "sap-ui-xx-viewCache=false",
-        "run.config": "{\"handlerId\":\"fiori_tools\",\"runnableId\":\"/home/user/projects/CGAICockpit/aicockpitfeq\"}"
+        "run.config": "{\"handlerId\":\"fiori_tools\",\"runnableId\":\"/home/user/projects/CGAICockpit/cockpitai\"}"
       }
     },
     {
-      "name": "Start aicockpitfeq Local",
+      "name": "Start cockpitai Local",
       "type": "node",
       "request": "launch",
-      "cwd": "${workspaceFolder}/aicockpitfeq",
+      "cwd": "${workspaceFolder}/cockpitai",
       "runtimeExecutable": "npx",
       "windows": {
         "runtimeExecutable": "npx.cmd"
@@ -51,7 +51,7 @@
       "outputCapture": "std",
       "env": {
         "FIORI_TOOLS_URL_PARAMS": "sap-ui-xx-viewCache=false",
-        "run.config": "{\"handlerId\":\"fiori_tools\",\"runnableId\":\"/home/user/projects/CGAICockpit/aicockpitfeq\"}"
+        "run.config": "{\"handlerId\":\"fiori_tools\",\"runnableId\":\"/home/user/projects/CGAICockpit/cockpitai\"}"
       }
     }
   ]

@@ -1,0 +1,145 @@
+{
+  "authenticationMethod": "route",
+  "welcomeFile": "/index.html",
+  "responseHeaders": [
+    {
+      "name": "Content-Security-Policy",
+      "value":
+      "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'self';"
+    }
+  ],
+  "routes": [
+    {
+      "source": "^/abap-mcp/(.*)$",
+      "destination": "arc1-mcp",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1"
+    },
+    {
+      "source": "^/api/objectstore/(.*)$",
+      "destination": "object-store-dest",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1",
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+     {
+      "source": "^/kb-integration/(.*)$",
+      "destination": "RagQueryAPI",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+    {
+      "source": "^/kbintegration/(.*)$",
+      "destination": "TCGAPI",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/$1",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+    {
+      "source": "^/cockpit/(.*)$",
+      "destination": "CGAICOCKPIT_BE",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/odata/v4/cockpit/$1",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+    {
+      "source": "^/deployments/(.*)$",
+      "destination": "AI_CORE_CGAI_COCKPIT",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "target": "/inference/deployments/$1",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+    {
+      "source": "^/lm/(.*)$",
+      "destination": "AI_CORE_CGAI_COCKPIT",
+      "csrfProtection": false,
+      "authenticationType": "xsuaa",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate",
+      "target": "/lm/$1"
+    },
+    {
+      "source": "^/resources/(.*)$",
+      "target": "/resources/$1",
+      "authenticationType": "xsuaa",
+      "destination": "ui5",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+       {
+      "source": "^/user-api(.*)",
+      "target": "/$1",
+      "service": "sap-approuter-userapi",
+      "authenticationType": "xsuaa",
+      "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+    },
+     {
+       "source": "^(.*)$",
+       "target": "$1",
+       "service": "html5-apps-repo-rt",
+       "authenticationType": "xsuaa",
+       "httpMethods": [
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE"
+			],
+      "cacheControl": "no-store, no-cache, must-revalidate"
+     }
+  ]
+}

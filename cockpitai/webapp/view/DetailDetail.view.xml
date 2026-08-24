@@ -1,0 +1,441 @@
+<mvc:View
+    controllerName="cockpitai.controller.DetailDetail"
+    xmlns="sap.m"
+    xmlns:f="sap.f"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:core="sap.ui.core"
+    xmlns:ce="sap.ui.codeeditor"
+    xmlns:pf="sap.suite.ui.commons"
+>
+    <Page
+        id="dyID"
+        class="sapUiContentPadding sapUiResponsivePadding--header sapUiResponsivePadding--footer"
+    >
+        <headerContent>
+            <HBox
+                alignItems="Stretch"
+                width="100%"
+                id="headerHboxDetDet"
+                justifyContent="SpaceBetween"
+                class="sapUiSmallMarginBegin sapUiSmallMarginTop"
+            >
+                <Title
+                    text="{bindKeyVal>/bindKey}"
+                    wrapping="false"
+                    class="sapUiSmallMarginBegin"
+                />
+
+                <HBox
+                    id="tokenHBox"
+                    visible="{TokenLimit>/tokenVis}"
+                    class="sapUiLargeMarginEnd"
+                >
+                    <Text
+                        text="{i18n>tknLim}"
+                        wrapping="false"
+                        class="sapUiTinyMarginEnd sapUiTinyMarginTop"
+                    />
+                    <Text
+                        id="tokenText"
+                        text="{TokenLimit>/usedToken} / {TokenLimit>/token}"
+                        class="sapUiTinyMarginTop sapUiLargeMarginEnd spaceClass"
+                    />
+                </HBox>
+            </HBox>
+        </headerContent>
+        <content>
+            <VBox
+                height="100%"
+                class="vboxDetClass"
+                id="vboxAiresp"
+            >
+            <!-- Retro Documentation - Process Log Panel
+                     Moved here from View1 (left panel); now rendered in the
+                     detail screen using the same panel styling as the other
+                     retro documentation panels below. -->
+                <Panel
+                    id="retroProcessLogPanel"
+                    headerText="Process Log"
+                    width="100%"
+                    expandable="true"
+                    expanded="true"
+                    class="panelClassDet retroDocPanel"
+                    visible="{= ${secondGoMod>/keyTab} === 'retroDocKey' }"
+                >
+                    <VBox width="100%">
+                        <pf:ProcessFlow
+                            id="retroProcessFlow"
+                            wheelZoomable="false"
+                            scrollable="false"
+                            class="retroProcessFlowSmallCards"
+                        >
+                            <pf:lanes>
+                                <pf:ProcessFlowLaneHeader
+                                    laneId="lane1"
+                                    iconSrc="sap-icon://source-code"
+                                    text="Object Selection"
+                                    position="0"
+                                />
+                                <pf:ProcessFlowLaneHeader
+                                    laneId="lane2"
+                                    iconSrc="sap-icon://document"
+                                    text="Fetch Source"
+                                    position="1"
+                                />
+                                <pf:ProcessFlowLaneHeader
+                                    laneId="lane3"
+                                    iconSrc="sap-icon://bullet-text"
+                                    text="Tech Spec"
+                                    position="2"
+                                />
+                                <pf:ProcessFlowLaneHeader
+                                    laneId="lane4"
+                                    iconSrc="sap-icon://documents"
+                                    text="Func Spec"
+                                    position="3"
+                                />
+                                <pf:ProcessFlowLaneHeader
+                                    laneId="lane5"
+                                    iconSrc="sap-icon://download"
+                                    text="Download"
+                                    position="4"
+                                />
+                            </pf:lanes>
+                            <pf:nodes>
+                                <pf:ProcessFlowNode
+                                    laneId="lane1"
+                                    nodeId="step-1"
+                                    titleAbbreviation="Pending"
+                                    children="step-2"
+                                    state="Neutral"
+                                />
+                                <pf:ProcessFlowNode
+                                    laneId="lane2"
+                                    nodeId="step-2"
+                                    titleAbbreviation="Pending"
+                                    children="step-3"
+                                    state="Neutral"
+                                />
+                                <pf:ProcessFlowNode
+                                    laneId="lane3"
+                                    nodeId="step-3"
+                                    titleAbbreviation="Pending"
+                                    children="step-4"
+                                    state="Neutral"
+                                />
+                                <pf:ProcessFlowNode
+                                    laneId="lane4"
+                                    nodeId="step-4"
+                                    titleAbbreviation="Pending"
+                                    children="step-5"
+                                    state="Neutral"
+                                />
+                                <pf:ProcessFlowNode
+                                    laneId="lane5"
+                                    nodeId="step-5"
+                                    titleAbbreviation="Pending"
+                                    state="Neutral"
+                                />
+                            </pf:nodes>
+                        </pf:ProcessFlow>
+
+                    </VBox>
+                </Panel>
+
+                <Panel
+                    id="retroDownloadPanel"
+                    headerText="Documents Ready"
+                    width="100%"
+                    expandable="true"
+                    expanded="true"
+                    class="panelClassDet retroDocPanel"
+                    visible="{= ${secondGoMod>/keyTab} === 'retroDocKey' &amp;&amp; ${/downloadPanelVisible} }"
+                >
+                    <VBox width="100%">
+                        <List
+                            id="retroDownloadList"
+                            items="{/downloadItems}"
+                            showNoData="false"
+                        >
+                            <CustomListItem>
+                                <HBox
+                                    width="100%"
+                                    justifyContent="SpaceBetween"
+                                    alignItems="Center"
+                                    class="sapUiTinyMargin"
+                                >
+                                    <HBox alignItems="Center">
+                                        <core:Icon
+                                            src="sap-icon://document-text"
+                                            color="#0a6ed1"
+                                            class="sapUiTinyMarginEnd"
+                                        />
+                                        <VBox>
+                                            <Text text="{name}" />
+                                            <Text text="{filename}" />
+                                        </VBox>
+                                    </HBox>
+                                    <Button
+                                        text="View"
+                                        type="Transparent"
+                                        press=".onViewDocument"
+                                    />
+                                </HBox>
+                            </CustomListItem>
+                        </List>
+                    </VBox>
+                </Panel>
+
+                <Panel
+                    id="retroTSDocPanel"
+                    headerText="Technical Specification Document"
+                    width="100%"
+                    expandable="true"
+                    expanded="true"
+                    class="panelClassDet retroDocPanel"
+                    visible="{= ${secondGoMod>/keyTab} === 'retroDocKey' &amp;&amp; !!${airesponseDetailModel>/tsContent} &amp;&amp; ${airesponseDetailModel>/tsVisible} }"
+                >
+                    <VBox width="100%">
+                        <core:HTML
+                            id="retroTSDocHtml"
+                            sanitizeContent="false"
+                            content="{ path: 'airesponseDetailModel>/tsContent', formatter: '.formatter.mdToHTML' }"
+                        />
+                    </VBox>
+                </Panel>
+
+                <Panel
+                    id="retroFSDocPanel"
+                    headerText="Functional Specification Document"
+                    width="100%"
+                    expandable="true"
+                    expanded="true"
+                    class="panelClassDet retroDocPanel"
+                    visible="{= ${secondGoMod>/keyTab} === 'retroDocKey' &amp;&amp; !!${airesponseDetailModel>/fsContent} &amp;&amp; ${airesponseDetailModel>/fsVisible} }"
+                >
+                    <VBox width="100%">
+                        <core:HTML
+                            id="retroFSDocHtml"
+                            sanitizeContent="false"
+                            content="{ path: 'airesponseDetailModel>/fsContent', formatter: '.formatter.mdToHTML' }"
+                        />
+                    </VBox>
+                </Panel>
+
+                <Panel
+                    id="aiResponsePanel"
+                    width="100%"
+                    height="100%"
+                    class="sapUiResponsiveContentPadding panelClassDet"
+                    visible="{= !${airesponseDetailModel>/codeEdVis} &amp;&amp; ${secondGoMod>/keyTab} !== 'retroDocKey' }"
+                >
+                    <VBox>
+                        <HBox
+                            justifyContent="SpaceBetween"
+                            width="100%"
+                        >
+                            <Label
+                                text="{i18n>aiResponse}"
+                                showColon="true"
+                            />
+                             <HBox>
+                              <Button id="editResponse" icon="sap-icon://edit" press="onEditAIResponse" enabled="{airesponseDetailModel>/downloadVis}"/>
+                              <Button id="cancelResponse" icon="sap-icon://decline" press="onCancelAIResponse" visible="false"/>
+                              <Button id="saveResponse" class="sapUiTinyMarginBegin" icon="sap-icon://save" press="onSaveAIResponse" visible="false"/>
+           
+                         </HBox>
+                        </HBox>
+                        <core:HTML
+                            id="aiRespHtml"
+                            sanitizeContent="false"
+                            preferDOM="false"
+                            content="{ path: 'airesponseDetailModel>/resp', formatter: '.formatter.mdToHTML' }"
+                        />
+                        <TextArea
+                            value="{airesponseDetailModel>/resp}"
+                            class="textAreaDetailDetail"
+                            width="100%"
+                            visible="false"
+                            id="aiRespTxtArea"
+                            liveChange=".handleLiveChangeTxtArea"
+                            height="100%"
+                            growing="true"
+                            editable="false"
+                        />
+                        <!-- growing="true"
+                            growingMaxLines="19" -->
+                        <HBox
+                            justifyContent="SpaceBetween"
+                            alignItems="End"
+                        >
+                            <VBox>
+                                <Title
+                                    visible="{ragModel>/currentRagEnabled}"
+                                />
+                            </VBox>
+                        </HBox>
+<VBox
+    id="Citationlink"
+    items="{airesponseDetailModel>/citationArr}"
+>
+                            <items>
+                                <Link
+                                    text="{airesponseDetailModel>fname}"
+                                    href="{airesponseDetailModel>link}"
+                                    target="_blank"
+                                />
+                            </items>
+                        </VBox>
+                    </VBox>
+                </Panel>
+              
+                <!-- <Text id="beforeText" text="AI Response: {airesponseDetailModel>/beforeResult}" visible="false"/>
+                 <HBox justifyContent="End" width="100%"> 
+                 <Button
+                    id="copyButton"
+                    icon="sap-icon://copy"
+                    tooltip="Copy code"
+                    press="onCopyCode"
+                    visible="false"
+                    />
+                      </HBox> -->
+                      <!-- visible="{airesponseDetailModel>/codeEdVis}" -->
+                <!-- <ce:CodeEditor height="200px" editable="false" type="{airesponseDetailModel>/codeType}" value="{airesponseDetailModel>/codeResult}" id="codeEditor"  visible="false" />
+                 <Text id="afterText" visible="false" text="{airesponseDetailModel>/afterResult}" /> -->
+                <Text 
+                text="AI Response:" 
+                id="cdGenInitText"/>
+                  
+                  <VBox 
+                  id="multipleCodeEd" 
+                  visible="{airesponseDetailModel>/codeEdVis}" 
+                  items="{airesponseDetailModel>/multiCE}">
+
+                  <items>
+                  <VBox>
+                  <!-- <Text text="{airesponseDetailModel>textData}" visible="true"/> -->
+                  <core:HTML
+                  sanitizeContent="false"
+                  content="{ path: 'airesponseDetailModel>textData', formatter: '.formatter.mdToHTML' }"
+                  />
+                 <HBox 
+                 justifyContent="End" 
+                 width="100%" 
+                 visible="true"> 
+                 <Button
+                    icon="sap-icon://copy"
+                    tooltip="Copy code"
+                    press=".onCopyCode"
+                    class="copyBtn"
+                    visible="{= ${airesponseDetailModel>lang} !== '' ? true:false}"
+                   />
+                      </HBox>
+                    <!-- visible="{= ${airesponseDetailModel>codeData} === '' ? false : true}" -->
+                <ce:CodeEditor height="200px" editable="false" type="{airesponseDetailModel>lang}" value="{airesponseDetailModel>codeData}" visible="{= ${airesponseDetailModel>codeData} === '' ? false : true}" />
+                   </VBox>
+                    </items>
+                     </VBox>
+                       <VBox id="codeGenCitation"
+                            items="{airesponseDetailModel>/citationArr}"
+                        >
+                            <items>
+                                <Link
+                                    text="{airesponseDetailModel>fname}"
+                                    href="{airesponseDetailModel>link}"
+                                    target="_blank"
+                                />
+                            </items>
+                        </VBox>
+            </VBox>
+        </content>
+        <footer>
+            <OverflowToolbar
+                class="sapUiTinyMarginBottom"
+                style="Clear"
+                id="footerOverFlow"
+            >
+                <content>
+                    <ToolbarSpacer />
+                    <Button
+                        text="{i18n>gitPush}"
+                        id="gitPushBtn"
+                        press=".openCommitMsg"
+                        type="Emphasized"
+                        class="sapUiTinyMarginTop"
+                        visible="false"
+                    />
+                    <Button
+                        tooltip="Push to S/4HANA"
+                        icon="sap-icon://upload-to-cloud"
+                        press=".onPushToS4T"
+                        class="sapUiTinyMarginTop"
+                        enabled="{= ${airesponseDetailModel>/downloadVis} &amp;&amp; ${viewModel>/useMCP} }"
+                        visible="{= ${airesponseDetailModel>/downloadVis} &amp;&amp; ${viewModel>/useMCP} }"
+                    />
+                    <Button
+                        text="{i18n>history}"
+                        id="history"
+                        press=".openHistory"
+                        class="sapUiTinyMarginTop"
+                        enabled="{airesponseDetailModel>/downloadVis}"
+                    />
+                    <Button
+                        icon="sap-icon://thumb-up"
+                        press=".likeH"
+                        class="sapUiTinyMarginTop"
+                    />
+                    <Button
+                        icon="sap-icon://thumb-down"
+                        press=".dislikeH"
+                        class="sapUiTinyMarginTop"
+                    />
+                    <MenuButton
+                        icon="sap-icon://download"
+                        tooltip="Download Options"
+                        type="Transparent"
+                        class="sapUiTinyMarginTop"
+                        enabled="{airesponseDetailModel>/downloadVis}"
+                    >
+                        <menu>
+                            <Menu>
+                                <MenuItem
+                                    text="Download Template"
+                                    icon="sap-icon://document-text"
+                                    press=".onExportTemplate"
+                                    visible="{parts: [
+                                        {path: 'viewModel>/templateToggle'},
+                                        {path: 'airesponseDetailModel>/downloadVis'}
+                                        ],
+                                        formatter: '.formatter.formatTemplateDownloadVisibility'
+                                    }"
+                                />
+                                <MenuItem
+                                    text="Download PDF"
+                                    icon="sap-icon://pdf-attachment"
+                                    press=".onDownloadPDF"
+                                />
+                                <MenuItem
+                                    text="Download Word"
+                                    icon="sap-icon://document"
+                                    press=".generateWordContent2"
+                                />
+                            </Menu>
+                        </menu>
+                    </MenuButton>
+                    <Button
+                        tooltip="Refresh"
+                        icon="sap-icon://synchronize"
+                        press=".syncH"
+                        class="sapUiTinyMarginTop"
+                    />
+                    <Button
+                        icon="sap-icon://overflow"
+                        press=".overflowH"
+                        visible="false"
+                        class="sapUiTinyMarginTop"
+                    />
+                </content>
+            </OverflowToolbar>
+        </footer>
+    </Page>
+</mvc:View>

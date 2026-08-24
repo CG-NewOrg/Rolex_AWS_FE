@@ -1,56 +1,56 @@
 _schema-version: "3.2"
-ID: CGAICockpitQ
+ID: AICockpit
 version: 0.0.1
 modules:
-  - name: CGAICockpitQ-destination-content
+  - name: AICockpit-destination-content
     type: com.sap.application.content
     requires:
-      - name: CGAICockpitQ-destination-service
+      - name: AICockpit-destination-service
         parameters:
           content-target: true
-      - name: CGAICockpitQ_html_repo_host
+      - name: AICockpit_html_repo_host
         parameters:
           service-key:
-            name: CGAICockpitQ_html_repo_host-key
-      - name: uaa_CGAICockpitQ
+            name: AICockpit_html_repo_host-key
+      - name: uaa_AICockpit
         parameters:
           service-key:
-            name: uaa_CGAICockpitQ-key
+            name: uaa_AICockpit-key
     parameters:
       content:
         instance:
           destinations:
-            - Name: CGAICockpitQ_html_repo_host
-              ServiceInstanceName: CGAICockpitQ-html5-app-host-service
-              ServiceKeyName: CGAICockpitQ_html_repo_host-key
+            - Name: AICockpit_html_repo_host
+              ServiceInstanceName: AICockpit-html5-app-host-service
+              ServiceKeyName: AICockpit_html_repo_host-key
               sap.cloud.service: aiCockpitQ
             - Authentication: OAuth2UserTokenExchange
-              Name: aiCockpit_uaa_CGAICockpitQ
-              ServiceInstanceName: CGAICockpitQ-xsuaa-service
-              ServiceKeyName: uaa_CGAICockpitQ-key
+              Name: aiCockpit_uaa_AICockpit
+              ServiceInstanceName: AICockpit-xsuaa-service
+              ServiceKeyName: uaa_AICockpit-key
               sap.cloud.service: aiCockpitQ
           existing_destinations_policy: update
     build-parameters:
       no-source: true
 
-  - name: CGAICockpitQ-app-content
+  - name: AICockpit-app-content
     type: com.sap.application.content
     path: .
     requires:
-      - name: CGAICockpitQ_html_repo_host
+      - name: AICockpit_html_repo_host
         parameters:
           content-target: true
     build-parameters:
       build-result: resources
       requires:
         - artifacts:
-            - aicockpitfeq.zip
-          name: aicockpitfeq
+            - cockpitai.zip
+          name: cockpitai
           target-path: resources/
 
-  - name: aicockpitfeq
+  - name: cockpitai
     type: html5
-    path: aicockpitfeq
+    path: cockpitai
     build-parameters:
       build-result: dist
       builder: custom
@@ -61,32 +61,32 @@ modules:
 
 resources:
  
-  - name: uaa_CGAICockpitQ
+  - name: uaa_AICockpit
     type: org.cloudfoundry.managed-service
     parameters:
       path: ./xs-security.json
       service: xsuaa
       service-plan: application
-      service-name: CGAICockpitQ-xsuaa-service
+      service-name: AICockpit-xsuaa-service
 
-  - name: CGAICockpitQ_html_repo_host
+  - name: AICockpit_html_repo_host
     type: org.cloudfoundry.managed-service
     parameters:
       service: html5-apps-repo
-      service-name: CGAICockpitQ-html5-app-host-service
+      service-name: AICockpit-html5-app-host-service
       service-plan: app-host
 
-  - name: CGAICockpitQ-html5-repo-runtime
+  - name: AICockpit-html5-repo-runtime
     type: org.cloudfoundry.managed-service
     parameters:
       service: html5-apps-repo
       service-plan: app-runtime
 
-  - name: CGAICockpitQ-destination-service
+  - name: AICockpit-destination-service
     type: org.cloudfoundry.managed-service
     parameters:
       service: destination
-      service-name: CGAICockpitQ-destination-service
+      service-name: AICockpit-destination-service
       service-plan: lite
       config:
         HTML5Runtime_enabled: true
