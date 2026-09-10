@@ -5757,7 +5757,7 @@ sap.ui.define([
                                     return {
                                         PROMPTID: item.id,
                                         UUID: item.id, // fallback since UUID not coming
-                                        PROMPT_TEMPLATE: item.prompt_details,
+                                        PROMPT_TEMPLATE: that.formatter.decodeHtml(item.prompt_details),
                                         NAME: item.promptid,
                                         SCENARIO: item.category,
                                         CREATED_AT: item.date_added,
@@ -5915,7 +5915,7 @@ sap.ui.define([
                                     return {
                                         PROMPTID: item.id,
                                         UUID: item.id, // fallback (since UUID not in response)
-                                        PROMPT_TEMPLATE: item.prompt_details,
+                                        PROMPT_TEMPLATE: that.formatter.decodeHtml(item.prompt_details),
                                         NAME: item.promptid,
                                         SCENARIO: item.category,
                                         CREATED_AT: item.date_added,
@@ -9882,7 +9882,7 @@ sap.ui.define([
                                         return {
                                             ID: item.id,
                                             UUID: item.id, // fallback alias
-                                            Prompt_Template: item.prompt_details,
+                                            Prompt_Template: that.formatter.decodeHtml(item.prompt_details),
                                             Date_Added: item.date_added,
                                             Category: item.category,
                                             ProjectId: item.project_id,

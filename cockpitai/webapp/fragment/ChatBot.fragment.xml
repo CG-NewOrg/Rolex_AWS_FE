@@ -10,7 +10,7 @@
     <customHeader>
       <Bar>
         <contentMiddle>
-          <Title text="Knowledge Base"/>
+          <Title text="S4 AI Assistant"/>
         </contentMiddle>
         <contentRight>
           <Button icon="sap-icon://decline"

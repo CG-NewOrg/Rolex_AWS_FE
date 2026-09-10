@@ -61,6 +61,14 @@ sap.ui.define([], () => {
             var dateComp = new Date(dt);
             return dateComp.getDate() + "/" + (dateComp.getMonth() + 1) + "/" + dateComp.getFullYear();
         },
+        decodeHtml: function (html) {
+            if (html == null) {
+                return "";
+            }
+            var txt = document.createElement("textarea");
+            txt.innerHTML = String(html);
+            return txt.value;
+        },
         formatListToLines: function (listOrString) {
             if (listOrString == null) return "";
 
